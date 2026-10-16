@@ -264,7 +264,27 @@ async function testJev(cfg) {
   return { ok: true, message: `${brand} 连接成功（${mdl}）· 测试断言概率 ${typeof p === 'number' ? Math.round(p * 1000) / 1000 : 'ok'}` };
 }
 
-module.exports = { PROVIDERS, runTask, runCloudTask, cancelTask, testAgent, triageTask, triageJev, testJev };
+/* managed-runtimes 第一步（借鉴统一运行时层）：扫描本机已安装应用自带的 Agent 运行时，
+   生成"免安装即可接入"的预置（绝对路径 + 配套 node）。机器上装了什么就发现什么 */
+function discoverAppRuntimes() {
+  const fs = require('fs'), path = require('path'), os = require('os');
+  const found = [];
+  const exists = p => { try { return fs.existsSync(p); } catch (e) { return false; } };
+  const nodeBin = bestNodeDir() ? path.join(bestNodeDir(), 'node') : 'node';
+
+  // ZCode 桌面应用内置无头 CLI（app-server 协议；上游 headless 回归修复后即可执行）
+  const zcodeCjs = '/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs';
+  if (exists(zcodeCjs)) {
+    found.push({
+      id: 'zcode-app', label: 'ZCode（应用内置）', cliId: 'zcode', detected: true,
+      cliCommand: nodeBin, cliTemplate: `${nodeBin} ${zcodeCjs} -p {prompt} --no-color`,
+      note: '检测到 ZCode.app 内置 CLI，已配好配套 Node',
+    });
+  }
+  return found;
+}
+
+module.exports = { PROVIDERS, runTask, runCloudTask, cancelTask, testAgent, triageTask, triageJev, testJev, discoverAppRuntimes };
 
 /* ============================================================
    本机 CLI Agent 执行（Claude Code / Codex / CodeBuddy …）
@@ -443,8 +463,18 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
   const nd = bestNodeDir();
   env.PATH = [nd, lp].filter(Boolean).join(':') + ':' + (env.PATH || '');
 
+  // 任务级实例约定（TASK_ENV_*）：每任务派生固定 CDP 端口（50000-59999 区间）与独立数据目录，
+  // 为 per-task IDE/CDP 实例与配置隔离铺路；现有 CLI 不识别也无副作用
+  const pathMod = require('path'), osMod = require('os');
+  const taskPort = 50000 + (Number(String(task.key).replace(/\D/g, '')) % 10000);
+  env.TASK_ENV_KEY = String(task.key || '');
+  env.TASK_ENV_INSTANCE_NUMBER = String(taskPort);
+  env.TASK_ENV_DAEMON_HEALTH_PORT = String(taskPort + 1);
+  env.TASK_ENV_ELECTRON_USER_DATA = pathMod.join(env.APPDATA || pathMod.join(osMod.homedir(), 'Library', 'Application Support'), 'Reins', 'tasks', task.key || 'run');
+
   onEvent({ type: 'start', model: cliRunLabel(cmd, agent) + (streamJson ? '（本机 CLI · 过程实时回传）' : '（本机 CLI）'), provider: '本机命令', cli: true });
   onEvent({ type: 'model', model: String(agent.cliModel || '').trim() || '默认模型' });
+  onEvent({ type: 'note', text: `▸ 任务实例 ${task.key} · 端口 ${taskPort} · 独立数据目录已注入` });
 
   // 隔离执行：空间配置了仓库根目录时，为任务准备独立 worktree（分支 reins/<KEY>），CLI 在其中改动互不干扰
   // 安全规则：配置了仓库但 worktree 准备失败 → 中止执行，绝不退化到应用目录裸跑；未配置仓库 → 落到独立临时目录

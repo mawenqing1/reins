@@ -49,6 +49,7 @@ ipcMain.handle('reins:jev:triage', (_e, payload) => { const s = readSettings(); 
 ipcMain.handle('reins:jev:test', (_e, cfg) => { const s = readSettings(); return runner.testJev({ ...s, ...(cfg || {}) }); });
 ipcMain.handle('reins:cli:list', () => runner.CLI_PRESETS);
 ipcMain.handle('reins:cli:detect', (_e, cmds) => runner.detectClis(cmds));
+ipcMain.handle('reins:runtimes:discover', () => runner.discoverAppRuntimes());
 
 ipcMain.handle('reins:run:start', (e, { task, agent, extraPrompt, repoRoot, runtime }) => {
   const win = BrowserWindow.fromWebContents(e.sender);

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('reins', {
   triageRun: (payload) => ipcRenderer.invoke('reins:triage:run', payload),
   cliList: () => ipcRenderer.invoke('reins:cli:list'),
   cliDetect: (cmds) => ipcRenderer.invoke('reins:cli:detect', cmds),
+  runtimeDiscover: () => ipcRenderer.invoke('reins:runtimes:discover'),
   runStart: ({ task, agent, extraPrompt, repoRoot, runtime }) => ipcRenderer.invoke('reins:run:start', { task, agent, extraPrompt, repoRoot, runtime }),
   runCancel: (taskId) => ipcRenderer.invoke('reins:run:cancel', taskId),
 

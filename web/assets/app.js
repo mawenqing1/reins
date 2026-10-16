@@ -2098,7 +2098,14 @@ function acSave(id) {
 }
 
 /* ---- 接入 Agent ---- */
-function openAddAgentModal() {
+let APP_RUNTIMES = [];
+async function openAddAgentModal() {
+  // 本机应用内置运行时（免安装）：发现即接入，模板里已配好绝对路径与配套 node
+  APP_RUNTIMES = (window.reins ? await window.reins.runtimeDiscover().catch(() => []) : []) || [];
+  const rtCards = APP_RUNTIMES.map(r => `<div class="pick" onclick="addAppRuntime('${r.id}')">
+    <b>${ic('server')} ${esc(r.label)}</b><span>${esc(r.note)}</span>
+    <span style="color:var(--accent);white-space:nowrap">接入 →</span>
+  </div>`).join('');
   const provCards = PROVIDER_PRESETS.map(p => `<div class="pick" onclick="addApiAgent('${p.id}')">
     <b>${brandIcon(PROVIDER_LOGO[p.id]) || brandMono(p.label)} ${p.label}</b><span>${p.model || '自填模型'}</span>
     <span style="color:var(--accent);white-space:nowrap">接入 →</span>
@@ -2109,7 +2116,8 @@ function openAddAgentModal() {
   </div>`).join('');
   openModal(`<div class="modal-head"><h3>接入 Agent</h3><span>通过 API Key 或本机 CLI 接入</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
-      <div class="add-sec-h">API 服务商（OpenAI 兼容，需 API Key）</div>
+      ${rtCards ? `<div class="add-sec-h">本机应用内置运行时 · 免安装</div><div class="picklist">${rtCards}</div>` : ''}
+      <div class="add-sec-h"${rtCards ? ' style="margin-top:18px"' : ''}>API 服务商（OpenAI 兼容，需 API Key）</div>
       <div class="picklist">${provCards}</div>
       <div class="add-sec-h" style="margin-top:18px">本机 CLI 工具（子进程调用）</div>
       <div class="picklist">${cliCards}</div>
@@ -2158,6 +2166,21 @@ function addCliAgent(presetId) {
   });
   save(); closeModal(); refreshViews();
   toast('已接入', p.label + '（本机 CLI）', '✳');
+  openAgentConfig(id);
+}
+/* 应用内置运行时接入：模板带绝对路径与配套 node，零配置 */
+function addAppRuntime(rtId) {
+  const r = APP_RUNTIMES.find(x => x.id === rtId);
+  if (!r) return;
+  const id = 'a' + now();
+  O().agents.push({
+    id, name: r.label, mode: 'cli',
+    cliId: r.cliId, cliCommand: r.cliCommand, cliTemplate: r.cliTemplate,
+    scenePrompt: '', detected: true,
+    status: 'idle', taskId: null, done: 0, tokens: 0,
+  });
+  save(); closeModal(); refreshViews();
+  toast('已接入', r.label + '（应用内置运行时）', '✳');
   openAgentConfig(id);
 }
 function addSimAgent() {
