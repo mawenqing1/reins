@@ -6,7 +6,7 @@
 @import '_mixins';
 
 // —— 控制台专属变量（中性冷灰基调；在此覆盖 _variables 共享令牌，不影响落地页）
-@paper:       #f5f6f7;
+@paper:       #f6f6f5;
 @panel:       #ffffff;
 @card:        #ffffff;
 @line:        #e5e7ea;
@@ -20,19 +20,19 @@
 @r-sm: 7px;
 @r-xs: 6px;
 @st-todo:      #8a8f94;
-@st-review:    #6f6ab8;
-@st-review-bg: #f1f0f6;
-@st-review-line: #dbd8ea;
+@st-review:    #4659b8;
+@st-review-bg: #eef0f8;
+@st-review-line: #d5d9ef;
 @ink-warm:     #edeff1;
 
 // 侧栏（深色）
-@side-bg:        #0f1618;
+@side-bg:        #10171a;
 @side-ink:       #c6d2d1;
 @side-ink-dim:   #a9b8b6;
 @side-ink-faint: #7c8d8e;
-@side-card:      #182126;
-@side-line:      #273439;
-@side-hover:     #1b2529;
+@side-card:      #192226;
+@side-line:      #28363b;
+@side-hover:     #1d272b;
 
 // 终端（执行回放）
 @term-bg:   #15181c;
@@ -778,7 +778,7 @@ a { color: var(--accent); text-decoration: none; }
 .node-pill {
   display: flex; align-items: center; gap: 8px;
   font-size: 11px; color: @side-ink-faint;
-  background: #162125; border: 1px solid @side-line; border-radius: 7px;
+  background: @side-card; border: 1px solid @side-line; border-radius: 7px;
   padding: 7px 11px; margin-bottom: 10px; cursor: pointer; transition: .15s;
   white-space: nowrap; overflow: hidden; // 在线时长再长也只占一行，超宽截断（悬停有完整 title）
   &:hover { border-color: #3f3f46; color: @side-ink-dim; }
