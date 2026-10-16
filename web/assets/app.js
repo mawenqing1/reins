@@ -2360,6 +2360,25 @@ function renderBell() {
   badge.style.display = n ? '' : 'none';
   window.reins?.traySetBadge?.(n); // 菜单栏托盘图标同步未读角标
 }
+
+/* 托盘角标绘制：在隐藏 canvas 上画「主图形（略缩左置）+ 右上实心圆 + 镂空数字」，供主进程取图 */
+function trayBadgeDataUrl(n) {
+  const img = document.getElementById('tray-base-src');
+  if (!img || !img.complete || !img.naturalWidth) return '';
+  const c = document.getElementById('tray-badge-canvas');
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, 32, 32);
+  x.drawImage(img, 0, 3, 26, 26);
+  x.globalCompositeOperation = 'source-over';
+  x.fillStyle = '#000';
+  x.beginPath(); x.arc(25, 7, 6.8, 0, 7); x.fill();
+  x.globalCompositeOperation = 'destination-out';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = 'bold ' + (n < 10 ? 8.5 : 7) + 'px -apple-system,Helvetica';
+  x.fillText(String(n), 25, 7.5);
+  x.globalCompositeOperation = 'source-over';
+  return c.toDataURL();
+}
 const INBOX_FILTERS = [['all', '全部'], ['done', '交付完成'], ['run', '执行中'], ['reject', '打回'], ['triage', '创建/分诊']];
 function toggleNotif(e) {
   e && e.stopPropagation();
