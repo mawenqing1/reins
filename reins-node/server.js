@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ============================================================
-   Reins 驭码 — 云端执行节点（runtime server）
+   Reins — 云端执行节点（runtime server）
    零依赖单文件：Node 18+ 直接运行。部署：
      node server.js --port 8787 --token <密钥> [--workspace ./workspace] [--repo-root /path/to/repo] [--name 节点名]
    客户端在「设置 → 云端节点」填 http://<服务器>:<端口> 与同一 token 即可派发任务。

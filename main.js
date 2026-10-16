@@ -1,4 +1,4 @@
-/* Reins 驭码 — Electron 主进程 */
+/* Reins — Electron 主进程 */
 const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -8,6 +8,13 @@ const runner = require('./services/runner');
 const isMac = process.platform === 'darwin';
 let mainWindow = null;
 let tray = null;
+
+/* 产品更名迁移：旧版 userData 目录带中文副名，改名前把数据原地带走，任务/密钥不丢 */
+(() => {
+  const oldUD = path.join(app.getPath('appData'), 'Reins 驭码');
+  const newUD = path.join(app.getPath('appData'), 'Reins');
+  try { if (fs.existsSync(oldUD) && !fs.existsSync(newUD)) fs.renameSync(oldUD, newUD); } catch (e) { }
+})();
 
 /* ---------- 客户端设置（userData/settings.json） ---------- */
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -101,7 +108,7 @@ ipcMain.handle('reins:webhook:test', async () => {
   if (!s.webhookUrl) return { ok: false, error: '未配置 Webhook 地址' };
   return postWebhook(s.webhookUrl, {
     event: 'ping', at: new Date().toISOString(),
-    text: 'Reins 驭码 Webhook 连通性测试：收到即表示链路正常。',
+    text: 'Reins Webhook 连通性测试：收到即表示链路正常。',
   });
 });
 
@@ -161,7 +168,7 @@ function createWindow(hidden) {
     minWidth: 1080,
     minHeight: 680,
     backgroundColor: '#f6f4f0',
-    title: 'Reins 驭码',
+    title: 'Reins',
     show: false,
     icon: path.join(__dirname, 'assets', 'icons', 'icon.png'),
     webPreferences: {
@@ -209,7 +216,7 @@ function createTray() {
   } else {
     tray = new Tray(nativeImage.createEmpty());
   }
-  tray.setToolTip('Reins 驭码 — 本机节点在线');
+  tray.setToolTip('Reins — 本机节点在线');
   const rebuild = () => {
     const s = readSettings();
     tray.setContextMenu(Menu.buildFromTemplate([
@@ -278,7 +285,7 @@ function buildMenu() {
           label: '关于 Reins', click: () => dialog.showMessageBox({
             type: 'info',
             title: '关于 Reins',
-            message: 'Reins 驭码 v' + app.getVersion(),
+            message: 'Reins v' + app.getVersion(),
             detail: '一站式 Agent 统一指挥管理平台（演示原型）\n\n把任务交给 Agent，把缰绳留给自己。\n数据保存在本机，完全离线可用。'
           })
         },

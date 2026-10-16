@@ -1,5 +1,5 @@
 /* ============================================================
-   Reins 驭码 — 真实 Agent 执行引擎
+   Reins — 真实 Agent 执行引擎
    通过 OpenAI 兼容协议（/chat/completions, SSE 流式）调用
    用户自备的模型服务（GLM / DeepSeek / Kimi / Qwen / OpenAI / 自定义）
    ============================================================ */
@@ -254,7 +254,7 @@ async function triageJev(task, roster, cfg) {
   };
 }
 async function testJev(cfg) {
-  const r = await callJev(cfg, '这是一条来自 Reins 驭码的连通性测试消息。', {
+  const r = await callJev(cfg, '这是一条来自 Reins的连通性测试消息。', {
     ping: { type: 'noul', instructions: '这句话表达了一个测试断言' },
   });
   if (!r.ok) return r;

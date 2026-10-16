@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ============================================================
-   Reins 驭码 — LESS 编译脚本
+   Reins — LESS 编译脚本
    node tools/build-css.js          编译 src/*.less → web/assets/*.css
    node tools/build-css.js --watch  编译并监听 src/ 变更
    ============================================================ */

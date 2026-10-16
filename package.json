@@ -1,8 +1,8 @@
 {
   "name": "reins",
-  "productName": "Reins 驭码",
+  "productName": "Reins",
   "version": "1.0.0",
-  "description": "Reins 驭码 — 一站式 Agent 统一指挥管理平台（演示原型）",
+  "description": "Reins — 一站式 Agent 统一指挥管理平台（演示原型）",
   "main": "main.js",
   "author": "Reins Demo",
   "license": "MIT",
@@ -18,7 +18,7 @@
   },
   "build": {
     "appId": "dev.reins.desktop",
-    "productName": "Reins 驭码",
+    "productName": "Reins",
     "directories": {
       "output": "dist"
     },

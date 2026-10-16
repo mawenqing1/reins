@@ -1,5 +1,5 @@
 /* ============================================================
-   Reins 驭码 — 控制台逻辑
+   Reins — 控制台逻辑
    · 桌面客户端：状态经 IPC 落盘 userData/reins-data.json；
     执行引擎分两档——「真实 API」（OpenAI 兼容协议，主进程流式调用）
     与「演示引擎」（本地模拟，零配置可玩）。浏览器打开时自动降级
@@ -234,7 +234,7 @@ function migrateV1(old) {
     version: 2, activeSpaceId: 'sp1',
     agents: Array.isArray(old.agents) && old.agents.length ? old.agents : seedAgents(),
     spaces: [{
-      id: 'sp1', name: '驭码团队', badge: '驭', sprint: 'Sprint 24 · 10.13 – 10.24',
+      id: 'sp1', name: 'Reins 团队', badge: 'R', sprint: 'Sprint 24 · 10.13 – 10.24',
       members: [{ name: '我', role: 'owner' }],
       seq: old.seq || 107, deliverSeq: old.deliverSeq || 219,
       tasks: old.tasks || [], prompts: old.prompts || seedPrompts(), autos: old.autos || seedAutos(),
@@ -623,7 +623,7 @@ function buildStandup() {
   const d = new Date();
   return [
     `# 每日站会 · ${d.getMonth() + 1}月${d.getDate()}日`,
-    `> 由自动化例程生成 · Reins 驭码`,
+    `> 由自动化例程生成 · Reins`,
     ``,
     `## 近 24h 归档（${yst.length}）`,
     ...(yst.length ? yst.map(t => `- ${t.key} ${t.title} — ${who(t)}${t.pr ? ' · ' + t.pr : ''}`) : ['- 无']),
@@ -672,7 +672,7 @@ function buildWeekly() {
   const agents = O().agents.filter(a => a.done > 0);
   return [
     `# 周报 · ${S().name} · ${d.getMonth() + 1}月${d.getDate()}日`,
-    `> 由自动化例程生成 · Reins 驭码`,
+    `> 由自动化例程生成 · Reins`,
     ``,
     `## 本周概况`,
     `- 归档交付 **${wk.length}** 项 · 待验收 ${review.length} 项 · 进行中 ${doing.length} 项`,
@@ -2249,7 +2249,7 @@ function settingsHTML(s, live) {
       <div id="cn-log" style="margin-top:8px;font-size:12px;color:var(--ink-dim)"></div>
     </div>` : `<div class="set-row"><div><b>云端节点</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`}
     <h3 class="set-h">关于</h3>
-    <div class="set-row"><div><b>Reins 驭码 v1.0.0</b><div class="set-desc">Agent 任务协作工具${s.version ? ' · 客户端 ' + esc(s.version) : ''}<br>任务数据保存在本机（${window.reins ? 'userData/reins-data.json' : '浏览器 localStorage'}）</div></div></div>
+    <div class="set-row"><div><b>Reins v1.0.0</b><div class="set-desc">Agent 任务协作工具${s.version ? ' · 客户端 ' + esc(s.version) : ''}<br>任务数据保存在本机（${window.reins ? 'userData/reins-data.json' : '浏览器 localStorage'}）</div></div></div>
     <h3 class="set-h">数据</h3>
     <div class="set-row"><div><b>导出数据</b><div class="set-desc">导出全部空间与 Agent 配置为 JSON 备份</div></div>
       <button class="btn btn-o btn-sm" onclick="exportData()">导出</button></div>

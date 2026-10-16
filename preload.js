@@ -1,4 +1,4 @@
-/* Reins 驭码 — preload：向渲染进程暴露最小客户端能力 */
+/* Reins — preload：向渲染进程暴露最小客户端能力 */
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('reins', {
