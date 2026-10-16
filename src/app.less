@@ -695,7 +695,8 @@ a { color: var(--accent); text-decoration: none; }
   .x { margin-left: auto; background: none; border: none; font-size: 19px; color: var(--ink-faint);
     &:hover { color: var(--ink); } }
 }
-.modal-body { padding: 16px 24px; overflow-y: auto; }
+// 弹性滚动三件套 flex:1+min-height:0 必须齐——少了 min-height:0 内容会把容器顶穿、footer 被推出视口
+.modal-body { padding: 16px 24px; overflow-y: auto; flex: 1; min-height: 0; .scrollbar(#ced3d9); }
 .modal-foot {
   padding: 16px 24px 20px; display: flex; gap: 10px; justify-content: flex-end;
   border-top: 1px solid var(--line);
