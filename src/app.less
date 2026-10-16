@@ -80,7 +80,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 a { color: var(--accent); text-decoration: none; }
 
 // ============ 布局 ============
-.app { display: grid; grid-template-columns: 216px 1fr; height: 100vh; }
+.app { display: grid; grid-template-columns: 216px 1fr; grid-template-rows: minmax(0, 100vh); height: 100vh; }
 
 .sidebar {
   background: @side-bg;
@@ -159,7 +159,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .nav {
-  flex: 1; padding: 4px 10px; overflow-y: auto;
+  flex: 1; min-height: 0; padding: 4px 10px; overflow-y: auto;
   .nav-label { font-size: 11px; color: #6d6d76; letter-spacing: 1.5px; padding: 14px 10px 6px; }
 }
 .nav-item {
@@ -264,7 +264,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .content {
-  flex: 1; overflow-y: auto; padding: 24px 28px 32px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 24px 28px 32px;
   .scrollbar(#ced3d9);
 }
 
