@@ -425,6 +425,7 @@ function viewAgents() {
         ${a.mode === 'api' ? `<button class="btn btn-o btn-sm" onclick="openAgentConfig('${a.id}')">配置</button>` : ''}
         <button class="btn btn-o btn-sm" onclick="toggleAgent('${a.id}')">${a.status === 'offline' ? '上线' : '离线'}</button>
         <button class="btn btn-o btn-sm" onclick="assignNextTo('${a.id}')">领取待处理任务</button>
+        <button class="btn btn-o btn-sm btn-danger-o" style="margin-left:auto" onclick="confirmDeleteAgent('${a.id}')" title="删除该 Agent">删除</button>
       </div>
     </div>`;
   }).join('');
@@ -446,6 +447,33 @@ function toggleAgent(id) {
   toast(a.name, a.status === 'offline' ? '已离线' : '已上线', a.status === 'offline' ? '■' : '▶');
   addActivity('✳', a.name + (a.status === 'offline' ? ' 已离线' : ' 已上线'));
   save(); refreshViews();
+}
+
+/* —— 删除 Agent：执行中拦截；名下任务（含其他空间）改为未指派并留痕 —— */
+function confirmDeleteAgent(id) {
+  const a = agentById(id); if (!a) return;
+  if (a.status === 'working') { toast('无法删除', a.name + ' 正在执行任务，请先等待完成或终止', '⚠'); return; }
+  const using = O().spaces.flatMap(sp => sp.tasks || []).filter(t => t.assignee?.kind === 'agent' && t.assignee.id === id);
+  openModal(`<div class="modal-head"><h3>删除 Agent</h3><span>${esc(a.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将删除 <b>${esc(a.name)}</b>${a.mode === 'api' && a.apiKey ? '（含已保存的 API Key）' : ''}。${using.length ? '其名下 ' + using.length + ' 个任务将改为未指派，执行记录保留。' : '此操作不可撤销。'}</div></div>
+    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
+      <button class="btn btn-danger" onclick="deleteAgent('${id}')">确认删除</button></div>`);
+}
+function deleteAgent(id) {
+  const org = O(); const i = org.agents.findIndex(x => x.id === id);
+  if (i < 0) { closeModal(); return; }
+  const a = org.agents[i];
+  if (a.status === 'working') { closeModal(); toast('无法删除', a.name + ' 正在执行任务', '⚠'); return; }
+  for (const sp of org.spaces) for (const t of (sp.tasks || [])) {
+    if (t.assignee?.kind === 'agent' && t.assignee.id === id) {
+      t.assignee = null;
+      th(t, '◆', '经办 Agent ' + a.name + ' 已删除，任务改为未指派');
+    }
+  }
+  org.agents.splice(i, 1);
+  save(); closeModal(); refreshViews();
+  addActivity('🗑', '删除了 Agent ' + a.name);
+  toast('已删除', a.name + ' 已移出组织', '✕');
 }
 function assignNextTo(agentId) {
   const a = agentById(agentId);
