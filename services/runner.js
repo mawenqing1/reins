@@ -15,6 +15,12 @@ const PROVIDERS = {
 
 const aborts = new Map();   // taskId -> AbortController
 
+/* 部分服务的 WAF 会按 TLS 指纹丢弃 Node 自带 fetch 的握手（表现为 connect timeout 而 curl 正常）。
+   Electron 主进程优先用 net.fetch（Chromium 网络栈，浏览器级指纹），纯 Node 环境回退原生 fetch */
+let _netFetch = null;
+try { _netFetch = require('electron').net.fetch; } catch (e) { }
+const pfetch = (...a) => (_netFetch || global.fetch)(...a);
+
 function buildMessages(task, extraPrompt, scenePrompt) {
   const sys = [
     '你是团队任务看板中的执行 Agent。你收到一张任务卡片，请直接执行并给出交付物。',
@@ -201,7 +207,7 @@ async function callJev(cfg, state, questions) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15000);
   try {
-    const resp = await fetch(url, {
+    const resp = await pfetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.jevKey },
       body: JSON.stringify({ state, model: cfg.jevModel || 'jev-latest', questions }),
@@ -211,7 +217,7 @@ async function callJev(cfg, state, questions) {
     const data = await resp.json();
     if (!data || !data.answers) return { ok: false, message: '响应缺少 answers 字段，请确认接入地址正确' };
     return { ok: true, data };
-  } catch (e) { return { ok: false, message: e.name === 'AbortError' ? '超时（15s）' : e.message }; }
+  } catch (e) { return { ok: false, message: e.name === 'AbortError' ? '超时（15s）' : (e.message + (e.cause && e.cause.code ? '（' + e.cause.code + '）' : '')) }; }
   finally { clearTimeout(timer); }
 }
 async function triageJev(task, roster, cfg) {
