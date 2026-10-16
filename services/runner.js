@@ -438,6 +438,7 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
   env.PATH = [nd, lp].filter(Boolean).join(':') + ':' + (env.PATH || '');
 
   onEvent({ type: 'start', model: cliRunLabel(cmd, agent) + (streamJson ? '（本机 CLI · 过程实时回传）' : '（本机 CLI）'), provider: '本机命令', cli: true });
+  onEvent({ type: 'model', model: String(agent.cliModel || '').trim() || '默认模型' });
 
   // 隔离执行：空间配置了仓库根目录时，为任务准备独立 worktree（分支 reins/<KEY>），CLI 在其中改动互不干扰
   // 安全规则：配置了仓库但 worktree 准备失败 → 中止执行，绝不退化到应用目录裸跑；未配置仓库 → 落到独立临时目录
@@ -493,6 +494,7 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
   let out = '';
   let errTail = '';
   let buf = '';
+  let sawInit = false;      // 首个 system/init 帧含真实模型，只取一次
   let finalResult = null;   // result 帧的干净交付文本
   let resultError = false;
   let resultAt = 0;         // result 帧到达时间：事件流模式下进程可能因 MCP/后台任务滞留，宽限后主动收尾
@@ -513,6 +515,13 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
           let j = null;
           try { j = JSON.parse(line); } catch (e) { }
           if (!j) { out += line + '\n'; onEvent({ type: 'delta', text: line + '\n' }); continue; }
+          // init 帧带着本次会话真实使用的模型（连默认模型都能识别），第一时间上报给界面
+          if (j.type === 'system' && j.subtype === 'init' && j.model && !sawInit) {
+            sawInit = true;
+            onEvent({ type: 'model', model: String(j.model), final: true });
+            onEvent({ type: 'note', text: '▸ 执行模型 ' + j.model + ' · 会话已建立' });
+            continue;
+          }
           if (j.type === 'result') {
             finalResult = typeof j.result === 'string' ? j.result : String(j.result ?? '');
             if (j.is_error) resultError = true;

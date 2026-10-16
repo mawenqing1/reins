@@ -785,10 +785,11 @@ function renderDrawer(id) {
     execHTML = `<div class="d-sec"><h4>Agent 执行</h4>
       <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-p" onclick="startRun('${t.id}',{byUser:true});renderDrawer('${t.id}')">▶ 指派并启动</button>
-        ${canModel ? `<select id="run-model" onchange="byId('${t.id}').runModel=this.value;save()" title="本次执行使用的模型">
-          <option value="">模型：${a.cliModel ? esc(a.cliModel) : '默认'}</option>
+        ${canModel ? `<label style="font-size:12.5px;color:var(--ink-dim)">执行模型
+          <select id="run-model" onchange="byId('${t.id}').runModel=this.value;save()" title="本次执行使用的模型" style="margin-left:2px">
+          <option value="">${a.cliModel ? esc(a.cliModel) + '（Agent 默认）' : '默认模型'}</option>
           ${CB_MODELS.map(m => `<option value="${m}" ${t.runModel === m ? 'selected' : ''}>${m}</option>`).join('')}
-        </select>` : ''}
+        </select></label>` : ''}
       </div>
       <div style="font-size:12px;color:var(--ink-faint);margin-top:8px">${a?.mode === 'api'
         ? '将调用 ' + esc(providerLabel(a.provider) + ' · ' + a.model) + '，实时流式返回，完成后交付物进入待验收。'
@@ -937,6 +938,11 @@ function startApiRun(taskId, agent, opts) {
       : `✓ 调用本机 CLI：${agent.cliCommand || '命令见配置'}（子进程流式）`
     : `✓ 调用 ${providerLabel(agent.provider)} · ${agent.model}（流式）`]);
   const effAgent = (agent.mode === 'cli' && t.runModel && CLI_CAN_MODEL.includes(agent.cliId)) ? { ...agent, cliModel: t.runModel } : agent;
+  if (agent.mode === 'cli') r.model = effAgent.cliModel || '默认模型';
+  const execLabel = agent.mode === 'cli'
+    ? (agent.cliCommand || 'CLI') + (effAgent.cliModel ? ' · ' + effAgent.cliModel : ' · 默认模型')
+    : providerLabel(agent.provider) + ' · ' + agent.model;
+  th(t, '▶', '开始执行 · ' + execLabel);
   window.reins.runStart({ task: t, agent: effAgent, extraPrompt: extra, repoRoot: agent.mode === 'cli' ? (t.repoRoot || S().repoRoot || '') : '', runtime: agent.mode === 'cli' && agent.runtime === 'cloud' ? 'cloud' : 'local' });
   updateRunUI(taskId);
 }
@@ -953,6 +959,12 @@ function handleRunEvent(evt) {
     return;
   }
   if (evt.type === 'usage') { r.usage = evt.usage; return; }
+  // 主进程上报的执行模型（start 即报，CLI 事件流的 init 帧随后用真实模型修正——默认模型也能显示）
+  if (evt.type === 'model') {
+    r.model = evt.model;
+    if (evt.final && t) th(t, '◆', '执行模型 ' + evt.model); // init 帧确认的真实模型入时间线，事后可查
+    updateRunUI(taskId); return;
+  }
   if (evt.type === 'note') { r.log.push(['', evt.text]); updateRunUI(taskId); return; }
   if (evt.type === 'done') {
     // stream 里已经有完整执行过程（工具调用日志），只在为空时才用交付文本补位，别把过程日志冲掉
@@ -1811,14 +1823,22 @@ function openNewTaskModal() {
       </div>
       <div class="f-row"><label>描述 / 验收标准</label><textarea id="nt-desc" placeholder="背景、期望产出与验收标准"></textarea></div>
       <div class="f-2col">
-        <div class="f-row"><label>经办人</label><select id="nt-assignee">${assigneeOpts}</select></div>
+        <div class="f-row"><label>经办人</label><select id="nt-assignee" onchange="ntSyncModel()">${assigneeOpts}</select></div>
         <div class="f-row" style="display:flex;align-items:flex-end"><label class="f-check" style="margin-bottom:9px"><input type="checkbox" id="nt-auto" checked> 指派 Agent 后立即启动</label></div>
       </div>
+      <div class="f-row" id="nt-model-row" style="display:none"><label>执行模型</label><select id="nt-model"><option value="">默认模型</option>${CB_MODELS.map(m => `<option value="${m}">${m}</option>`).join('')}</select></div>
       ${(S().repos || []).length || S().repoRoot ? `<div class="f-row"><label>代码仓库（CLI 任务在其隔离工作区执行）</label><select id="nt-repo">${repoOpts('')}</select></div>` : ''}
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="createTask()">创建任务</button></div>`);
-  setTimeout(() => $('#nt-title')?.focus(), 60);
+  setTimeout(() => { $('#nt-title')?.focus(); ntSyncModel(); }, 60);
+}
+/* 经办人换成支持选模型的 CLI Agent（codebuddy/workbuddy）时，露出执行模型下拉 */
+function ntSyncModel() {
+  const av = $('#nt-assignee')?.value || '';
+  const a = av.startsWith('a:') ? agentById(av.slice(2)) : null;
+  const row = $('#nt-model-row');
+  if (row) row.style.display = a && a.mode === 'cli' && CLI_CAN_MODEL.includes(a.cliId) ? '' : 'none';
 }
 function createTask() {
   const title = $('#nt-title').value.trim();
@@ -1828,6 +1848,7 @@ function createTask() {
     title, type: $('#nt-type').value, pri: $('#nt-pri').value,
     desc: $('#nt-desc').value.trim(), status: 'todo', assignee: null, tags: [], pr: null,
     result: null, thread: [], attachPrompt: null, comments: [], repoRoot: $('#nt-repo')?.value || '',
+    runModel: $('#nt-model')?.value || '',
     createdAt: now(), doneAt: null,
   };
   const av = $('#nt-assignee').value;
