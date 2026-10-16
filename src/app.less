@@ -947,6 +947,38 @@ svg.brand-ico { color: var(--ink-dim); } // 内联品牌 SVG：currentColor，�
 
 // —— 内联线性图标（Lucide 子集，见 web/assets/icons.js）：currentColor 随文变色，尺寸按上下文 ——
 svg.lic { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
+
+// —— 自绘下拉（替换原生 select，见 app.js 的 ds()）——
+.ds { position: relative; flex: 1; min-width: 0; }
+.ds-btn {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 11px; border: 1px solid var(--line-strong); border-radius: @r-sm;
+  background: var(--card); color: var(--ink); font-size: 13px; text-align: left; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+  &:hover { border-color: #b9c0c8; }
+  .ds-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ic-ds { width: 14px; height: 14px; color: var(--ink-faint); transition: transform .15s; flex: none; }
+}
+.ds.open .ds-btn {
+  border-color: @brand; box-shadow: 0 0 0 3px rgba(14, 122, 112, .12);
+  .ic-ds { transform: rotate(180deg); }
+}
+.ds-pop {
+  display: none; position: absolute; left: 0; right: 0; top: calc(100% + 5px); z-index: 80;
+  background: #ffffff; border: 1px solid var(--line); border-radius: @r-sm;
+  box-shadow: 0 8px 24px rgba(20, 22, 26, .14); padding: 5px; max-height: 264px; overflow: auto;
+}
+.ds.open .ds-pop { display: block; }
+.ds-opt {
+  display: block; width: 100%; text-align: left; padding: 7px 10px; border: none; background: none;
+  border-radius: 6px; font-size: 13px; color: var(--ink); cursor: pointer; font-family: inherit;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  &:hover { background: #eef0f3; }
+  &.on { color: @brand-text; font-weight: 600; background: rgba(14, 122, 112, .08); }
+  &.dis { color: var(--ink-faint); cursor: default; &:hover { background: none; } }
+}
+.ds.inline { flex: none; width: auto; min-width: 108px; } // 筛选栏内的紧凑形态
+.mb-row .ds-btn { padding: 6px 10px; font-size: 12.5px; }
 .fic svg.lic { width: 13px; height: 13px; vertical-align: -2px; }
 .stat .ic svg.lic { width: 18px; height: 18px; vertical-align: 0; }
 .x svg.lic, .drawer-x svg.lic { width: 15px; height: 15px; vertical-align: -2px; }

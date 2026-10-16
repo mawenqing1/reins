@@ -83,6 +83,46 @@ const brandMono = name => {
 };
 const brandOf = a => brandIcon(a.mode === 'cli' ? CLI_LOGO[a.cliId] : a.mode === 'api' ? PROVIDER_LOGO[a.provider] : '') || brandMono(a.name);
 
+/* —— 自绘下拉：替换原生 select（原生弹出菜单是系统渲染、样式无法统一）
+   对外保持原生语义：值存隐藏 input（id 不变，$('#id').value 读写照旧），
+   选中后派发 change 事件，onchange 表达式里的 this.value 继续可用。opts: [{v, l, dis}] —— */
+function ds(id, opts, val, onchange = '', cls = '') {
+  const cur = opts.find(o => o.v === val) || opts[0] || { v: '', l: '—' };
+  const optBtn = (o, i) => `<button type="button" class="ds-opt${o.v === cur.v ? ' on' : ''}${o.dis ? ' dis' : ''}"${o.dis ? ' disabled' : ''} data-v="${esc(o.v)}" onclick="dsPick('${id}',${i})">${esc(o.l)}</button>`;
+  return `<div class="ds${cls ? ' ' + cls : ''}" data-ds="${id}">
+    <input type="hidden" id="${id}" value="${esc(cur.v)}"${onchange ? ` onchange="${esc(onchange)}"` : ''}>
+    <button type="button" class="ds-btn" onclick="dsToggle('${id}')"><span class="ds-val">${esc(cur.l)}</span>${ic('chevron-down', 'ic-ds')}</button>
+    <div class="ds-pop">${opts.map(optBtn).join('')}</div>
+  </div>`;
+}
+function dsToggle(id) {
+  const wrap = document.querySelector(`.ds[data-ds="${id}"]`);
+  if (!wrap) return;
+  document.querySelectorAll('.ds.open').forEach(d => { if (d !== wrap) d.classList.remove('open'); });
+  wrap.classList.toggle('open');
+}
+function dsPick(id, i) {
+  const wrap = document.querySelector(`.ds[data-ds="${id}"]`);
+  if (!wrap) return;
+  const opt = wrap.querySelectorAll('.ds-opt')[i];
+  if (!opt || opt.disabled) return;
+  const inp = document.getElementById(id);
+  inp.value = opt.dataset.v;
+  wrap.querySelector('.ds-val').textContent = opt.textContent;
+  wrap.querySelectorAll('.ds-opt').forEach(o => o.classList.toggle('on', o === opt));
+  wrap.classList.remove('open');
+  inp.dispatchEvent(new Event('change'));
+}
+/* 程序化重设选项与当前值（动态场景用） */
+function dsSet(id, opts, val) {
+  const wrap = document.querySelector(`.ds[data-ds="${id}"]`);
+  if (!wrap) return;
+  const cur = opts.find(o => o.v === val) || opts[0] || { v: '', l: '—' };
+  document.getElementById(id).value = cur.v;
+  wrap.querySelector('.ds-val').textContent = cur.l;
+  wrap.querySelector('.ds-pop').innerHTML = opts.map((o, i) => `<button type="button" class="ds-opt${o.v === cur.v ? ' on' : ''}${o.dis ? ' dis' : ''}"${o.dis ? ' disabled' : ''} data-v="${esc(o.v)}" onclick="dsPick('${id}',${i})">${esc(o.l)}</button>`).join('');
+}
+
 const FILES = ['src/api/orders.ts', 'src/services/payment.ts', 'docs/竞品分析.md', 'data/suppliers_2026Q3.xlsx',
   'docs/周报模板.md', 'src/hooks/useAuth.ts', 'tickets/高频工单.csv', 'src/views/Checkout.tsx'];
 
@@ -268,21 +308,14 @@ function laneOf(t) {
   return ['h:' + t.assignee.name, t.assignee.name, 'human'];
 }
 function viewKanban() {
-  const typeOpts = ['', ...Object.keys(TYPE_LABEL)].map(v => `<option value="${v}" ${filters.type === v ? 'selected' : ''}>${v ? TYPE_LABEL[v] : '全部类型'}</option>`).join('');
-  const whoOpts = `<option value="" ${filters.who === '' ? 'selected' : ''}>全部经办</option>
-    <option value="none" ${filters.who === 'none' ? 'selected' : ''}>未指派</option>
-    <option value="human" ${filters.who === 'human' ? 'selected' : ''}>团队成员</option>
-    ${O().agents.map(a => `<option value="a:${a.id}" ${filters.who === 'a:' + a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}`;
-  const iterOpts = ['<option value="">全部迭代</option>', ...(S().iterations || []).map(i => `<option value="${i.id}" ${filters.iter === i.id ? 'selected' : ''}>${esc(i.name)}</option>`)].join('');
-  const laneSel = `<select onchange="filters.lane=this.value;render()">
-    <option value="" ${!filters.lane ? 'selected' : ''}>平铺视图</option>
-    <option value="who" ${filters.lane === 'who' ? 'selected' : ''}>按经办人泳道</option>
-  </select>`;
+  const typeOpts = [{ v: '', l: '全部类型' }, ...Object.keys(TYPE_LABEL).map(k => ({ v: k, l: TYPE_LABEL[k] }))];
+  const whoOpts = [{ v: '', l: '全部经办' }, { v: 'none', l: '未指派' }, { v: 'human', l: '团队成员' }, ...O().agents.map(a => ({ v: 'a:' + a.id, l: a.name }))];
+  const iterOpts = [{ v: '', l: '全部迭代' }, ...(S().iterations || []).map(i => ({ v: i.id, l: i.name }))];
   const filtersBar = `<div class="kb-filters">
-      ${laneSel}
-      ${(S().iterations || []).length ? `<select onchange="filters.iter=this.value;render()">${iterOpts}</select>` : ''}
-      <select onchange="filters.type=this.value;render()">${typeOpts}</select>
-      <select onchange="filters.who=this.value;render()">${whoOpts}</select>
+      ${ds('kb-lane', [{ v: '', l: '平铺视图' }, { v: 'who', l: '按经办人泳道' }], filters.lane, 'filters.lane=this.value;render()', 'inline')}
+      ${(S().iterations || []).length ? ds('kb-iter', iterOpts, filters.iter, 'filters.iter=this.value;render()', 'inline') : ''}
+      ${ds('kb-type', typeOpts, filters.type, 'filters.type=this.value;render()', 'inline')}
+      ${ds('kb-who', whoOpts, filters.who, 'filters.who=this.value;render()', 'inline')}
       <span class="kb-hint">指派给 Agent 的任务拖入「进行中」后自动执行</span>
     </div>`;
 
@@ -676,11 +709,11 @@ function viewInteg() {
         <div class="f-row"><label>接入地址（兼容 systemone 协议即可）</label><input type="text" id="jev-url" value="${esc(cfg.jevUrl || 'https://api.typesafe.ai/v1/systemone')}" placeholder="https://api.typesafe.ai/v1/systemone"></div>
         <div class="f-2col">
           <div class="f-row"><label>模型</label><input type="text" id="jev-model" value="${esc(cfg.jevModel || 'jev-latest')}" placeholder="jev-latest"></div>
-          <div class="f-row"><label>分诊引擎</label><select id="jev-engine">
-            <option value="auto" ${engineSel === 'auto' ? 'selected' : ''}>自动（Jev 优先，失败降级模型）</option>
-            <option value="jev" ${engineSel === 'jev' ? 'selected' : ''}>仅 Jev（失败降级本地规则）</option>
-            <option value="llm" ${engineSel === 'llm' ? 'selected' : ''}>仅 API 模型（不用 Jev）</option>
-          </select></div>
+          <div class="f-row"><label>分诊引擎</label>${ds('jev-engine', [
+            { v: 'auto', l: '自动（Jev 优先，失败降级模型）' },
+            { v: 'jev', l: '仅 Jev（失败降级本地规则）' },
+            { v: 'llm', l: '仅 API 模型（不用 Jev）' },
+          ], engineSel)}</div>
         </div>
         <div style="display:flex;gap:9px;margin-top:4px">
           <button class="btn btn-p" onclick="jevSave()">保存配置</button>
@@ -792,11 +825,10 @@ function renderDrawer(id) {
   const t = byId(id); if (!t) { closeDrawer(); return; }
   const r = runs[id];
   const pct = runPct(id);
-  const assigneeOpts = `<option value="">未指派</option>
-    ${memberNames().map(m => `<option value="m:${esc(m)}" ${t.assignee?.kind === 'human' && t.assignee.name === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
-    ${O().agents.map(a => `<option value="a:${a.id}" ${t.assignee?.id === a.id ? 'selected' : ''} ${agentUsable(a) ? '' : 'disabled'}>◆ ${esc(a.name)}${a.status === 'working' && a.taskId !== id ? '（忙）' : ''}</option>`).join('')}`;
-  const promptOpts = `<option value="">不附加</option>
-    ${S().prompts.map(p => `<option value="${p.id}" ${t.attachPrompt === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}`;
+  const assigneeOpts = [{ v: '', l: '未指派' },
+    ...memberNames().map(m => ({ v: 'm:' + m, l: m })),
+    ...O().agents.map(a => ({ v: 'a:' + a.id, l: a.name + (a.status === 'working' && a.taskId !== id ? '（忙）' : ''), dis: !agentUsable(a) }))];
+  const promptOpts = [{ v: '', l: '不附加' }, ...S().prompts.map(p => ({ v: p.id, l: p.title }))];
 
   let execHTML = '';
   if (r) {
@@ -815,11 +847,8 @@ function renderDrawer(id) {
     execHTML = `<div class="d-sec"><h4>Agent 执行</h4>
       <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-p" onclick="startRun('${t.id}',{byUser:true});renderDrawer('${t.id}')">▶ 指派并启动</button>
-        ${canModel ? `<label style="font-size:12.5px;color:var(--ink-dim)">执行模型
-          <select id="run-model" onchange="byId('${t.id}').runModel=this.value;save()" title="本次执行使用的模型" style="margin-left:2px">
-          <option value="">${a.cliModel ? esc(a.cliModel) + '（Agent 默认）' : '默认模型'}</option>
-          ${CB_MODELS.map(m => `<option value="${m}" ${t.runModel === m ? 'selected' : ''}>${m}</option>`).join('')}
-        </select></label>` : ''}
+        ${canModel ? `<label style="font-size:12.5px;color:var(--ink-dim);display:flex;align-items:center;gap:7px">执行模型
+          ${ds('run-model', [{ v: '', l: a.cliModel ? a.cliModel + '（Agent 默认）' : '默认模型' }, ...CB_MODELS.map(m => ({ v: m, l: m }))], t.runModel || '', `byId('${t.id}').runModel=this.value;save()`, 'inline')}</label>` : ''}
       </div>
       <div style="font-size:12px;color:var(--ink-faint);margin-top:8px">${a?.mode === 'api'
         ? '将调用 ' + esc(providerLabel(a.provider) + ' · ' + a.model) + '，实时流式返回，完成后交付物进入待验收。'
@@ -855,19 +884,19 @@ function renderDrawer(id) {
       <div class="d-sec">
         <div class="d-fields">
           <label>状态</label>
-          <select onchange="setStatus(byId('${t.id}'),this.value)">${STATUS_FLOW.map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select>
+          ${ds('d-status', STATUS_FLOW.map(s => ({ v: s, l: STATUS_LABEL[s] })), t.status, `setStatus(byId('${t.id}'),this.value)`)}
           <label>优先级</label>
-          <select onchange="byId('${t.id}').pri=this.value;save();refreshViews();renderDrawer('${t.id}')">${['P0', 'P1', 'P2'].map(p => `<option ${t.pri === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
+          ${ds('d-pri', ['P0', 'P1', 'P2'].map(p => ({ v: p, l: p })), t.pri, `byId('${t.id}').pri=this.value;save();refreshViews();renderDrawer('${t.id}')`)}
           <label>经办人</label>
-          <select onchange="updateAssignee('${t.id}',this.value)">${assigneeOpts}</select>
+          ${ds('d-assignee', assigneeOpts, t.assignee?.kind === 'human' ? 'm:' + t.assignee.name : t.assignee?.kind === 'agent' ? 'a:' + t.assignee.id : '', `updateAssignee('${t.id}',this.value)`)}
           <label>附加提示词</label>
-          <select onchange="byId('${t.id}').attachPrompt=this.value||null;save();toast('已附加','执行时将随任务一并发送','✎')">${promptOpts}</select>
+          ${ds('d-prompt', promptOpts, t.attachPrompt || '', `byId('${t.id}').attachPrompt=this.value||null;save();toast('已附加','执行时将随任务一并发送','✎')`)}
           <label>迭代</label>
-          <select onchange="byId('${t.id}').iterId=this.value||null;save();refreshViews()"><option value="">不归属</option>${(S().iterations||[]).map(i=>`<option value="${i.id}" ${t.iterId===i.id?'selected':''}>${esc(i.name)}</option>`).join('')}</select>
+          ${ds('d-iter', [{ v: '', l: '不归属' }, ...(S().iterations || []).map(i => ({ v: i.id, l: i.name }))], t.iterId || '', `byId('${t.id}').iterId=this.value||null;save();refreshViews()`)}
           <label>史诗</label>
-          <select onchange="byId('${t.id}').epicId=this.value||null;save();refreshViews()"><option value="">不归属</option>${(S().epics||[]).map(i=>`<option value="${i.id}" ${t.epicId===i.id?'selected':''}>${esc(i.name)}</option>`).join('')}</select>
+          ${ds('d-epic', [{ v: '', l: '不归属' }, ...(S().epics || []).map(i => ({ v: i.id, l: i.name }))], t.epicId || '', `byId('${t.id}').epicId=this.value||null;save();refreshViews()`)}
           <label>仓库</label>
-          <select onchange="byId('${t.id}').repoRoot=this.value;save();refreshViews();renderDrawer('${t.id}')">${repoOpts(t.repoRoot || '')}</select>
+          ${ds('d-repo', repoOpts(t.repoRoot || ''), t.repoRoot || '', `byId('${t.id}').repoRoot=this.value;save();refreshViews();renderDrawer('${t.id}')`)}
         </div>
       </div>
       <div class="d-sec"><h4>描述 / 验收标准</h4><div class="d-desc">${esc(t.desc) || '（无描述）'}</div></div>
@@ -1369,8 +1398,8 @@ const repoName = p => { const s = String(p || '').trim().replace(/\/+$/, ''); re
 function repoOpts(sel) {
   const repos = S().repos || [];
   const def = S().repoRoot || '';
-  return `<option value="" ${!sel ? 'selected' : ''}>跟随空间默认${def ? '（' + esc(repoName(def)) + '）' : '（未配置）'}</option>`
-    + repos.map(r => `<option value="${esc(r.path)}" ${sel === r.path ? 'selected' : ''}>${esc(r.name || repoName(r.path))} · ${esc(r.path)}</option>`).join('');
+  return [{ v: '', l: '跟随空间默认' + (def ? '（' + repoName(def) + '）' : '（未配置）') },
+    ...repos.map(r => ({ v: r.path, l: (r.name || repoName(r.path)) + ' · ' + r.path }))];
 }
 function addRepo() {
   const path = $('#ss-r-path').value.trim();
@@ -1402,9 +1431,7 @@ function openSpaceSettings() {
   const rows = sp.members.map((m, i) => `<div class="mb-row">
       <span class="mb-av">${esc(m.name[0])}</span>
       <div style="flex:1"><b>${esc(m.name)}</b>${m.role === 'owner' ? ' <span class="mode-pill api">创建者</span>' : ''}</div>
-      <select onchange="S().members[${i}].role=this.value;save();renderSpaceButton()" ${m.role === 'owner' ? 'disabled' : ''}>
-        ${['owner', 'member', 'guest'].map(r => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
-      </select>
+      ${m.role === 'owner' ? '<span style="font-size:12px;color:var(--ink-faint)">所有者</span>' : ds('ss-role-' + i, ['owner', 'member', 'guest'].map(r => ({ v: r, l: ROLE_LABEL[r] })), m.role, `S().members[${i}].role=this.value;save();renderSpaceButton()`, 'inline')}
       ${m.role === 'owner' ? '' : `<button class="btn btn-o btn-sm" onclick="removeMember(${i})">移除</button>`}
     </div>`).join('');
   openModal(`<div class="modal-head"><h3>空间设置</h3><span>${esc(sp.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
@@ -1431,10 +1458,7 @@ function openSpaceSettings() {
         <button class="btn btn-o btn-sm" onclick="addRepo()">添加</button>
       </div>
       <div class="f-row" style="margin-top:12px"><label>空间默认仓库（新建任务的预设）</label>
-        <select onchange="setDefaultRepoByPath(this.value)">
-          <option value="" ${!sp.repoRoot ? 'selected' : ''}>不隔离执行</option>
-          ${(sp.repos || []).map(r => `<option value="${esc(r.path)}" ${sp.repoRoot === r.path ? 'selected' : ''}>${esc(r.name || repoName(r.path))}</option>`).join('')}
-        </select></div>
+        ${ds('ss-defrepo', [{ v: '', l: '不隔离执行' }, ...(sp.repos || []).map(r => ({ v: r.path, l: r.name || repoName(r.path) }))], sp.repoRoot || '', 'setDefaultRepoByPath(this.value)')}</div>
       <div style="font-size:12px;color:var(--ink-faint);margin:-4px 0 4px">任务也可在创建时或抽屉里单独指定仓库；CLI Agent 会在所选仓库旁的 .reins-wt/&lt;任务号&gt; 创建独立工作区与 reins/&lt;任务号&gt; 分支。</div>
 
       <h3 class="set-h">成员 · ${sp.members.length}</h3>
@@ -1442,7 +1466,7 @@ function openSpaceSettings() {
       <div class="mb-row" style="border-bottom:none">
         <span class="mb-av" style="background:var(--accent-soft);color:var(--brand-text)">＋</span>
         <input id="ss-mb-name" placeholder="同事姓名" style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:7px">
-        <select id="ss-mb-role"><option value="member">成员</option><option value="guest">访客</option></select>
+        ${ds('ss-mb-role', [{ v: 'member', l: '成员' }, { v: 'guest', l: '访客' }], 'member', '', 'inline')}
         <button class="btn btn-o btn-sm" onclick="addMember()">添加</button>
       </div>
 
@@ -1841,23 +1865,23 @@ function closeModal() { $('#modal-mask').classList.remove('show'); }
 $('#modal-mask')?.addEventListener('click', e => { if (e.target.id === 'modal-mask') closeModal(); });
 
 function openNewTaskModal() {
-  const assigneeOpts = `<option value="">暂不指派</option>
-    ${memberNames().map(m => `<option value="m:${esc(m)}">${esc(m)}</option>`).join('')}
-    ${O().agents.filter(a => agentUsable(a)).map(a => `<option value="a:${a.id}">◆ ${esc(a.name)}</option>`).join('')}`;
+  const assigneeOpts = [{ v: '', l: '暂不指派' },
+    ...memberNames().map(m => ({ v: 'm:' + m, l: m })),
+    ...O().agents.filter(a => agentUsable(a)).map(a => ({ v: 'a:' + a.id, l: a.name }))];
   openModal(`<div class="modal-head"><h3>新建任务</h3><span>REINS-${S().seq}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-row"><label>标题</label><input type="text" id="nt-title" placeholder="用一句话说明要做什么"></div>
       <div class="f-2col">
-        <div class="f-row"><label>类型</label><select id="nt-type">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-        <div class="f-row"><label>优先级</label><select id="nt-pri"><option>P2</option><option>P1</option><option>P0</option></select></div>
+        <div class="f-row"><label>类型</label>${ds('nt-type', Object.entries(TYPE_LABEL).map(([k, v]) => ({ v: k, l: v })), 'req')}</div>
+        <div class="f-row"><label>优先级</label>${ds('nt-pri', ['P2', 'P1', 'P0'].map(p => ({ v: p, l: p })), 'P2')}</div>
       </div>
       <div class="f-row"><label>描述 / 验收标准</label><textarea id="nt-desc" placeholder="背景、期望产出与验收标准"></textarea></div>
       <div class="f-2col">
-        <div class="f-row"><label>经办人</label><select id="nt-assignee" onchange="ntSyncModel()">${assigneeOpts}</select></div>
+        <div class="f-row"><label>经办人</label>${ds('nt-assignee', assigneeOpts, '', 'ntSyncModel()')}</div>
         <div class="f-row" style="display:flex;align-items:flex-end"><label class="f-check" style="margin-bottom:9px"><input type="checkbox" id="nt-auto" checked> 指派 Agent 后立即启动</label></div>
       </div>
-      <div class="f-row" id="nt-model-row" style="display:none"><label>执行模型</label><select id="nt-model"><option value="">默认模型</option>${CB_MODELS.map(m => `<option value="${m}">${m}</option>`).join('')}</select></div>
-      ${(S().repos || []).length || S().repoRoot ? `<div class="f-row"><label>代码仓库（CLI 任务在其隔离工作区执行）</label><select id="nt-repo">${repoOpts('')}</select></div>` : ''}
+      <div class="f-row" id="nt-model-row" style="display:none"><label>执行模型</label>${ds('nt-model', [{ v: '', l: '默认模型' }, ...CB_MODELS.map(m => ({ v: m, l: m }))], '')}</div>
+      ${(S().repos || []).length || S().repoRoot ? `<div class="f-row"><label>代码仓库（CLI 任务在其隔离工作区执行）</label>${ds('nt-repo', repoOpts(''), '')}</div>` : ''}
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="createTask()">创建任务</button></div>`);
@@ -1897,7 +1921,7 @@ function createTask() {
 /* ---- Agent 配置（真实 API） ---- */
 function openAgentConfig(agentId) {
   const a = agentById(agentId); if (!a) return;
-  const provOpts = PROVIDER_PRESETS.map(p => `<option value="${p.id}" ${a.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('');
+  const provOpts = PROVIDER_PRESETS.map(p => ({ v: p.id, l: p.label }));
   const engineFields = a.mode === 'cli' ? `
       <div class="f-2col">
         <div class="f-row"><label>本机命令</label><input type="text" id="ac-cmd" value="${esc(a.cliCommand || '')}" placeholder="例如 claude"></div>
@@ -1906,15 +1930,15 @@ function openAgentConfig(agentId) {
         </div>
       </div>
       <div class="f-row"><label>命令模板（{prompt} 为任务提示词占位）</label><input type="text" id="ac-tpl" value="${esc(a.cliTemplate || '')}" placeholder="claude -p {prompt}"></div>
-      <div class="f-row"><label>执行位置</label><select id="ac-runtime">
-        <option value="local" ${a.runtime !== 'cloud' ? 'selected' : ''}>本机节点（在这台电脑上执行）</option>
-        <option value="cloud" ${a.runtime === 'cloud' ? 'selected' : ''}>云端节点（在设置中配置的服务器上执行）</option>
-      </select></div>
+      <div class="f-row"><label>执行位置</label>${ds('ac-runtime', [
+        { v: 'local', l: '本机节点（在这台电脑上执行）' },
+        { v: 'cloud', l: '云端节点（在设置中配置的服务器上执行）' },
+      ], a.runtime === 'cloud' ? 'cloud' : 'local')}</div>
       ${['codebuddy', 'workbuddy'].includes(a.cliId) ? `<div class="f-row"><label>执行模型（留空用 CLI 默认）</label><input type="text" id="ac-climodel" list="climodel-list" value="${esc(a.cliModel || '')}" placeholder="例如 glm-5.3-flash">
       <datalist id="climodel-list">${['hy4-preview', 'hy3', 'hy3-x', 'step-5-preview', 'space-bunny', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx', 'glm-5.2', 'glm-5.1', 'glm-5v-turbo', 'minimax-m3-pay', 'minimax-m2.7', 'kimi-k3-2', 'kimi-k2.8-preview', 'kimi-k2.7', 'kimi-k2.6', 'deepseek-v4-pro'].map(m => `<option value="${m}">`).join('')}</datalist></div>` : ''}`
     : `
       <div class="f-2col">
-        <div class="f-row"><label>服务商（OpenAI 兼容）</label><select id="ac-provider" onchange="acProviderChanged()">${provOpts}</select></div>
+        <div class="f-row"><label>服务商（OpenAI 兼容）</label>${ds('ac-provider', provOpts, a.provider, 'acProviderChanged()')}</div>
         <div class="f-row"><label>模型</label><input type="text" id="ac-model" value="${esc(a.model || '')}" placeholder="例如 glm-4.7"></div>
       </div>
       <div class="f-row"><label>Base URL</label><input type="text" id="ac-baseurl" value="${esc(a.baseURL || '')}" placeholder="选服务商后自动填入"></div>
@@ -1924,11 +1948,7 @@ function openAgentConfig(agentId) {
       <div class="f-2col">
         <div class="f-row"><label>名称</label><input type="text" id="ac-name" value="${esc(a.name)}"></div>
         <div class="f-row"><label>执行引擎</label>
-          <select id="ac-mode" onchange="acModeSwap('${a.id}')">
-            <option value="api" ${a.mode === 'api' ? 'selected' : ''}>真实 API</option>
-            <option value="cli" ${a.mode === 'cli' ? 'selected' : ''}>本机 CLI</option>
-            <option value="sim" ${a.mode === 'sim' ? 'selected' : ''}>演示引擎</option>
-          </select></div>
+          ${ds('ac-mode', [{ v: 'api', l: '真实 API' }, { v: 'cli', l: '本机 CLI' }, { v: 'sim', l: '演示引擎' }], a.mode, `acModeSwap('${a.id}')`)}</div>
       </div>
       ${engineFields}
       <div class="f-row"><label>场景 / 角色附加提示（可选，执行时随任务发送）</label>
@@ -1941,6 +1961,13 @@ function openAgentConfig(agentId) {
       <button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="acSave('${a.id}')">保存</button>
     </div>`);
+}
+/* 切换服务商：自动带入 Base URL，模型为空时带入预置模型 */
+function acProviderChanged() {
+  const p = PROVIDER_PRESETS.find(x => x.id === $('#ac-provider')?.value);
+  if (!p) return;
+  const bu = $('#ac-baseurl'); if (bu && p.baseURL) bu.value = p.baseURL;
+  const m = $('#ac-model'); if (m && !m.value.trim() && p.model) m.value = p.model;
 }
 function acModeSwap(id) {
   const a = agentById(id);
@@ -2408,7 +2435,7 @@ async function init() {
   $('#search').addEventListener('input', e => { filters.search = e.target.value; if (curView === 'kanban' || curView === 'list') render(); });
   document.addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#search').focus(); }
-    if (e.key === 'Escape') { closeSpaceMenu(); closeOrgMenu(); closeModal(); closeDrawer(); document.getElementById('notif-pop')?.classList.remove('show'); }
+    if (e.key === 'Escape') { closeSpaceMenu(); closeOrgMenu(); closeModal(); closeDrawer(); document.getElementById('notif-pop')?.classList.remove('show'); document.querySelectorAll('.ds.open').forEach(d => d.classList.remove('open')); }
     const tag = document.activeElement?.tagName;
     if ((e.metaKey || e.ctrlKey) && /^[0-9]$/.test(e.key) && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
       e.preventDefault(); const vi = e.key === '0' ? 9 : Number(e.key) - 1; switchView(VIEWS[vi].id);
@@ -2420,6 +2447,7 @@ async function init() {
       if (!e.target.closest('.space-menu')) { closeSpaceMenu(); closeOrgMenu(); }
       // 收件箱弹层：点击顶栏铃铛以外任意处即收起（铃铛按钮自带 stopPropagation，不会误关）
       if (!e.target.closest('.topbar-bell')) document.getElementById('notif-pop')?.classList.remove('show');
+      document.querySelectorAll('.ds.open').forEach(d => { if (!e.target.closest('.ds') || d !== e.target.closest('.ds')) d.classList.remove('open'); });
     });
 
   // 恢复/演示：进行中且指派演示引擎的任务自动继续（真实 API 不自动续跑，避免无感知扣费）
