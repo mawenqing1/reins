@@ -113,9 +113,10 @@ a { color: var(--accent); text-decoration: none; }
 }
 .sq {
   width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
-  background: @brand-deep;
+  background: linear-gradient(135deg, #2E2E33, #151518); // 石墨黑章，与应用图标同源
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; color: #fff; font-weight: 700;
+  &.ghost { background: #eceef1; color: var(--ink-dim); font-weight: 400; } // 功能入口的浅底形态
 }
 .space-pop {
   display: none; position: absolute; left: 0; right: 0; top: calc(100% + 6px);
@@ -131,10 +132,10 @@ a { color: var(--accent); text-decoration: none; }
     .sq { width: 24px; height: 24px; font-size: 11px; }
   }
   .sp-act {
-    display: block; width: 100%; text-align: left; background: none; border: none;
-    border-top: 1px solid @side-line; margin-top: 6px; padding: 9px 10px 5px;
-    color: #87919a; font-size: 12px; border-radius: 7px; cursor: pointer;
-    &:hover { color: #e6e9ec; }
+    display: flex; width: 100%; align-items: center; gap: 7px; text-align: left; background: none; border: none;
+    margin-top: 6px; padding: 8px 10px; color: #5d636b; font-size: 12px;
+    border-radius: 7px; cursor: pointer;
+    &:hover { background: #eef0f3; color: #2c3136; }
   }
 }
 
@@ -872,10 +873,24 @@ a { color: var(--accent); text-decoration: none; }
 }
 .org-pop {
   position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 60;
-  background: #20262a; border: 1px solid #333a41; border-radius: 8px;
-  padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  background: #ffffff; border: 1px solid @side-line; border-radius: 8px;
+  padding: 6px; box-shadow: 0 8px 24px rgba(20, 22, 26, .14);
   display: none;
   &.show { display: block; }
+  .sp-item {
+    display: flex; gap: 9px; align-items: center; padding: 8px 10px;
+    border-radius: 7px; cursor: pointer; color: @side-ink-dim;
+    b { color: inherit; font-weight: 600; font-size: 12px; }
+    &:hover { background: #eef0f3; color: #2c3136; }
+    &.on { background: rgba(14, 122, 112, .10); color: @brand-text; }
+    .sq { width: 24px; height: 24px; font-size: 11px; }
+  }
+  .sp-act {
+    display: flex; width: 100%; align-items: center; gap: 7px; text-align: left; background: none; border: none;
+    margin-top: 6px; padding: 8px 10px; color: #5d636b; font-size: 12px;
+    border-radius: 7px; cursor: pointer;
+    &:hover { background: #eef0f3; color: #2c3136; }
+  }
 }
 
 // —— 任务时间线
