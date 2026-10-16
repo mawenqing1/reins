@@ -10,6 +10,54 @@
 const STORE_KEY = 'reins-state-v1';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* —— 轻量 Markdown 渲染（零依赖，覆盖交付报告常用语法；先转义再生成受控标签，链接仅放行 http(s)） —— */
+function mdToHtml(src) {
+  if (!src) return '';
+  const inline = s => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const lines = String(src).replace(/\r/g, '').split('\n');
+  let html = '', i = 0, p = [];
+  const flushP = () => { if (p.length) html += '<p>' + p.map(inline).join('<br>') + '</p>'; p = []; };
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^```/.test(l)) {
+      flushP(); const code = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) code.push(lines[i++]);
+      i++;
+      html += '<pre><code>' + esc(code.join('\n')) + '</code></pre>';
+      continue;
+    }
+    const h = l.match(/^(#{1,4})\s+(.*)/);
+    if (h) { flushP(); const lv = h[1].length + 1; html += `<h${lv}>${inline(h[2])}</h${lv}>`; i++; continue; }
+    if (/^\s*([-*]|\d+\.)\s+/.test(l)) {
+      flushP();
+      const ordered = /^\s*\d+\./.test(l);
+      const items = [];
+      while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) items.push(lines[i++].replace(/^\s*(?:[-*]|\d+\.)\s+/, ''));
+      html += `<${ordered ? 'ol' : 'ul'}>` + items.map(x => `<li>${inline(x)}</li>`).join('') + `</${ordered ? 'ol' : 'ul'}>`;
+      continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      flushP();
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(lines[i++].trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+      const head = rows.shift(); rows.shift();
+      html += '<table><thead><tr>' + head.map(c => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>'
+        + rows.map(r => '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+      continue;
+    }
+    if (/^\s*(---+|\*\*\*+)\s*$/.test(l)) { flushP(); html += '<hr>'; i++; continue; }
+    if (/^\s*>\s?/.test(l)) { flushP(); html += '<blockquote>' + inline(l.replace(/^\s*>\s?/, '')) + '</blockquote>'; i++; continue; }
+    if (!l.trim()) { flushP(); i++; continue; }
+    p.push(l); i++;
+  }
+  flushP();
+  return html;
+}
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = arr => arr[rnd(0, arr.length - 1)];
 
@@ -859,7 +907,7 @@ function renderDrawer(id) {
     execHTML = `<div class="d-sec"><h4>验收</h4>
       <div class="review-box">
         <span class="pr">${esc(t.pr || '交付 #—')}</span>
-        ${t.result ? `<div class="result-box">${esc(t.result)}</div>`
+        ${t.result ? `<div class="result-box">${mdToHtml(t.result)}</div>`
         : `<p>执行已完成，请核对改动后验收</p>`}
         <div style="display:flex;gap:9px;margin-top:12px">
           <button class="btn btn-p btn-sm" onclick="mergeTask('${t.id}')">✓ 通过并归档</button>
@@ -869,7 +917,7 @@ function renderDrawer(id) {
       ${t.thread?.length ? `<div class="thread-note">该任务已执行 ${t.thread.filter(m => m.role === 'assistant').length} 轮，打回时 Agent 会结合此前的交付与反馈继续修改。</div>` : ''}</div>`;
   } else if (t.status === 'done' && t.pr) {
     execHTML = `<div class="d-sec"><h4>结果</h4><div class="done-box">✓ 已归档 <span class="pr">${esc(t.pr)}</span> · 完成于 ${t.doneAt ? fmtRel(t.doneAt) : '—'}</div>
-      ${t.result ? `<div class="result-box" style="margin-top:10px">${esc(t.result)}</div>` : ''}</div>`;
+      ${t.result ? `<div class="result-box" style="margin-top:10px">${mdToHtml(t.result)}</div>` : ''}</div>`;
   }
 
   $('#drawer').innerHTML = `
@@ -1663,7 +1711,7 @@ function viewDeliveries() {
 function previewDelivery(id) {
   const t = byId(id);
   openModal(`<div class="modal-head"><h3>${esc(t.title)}</h3><span>${esc(t.pr || t.key)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div class="result-box" style="max-height:56vh;overflow:auto">${esc(t.result || '（该交付无文本产出）')}</div></div>
+    <div class="modal-body"><div class="result-box" style="max-height:56vh;overflow:auto">${mdToHtml(t.result || '（该交付无文本产出）')}</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
       ${t.result ? `<button class="btn btn-p" onclick="downloadDelivery('${t.id}')">下载 .md</button>` : ''}</div>`);
 }
