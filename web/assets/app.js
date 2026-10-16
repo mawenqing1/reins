@@ -2361,23 +2361,26 @@ function renderBell() {
   window.reins?.traySetBadge?.(n); // 菜单栏托盘图标同步未读角标
 }
 
-/* 托盘角标绘制：在隐藏 canvas 上画「主图形（略缩左置）+ 右上实心圆 + 镂空数字」，供主进程取图 */
+/* 托盘角标绘制：图形 + 右侧纯数字（无底衬），整图为单色模板——深色菜单栏渲染为纯白，浅色自动变黑 */
 function trayBadgeDataUrl(n) {
   const img = document.getElementById('tray-base-src');
-  if (!img || !img.complete || !img.naturalWidth) return '';
+  if (!img || !img.complete || !img.naturalWidth) return null;
+  const x0 = document.getElementById('tray-badge-canvas').getContext('2d');
+  const font = 'bold 22px -apple-system,Helvetica';
+  x0.font = font;
+  const tw = n > 0 ? Math.ceil(x0.measureText(String(Math.min(n, 99))).width) : 0;
+  const W = 32 + (n > 0 ? 5 + tw : 0), H = 32;
   const c = document.getElementById('tray-badge-canvas');
+  c.width = W; c.height = H;              // 重设尺寸会清空画布状态，字体需重设
   const x = c.getContext('2d');
-  x.clearRect(0, 0, 32, 32);
-  x.drawImage(img, 0, 3, 26, 26);
-  x.globalCompositeOperation = 'source-over';
-  x.fillStyle = '#000';
-  x.beginPath(); x.arc(25, 7, 6.8, 0, 7); x.fill();
-  x.globalCompositeOperation = 'destination-out';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.font = 'bold ' + (n < 10 ? 8.5 : 7) + 'px -apple-system,Helvetica';
-  x.fillText(String(n), 25, 7.5);
-  x.globalCompositeOperation = 'source-over';
-  return c.toDataURL();
+  x.drawImage(img, 0, 0, 32, 32);         // 品牌图形（alpha 保留，颜色交给模板机制）
+  if (n > 0) {
+    x.fillStyle = '#fff';                 // 模板图只取 alpha，此处填白色仅作占位
+    x.textAlign = 'left'; x.textBaseline = 'middle';
+    x.font = font;
+    x.fillText(String(Math.min(n, 99)), 36, 17);
+  }
+  return { url: c.toDataURL(), w: W, h: H };
 }
 const INBOX_FILTERS = [['all', '全部'], ['done', '交付完成'], ['run', '执行中'], ['reject', '打回'], ['triage', '创建/分诊']];
 function toggleNotif(e) {

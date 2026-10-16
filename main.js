@@ -206,41 +206,38 @@ function createWindow(hidden) {
 
 
 /* ---------- 托盘 ---------- */
-/* —— 托盘未读角标：主窗口 canvas 画「实心圆+镂空数字」进模板图（深浅菜单栏都清晰），按数字缓存 —— */
-let trayBadgeCur = 0;
+/* —— 托盘未读角标（企微式：青图形 + 右侧红圆白字徽章）：主窗口 canvas 绘制 2x 位图，按数字缓存 —— */
+let trayBadgeCur = -1;
 const trayBadgeCache = new Map();
-function baseTrayImage() {
-  const t16 = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-16.png'));
-  const t32 = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-32.png'));
-  if (!t32.isEmpty()) t16.addRepresentation({ scaleFactor: 2, width: 32, height: 32, buffer: t32.toPNG() });
-  t16.setTemplateImage(true);
-  return t16;
-}
 async function renderTrayBadge(n) {
-  // 画布在主窗口里（app.html 的隐藏 img/canvas，同源无拦截）；首调可能图片未就绪，稍候重试一次
+  // 画布在主窗口（app.html 隐藏 img/canvas）；首调可能图片未就绪，稍候重试一次
   for (let i = 0; i < 2; i++) {
-    const url = await mainWindow?.webContents
+    const r = await mainWindow?.webContents
       .executeJavaScript(`trayBadgeDataUrl(${n})`, true)
-      .catch(() => '');
-    if (url) {
-      const img = nativeImage.createFromDataURL(url);
+      .catch(() => null);
+    if (r && r.url) {
+      const bitmap = nativeImage.createFromDataURL(r.url);
+      // 位图按 2x 生成，标记缩放因子保证逻辑尺寸正确、Retina 不糊；模板图随菜单栏明暗渲染（深色=纯白）
+      const img = nativeImage.createFromBuffer(bitmap.toPNG(), { scaleFactor: 2, width: r.w / 2, height: r.h / 2 });
       if (!img.isEmpty()) { img.setTemplateImage(true); return img; }
     }
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r2 => setTimeout(r2, 500));
   }
   return null;
 }
 async function setTrayBadge(n) {
   n = Math.max(0, Math.min(99, n | 0));
   if (!tray || n === trayBadgeCur) return;
+  const prev = trayBadgeCur;
   trayBadgeCur = n;
-  if (!n) { tray.setImage(baseTrayImage()); return; }
   let img = trayBadgeCache.get(n);
   if (!img || img.isEmpty()) {
     img = await renderTrayBadge(n);
     if (img) trayBadgeCache.set(n, img);
   }
-  if (tray && trayBadgeCur === n && img && !img.isEmpty()) tray.setImage(img);
+  // 渲染失败时保留当前图标，别把好图标换成空图
+  if (tray && img && !img.isEmpty()) tray.setImage(img);
+  else trayBadgeCur = prev;
 }
 
 function createTray() {
