@@ -2366,19 +2366,19 @@ function trayBadgeDataUrl(n) {
   const img = document.getElementById('tray-base-src');
   if (!img || !img.complete || !img.naturalWidth) return null;
   const x0 = document.getElementById('tray-badge-canvas').getContext('2d');
-  const font = 'bold 22px -apple-system,Helvetica';
+  const font = 'bold 26px -apple-system,Helvetica';
   x0.font = font;
   const tw = n > 0 ? Math.ceil(x0.measureText(String(Math.min(n, 99))).width) : 0;
-  const W = 32 + (n > 0 ? 5 + tw : 0), H = 32;
+  const W = 36 + (n > 0 ? 5 + tw : 0), H = 36;
   const c = document.getElementById('tray-badge-canvas');
   c.width = W; c.height = H;              // 重设尺寸会清空画布状态，字体需重设
   const x = c.getContext('2d');
-  x.drawImage(img, 0, 0, 32, 32);         // 品牌图形（alpha 保留，颜色交给模板机制）
+  x.drawImage(img, 0, 0, 36, 36);         // 品牌图形（alpha 保留，颜色交给模板机制）
   if (n > 0) {
     x.fillStyle = '#fff';                 // 模板图只取 alpha，此处填白色仅作占位
     x.textAlign = 'left'; x.textBaseline = 'middle';
     x.font = font;
-    x.fillText(String(Math.min(n, 99)), 36, 17);
+    x.fillText(String(Math.min(n, 99)), 41, 19);
   }
   return { url: c.toDataURL(), w: W, h: H };
 }
