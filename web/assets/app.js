@@ -81,7 +81,7 @@ const brandMono = name => {
 };
 const brandOf = a => brandIcon(a.mode === 'cli' ? CLI_LOGO[a.cliId] : a.mode === 'api' ? PROVIDER_LOGO[a.provider] : '') || brandMono(a.name);
 
-const FILES = ['src/api/orders.ts', 'src/services/payment.ts', 'docs/竞品分析-飞书.md', 'data/suppliers_2026Q3.xlsx',
+const FILES = ['src/api/orders.ts', 'src/services/payment.ts', 'docs/竞品分析.md', 'data/suppliers_2026Q3.xlsx',
   'docs/周报模板.md', 'src/hooks/useAuth.ts', 'tickets/高频工单.csv', 'src/views/Checkout.tsx'];
 
 /* ============ 状态 ============ */
@@ -111,7 +111,7 @@ function seed() {
     tasks: [], prompts: [], autos: seedAutos(),
     chart: [0, 0, 0, 0, 0, 0, 0],
     integ: { jira: { connected: false, host: '', lastSync: 0 } },
-    activity: [{ at: now(), icon: '👋', text: '工作区已就绪：接入 Agent，创建第一张任务卡' }],
+    activity: [{ at: now(), icon: '✳', text: '工作区已创建，可新建任务或接入 Agent' }],
     seq: 1, deliverSeq: 1, repoRoot: '', readAt: 0,
   };
   return {
@@ -122,9 +122,9 @@ function seed() {
 
 function seedAutos() {
   return [
-    { id: 'au1', name: '每日站会报告', trigger: '手动运行 · 也可按例程定时', icon: '🧾', desc: '汇总昨日归档、今日进行中与阻塞，生成站会材料。', enabled: true, lastRun: 0, runnable: true },
-    { id: 'au2', name: 'AI 分诊', trigger: '手动运行 · 也可按例程定时', icon: '✨', desc: '对待办任务判断类型与优先级、建议经办人，逐条给出理由，可一键应用。', enabled: true, lastRun: 0, runnable: true },
-    { id: 'au3', name: '周报生成', trigger: '手动运行 · 也可按例程定时', icon: '📈', desc: '按空间维度汇总近 7 天吞吐、验收队列、迭代进度与产能。', enabled: true, lastRun: 0, runnable: true },
+    { id: 'au1', name: '每日站会报告', trigger: '手动运行 · 也可按例程定时', icon: '☰', desc: '汇总昨日归档、今日进行中与阻塞，生成站会材料。', enabled: true, lastRun: 0, runnable: true },
+    { id: 'au2', name: 'AI 分诊', trigger: '手动运行 · 也可按例程定时', icon: '✦', desc: '对待办任务判断类型与优先级，建议经办人并逐条给出理由，确认后应用。', enabled: true, lastRun: 0, runnable: true },
+    { id: 'au3', name: '周报生成', trigger: '手动运行 · 也可按例程定时', icon: '▤', desc: '按空间维度汇总近 7 天吞吐、验收队列、迭代进度与产能。', enabled: true, lastRun: 0, runnable: true },
   ];
 }
 
@@ -186,15 +186,15 @@ const fmtTokens = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1
 
 /* ============ 导航 ============ */
 const VIEWS = [
-  { id: 'dash', ic: '◧', label: '概览', sub: '团队与 Agent 运行全景', group: 'work' },
-  { id: 'kanban', ic: '▤', label: '看板', sub: '拖动卡片流转状态 · 指派给 Agent 即自动执行', group: 'work' },
-  { id: 'list', ic: '☰', label: '任务', sub: '全部任务一览', group: 'work' },
-  { id: 'deliveries', ic: '⇩', label: '交付', sub: '全部产出物 · 预览 / 复制 / 下载', group: 'work' },
-  { id: 'nodes', ic: '▣', label: '节点', sub: '本机与云端执行节点 · 运行时检测 · 防休眠', group: 'work' },
-  { id: 'agents', ic: '✳', label: 'Agent', sub: '接入与指挥你的 Agent 编队（真实 API 或本机 CLI）', group: 'cmd' },
-  { id: 'prompts', ic: '✎', label: '提示词库', sub: '团队共享的提示词资产，执行时可附加到任务', group: 'cmd' },
-  { id: 'autos', ic: '⟳', label: '自动化', sub: '例程与触发器，让 Agent 定时自己干活', group: 'cmd' },
-  { id: 'integ', ic: '⇄', label: '集成', sub: '与研发工具链双向同步', group: 'cmd' },
+  { id: 'dash', ic: '◧', label: '概览', sub: '任务、Agent 与近期动态', group: 'work' },
+  { id: 'kanban', ic: '▤', label: '看板', sub: '拖动卡片流转状态，指派 Agent 的任务自动执行', group: 'work' },
+  { id: 'list', ic: '☰', label: '任务', sub: '全部任务', group: 'work' },
+  { id: 'deliveries', ic: '⇩', label: '交付', sub: '任务的交付物，可预览、复制、下载', group: 'work' },
+  { id: 'nodes', ic: '▣', label: '节点', sub: '本机与云端执行节点', group: 'work' },
+  { id: 'agents', ic: '✳', label: 'Agent', sub: '接入 API 或本机 CLI，统一指派任务', group: 'cmd' },
+  { id: 'prompts', ic: '✎', label: '提示词库', sub: '共享的提示词，执行时可附加到任务', group: 'cmd' },
+  { id: 'autos', ic: '⟳', label: '自动化', sub: '站会、分诊与周报例程', group: 'cmd' },
+  { id: 'integ', ic: '⇄', label: '集成', sub: 'Webhook 推送与分诊引擎', group: 'cmd' },
   { id: 'settings', ic: '⚙', label: '设置', sub: '模型与密钥 · 客户端偏好 · 数据', group: 'sys' },
 ];
 
@@ -281,7 +281,7 @@ function viewKanban() {
       ${(S().iterations || []).length ? `<select onchange="filters.iter=this.value;render()">${iterOpts}</select>` : ''}
       <select onchange="filters.type=this.value;render()">${typeOpts}</select>
       <select onchange="filters.who=this.value;render()">${whoOpts}</select>
-      <span class="kb-hint">把卡片拖到「进行中」并指派 Agent，即自动开始执行</span>
+      <span class="kb-hint">指派给 Agent 的任务拖入「进行中」后自动执行</span>
     </div>`;
 
   // —— 泳道模式：每个经办人一条横向泳道，列头只出现一次 ——
@@ -311,9 +311,9 @@ function viewKanban() {
   const cols = STATUS_FLOW.map(st => colHTML(st, S().tasks.filter(t => t.status === st && passFilter(t)))).join('');
   const welcome = !S().tasks.length && !filters.type && !filters.who && !filters.search ? `
     <div class="kb-welcome">
-      <div class="kw"><span class="n">1</span><div><b>创建第一张任务卡</b><span>用一句话说清要做什么；类型、优先级可以之后让 AI 分诊补齐。</span></div></div>
-      <div class="kw"><span class="n">2</span><div><b>接入你的 Agent</b><span>真实 API 服务商或本机 CLI（Claude Code、Codex…），密钥只存本机。</span></div></div>
-      <div class="kw"><span class="n">3</span><div><b>指派并执行</b><span>把卡拖进「进行中」或直接点「指派并启动」，产出进入待验收，可打回重做。</span></div></div>
+      <div class="kw"><span class="n">1</span><div><b>创建第一张任务</b><span>标题写清要做什么即可，类型与优先级可以之后再调整。</span></div></div>
+      <div class="kw"><span class="n">2</span><div><b>接入 Agent</b><span>支持 OpenAI 兼容 API 与本机 CLI 两种方式，密钥只保存在本机。</span></div></div>
+      <div class="kw"><span class="n">3</span><div><b>指派并执行</b><span>将卡片拖入「进行中」或点击「指派并启动」，产出进入待验收，可打回重做。</span></div></div>
     </div>` : '';
   return filtersBar + welcome + `<div class="kanban">${cols}</div>`;
 }
@@ -363,14 +363,14 @@ function setStatus(t, st) {
       if (!runs[t.id]) startRun(t.id, { byUser: true });
     } else if (!t.assignee) {
       t.assignee = { kind: 'human', name: '我' };
-      toast('已自动指派', t.key + ' → 我（成员）', '👤');
+      toast('已自动指派', t.key + ' 已指派给我');
     }
   }
   if (st === 'review' && !t.pr && t.assignee?.kind === 'agent') t.pr = '交付 #' + (S().deliverSeq++);
   if (st === 'done') {
     t.doneAt = now(); S().chart[6]++;
     addActivity('✅', t.key + ' 已归档' + (t.pr ? ' · ' + t.pr : ''));
-    toast('任务完成', t.key + ' ' + esc(t.title), '✅');
+    toast('任务完成', t.key + ' ' + esc(t.title), '✓');
   }
   save(); refreshViews();
   if (drawerTaskId === t.id) renderDrawer(t.id);
@@ -388,7 +388,7 @@ function viewList() {
       <td><span class="pri ${t.pri}">${t.pri}</span></td>
       <td><span class="st ${t.status}"><span class="dot"></span>${STATUS_LABEL[t.status]}</span></td>
       <td>${t.assignee ? (t.assignee.kind === 'agent' ? '◆ ' + esc(t.assignee.name) : esc(t.assignee.name)) : '<span style="color:var(--ink-faint)">未指派</span>'}</td>
-      <td>${t.pr ? `<span style="font-family:var(--mono);font-size:11.5px;color:${t.status === 'done' ? 'var(--done)' : 'var(--review)'}">${esc(t.pr)}</span>` : '—'}</td>
+      <td>${t.pr ? `<span style="font-family:var(--mono);font-size:11px;color:${t.status === 'done' ? 'var(--done)' : 'var(--review)'}">${esc(t.pr)}</span>` : '—'}</td>
     </tr>`).join('')}</tbody></table>`;
 }
 
@@ -412,12 +412,12 @@ function viewAgents() {
         </div>
         <span class="status-pill ${a.status}">${a.status === 'working' ? '<span class="pulse"></span>执行中' : a.status === 'idle' ? '待命' : '离线'}</span>
       </div>
-      ${cur ? `<div class="agent-now"><span class="pulse" style="display:inline-block;margin-right:6px"></span>正在执行 <b>${cur.key}</b> ${esc(cur.title)} <span class="lnk" onclick="openTask('${cur.id}')">查看 →</span></div>` : '<div class="agent-now" style="color:var(--ink-faint)">空闲，等待指派任务</div>'}
-      <div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-faint)"><span>负载</span><span>${Math.round(util)}%</span></div><div class="util"><i style="width:${util}%"></i></div></div>
+      ${cur ? `<div class="agent-now"><span class="pulse" style="display:inline-block;margin-right:6px"></span>正在执行 <b>${cur.key}</b> ${esc(cur.title)} <span class="lnk" onclick="openTask('${cur.id}')">查看 →</span></div>` : '<div class="agent-now" style="color:var(--ink-faint)">暂无执行中的任务</div>'}
+      <div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-faint)"><span>负载</span><span>${Math.round(util)}%</span></div><div class="util"><i style="width:${util}%"></i></div></div>
       <div class="agent-stats">
-        <div><b>${a.done}</b><span>累计任务</span></div>
-        <div><b>${fmtTokens(a.tokens)}</b><span>tokens（真实计量）</span></div>
-        <div><b>${a.status === 'working' ? '1' : '0'}</b><span>并行实例</span></div>
+        <div><b>${a.done}</b><span>累计完成</span></div>
+        <div><b>${fmtTokens(a.tokens)}</b><span>tokens 消耗</span></div>
+        <div><b>${a.status === 'working' ? '1' : '0'}</b><span>并发任务</span></div>
       </div>
       <div class="agent-foot">
         ${a.mode === 'api' ? `<button class="btn btn-o btn-sm" onclick="openAgentConfig('${a.id}')">配置</button>` : ''}
@@ -427,31 +427,30 @@ function viewAgents() {
     </div>`;
   }).join('');
   const empty = !O().agents.length ? `<div class="panel" style="grid-column:1/-1;padding:30px;text-align:center">
-      <div style="font-size:30px;margin-bottom:8px">🤖</div>
-      <b style="font-size:15px">还没有 Agent</b>
-      <div style="font-size:13px;color:var(--ink-dim);margin:6px 0 14px">接入一个真实 API 服务商或本机 CLI，把任务卡指派给它就会自动执行。</div>
-      <button class="btn btn-p" onclick="openAddAgentModal()">接入第一个 Agent</button>
+      <b style="font-size:15px">尚未接入 Agent</b>
+      <div style="font-size:13px;color:var(--ink-dim);margin:6px 0 14px">接入 API 服务商或本机 CLI 后，即可将任务指派给 Agent 执行。</div>
+      <button class="btn btn-p" onclick="openAddAgentModal()">接入 Agent</button>
     </div>` : '';
-  return `<div class="view-head"><h2>Agent 编队</h2><p>真实 API 走你自己的密钥；本机 CLI 复用你的订阅</p>
+  return `<div class="view-head"><h2>Agent</h2><p>API 与本机 CLI 两种接入方式，密钥保存在本机</p>
       <span class="act"><button class="btn btn-p" onclick="openAddAgentModal()">＋ 接入 Agent</button></span></div>
-    <div class="grid3">${empty}${cards}<div class="add-card" onclick="openAddAgentModal()"><span class="plus">＋</span>接入新的 Agent</div></div>`;
+    <div class="grid3">${empty}${cards}<div class="add-card" onclick="openAddAgentModal()"><span class="plus">＋</span>接入 Agent</div></div>`;
 }
 
 function toggleAgent(id) {
   const a = agentById(id);
-  if (a.status === 'working') { toast('无法离线', a.name + ' 正在执行任务，请先等待完成或终止', '⚠️'); return; }
-  if (a.mode === 'api' && !a.apiKey && a.status === 'offline') { toast('缺少密钥', '请先在配置中填写 API Key', '🔑'); openAgentConfig(id); return; }
+  if (a.status === 'working') { toast('无法离线', a.name + ' 正在执行任务，请先等待完成或终止', '⚠'); return; }
+  if (a.mode === 'api' && !a.apiKey && a.status === 'offline') { toast('缺少密钥', '请先在配置中填写 API Key', ''); openAgentConfig(id); return; }
   a.status = a.status === 'offline' ? 'idle' : 'offline';
-  toast(a.name, a.status === 'offline' ? '已离线' : '已上线，待命中', a.status === 'offline' ? '⏹' : '▶️');
+  toast(a.name, a.status === 'offline' ? '已离线' : '已上线', a.status === 'offline' ? '■' : '▶');
   addActivity('✳', a.name + (a.status === 'offline' ? ' 已离线' : ' 已上线'));
   save(); refreshViews();
 }
 function assignNextTo(agentId) {
   const a = agentById(agentId);
-  if (!agentUsable(a)) { toast('Agent 不可用', a.mode === 'api' ? '请先配置密钥并上线' : '请先上线', '⚠️'); if (a.mode === 'api') openAgentConfig(agentId); return; }
-  if (a.status === 'working') { toast('忙线中', a.name + ' 正在执行 ' + byId(a.taskId).key, '⏳'); return; }
+  if (!agentUsable(a)) { toast('Agent 不可用', a.mode === 'api' ? '请先配置密钥并上线' : '请先上线', '⚠'); if (a.mode === 'api') openAgentConfig(agentId); return; }
+  if (a.status === 'working') { toast('忙线中', a.name + ' 正在执行 ' + byId(a.taskId).key, '▸'); return; }
   const t = S().tasks.filter(x => x.status === 'todo' && x.assignee?.kind !== 'human').sort((x, y) => y.pri.localeCompare(x.pri))[0];
-  if (!t) { toast('没有可领取的任务', '待处理列为空', '📭'); return; }
+  if (!t) { toast('没有可领取的任务', '待处理列为空', ''); return; }
   t.assignee = { kind: 'agent', id: a.id, name: a.name };
   startRun(t.id, { byUser: true, openDrawer: true });
   save(); refreshViews();
@@ -475,7 +474,7 @@ function viewPrompts() {
 }
 function copyPrompt(id) {
   const p = S().prompts.find(x => x.id === id);
-  const done = () => toast('已复制', '「' + esc(p.title) + '」已到剪贴板', '📋');
+  const done = () => toast('已复制', '「' + esc(p.title) + '」已复制到剪贴板', '⧉');
   if (navigator.clipboard) navigator.clipboard.writeText(p.content).then(done, done); else done();
 }
 
@@ -489,11 +488,11 @@ function viewAutos() {
     ${a.runnable ? `<button class="btn btn-o btn-sm" onclick="runAuto('${a.id}')">立即运行</button>` : ''}
     <label class="switch"><input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="toggleAuto('${a.id}')"><i></i></label>
   </div>`).join('');
-  return `<div class="view-head"><h2>自动化例程</h2><p>站会、分诊、周报 —— 在你到工位前已完成</p></div>${rows}`;
+  return `<div class="view-head"><h2>自动化</h2><p>站会报告、任务分诊与周报生成，可手动或定时运行</p></div>${rows}`;
 }
 function toggleAuto(id) {
   const a = S().autos.find(x => x.id === id); a.enabled = !a.enabled;
-  toast(a.name, a.enabled ? '已启用' : '已停用', a.enabled ? '⚙️' : '⏸');
+  toast(a.name, a.enabled ? '已启用' : '已停用', a.enabled ? '⚙' : '‖');
   save(); refreshViews();
 }
 function runAuto(id) {
@@ -530,7 +529,7 @@ function buildStandup() {
 }
 function openStandupModal() {
   const text = buildStandup();
-  openModal(`<div class="modal-head"><h3>每日站会报告</h3><span>自动化生成 · 09:30</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>每日站会报告</h3><span>自动化生成</span><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body"><div class="standup-out" id="standup-out"></div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
       <button class="btn btn-p" onclick="copyStandup()">复制全文</button></div>`);
@@ -541,7 +540,7 @@ function openStandupModal() {
   }, 14);
 }
 function copyStandup() {
-  const done = () => toast('已复制', '站会报告全文已到剪贴板', '📋');
+  const done = () => toast('已复制', '站会报告已复制到剪贴板', '⧉');
   if (navigator.clipboard) navigator.clipboard.writeText(buildStandup()).then(done, done); else done();
 }
 
@@ -594,7 +593,7 @@ function openWeeklyModal() {
   }, 10);
 }
 function copyWeekly() {
-  const done = () => toast('已复制', '周报全文已到剪贴板', '📋');
+  const done = () => toast('已复制', '周报已复制到剪贴板', '⧉');
   if (navigator.clipboard) navigator.clipboard.writeText(buildWeekly()).then(done, done); else done();
 }
 function downloadWeekly() {
@@ -604,7 +603,7 @@ function downloadWeekly() {
   a.href = URL.createObjectURL(blob);
   a.download = `周报-${S().name}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.md`;
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast('已下载', a.download, '📈');
+  toast('已下载', a.download, '⇩');
 }
 
 /* ============ 集成 ============ */
@@ -613,18 +612,18 @@ function viewInteg() {
   const evs = [['create', '任务创建'], ['done', '完成归档'], ['reject', '验收打回']];
   const roadmap = [['Linear', '双向同步 · 规划中'], ['TAPD', '双向同步 · 规划中'], ['GitHub Issues', '双向同步 · 规划中'], ['GitLab', '双向同步 · 规划中'], ['飞书项目', '双向同步 · 规划中'], ['Jira', '双向同步 · 规划中']];
   const engineSel = cfg.triageEngine || 'auto';
-  return `<div class="view-head"><h2>集成</h2><p>不迁移、不替换，长在你现有的工具链上</p></div>
+  return `<div class="view-head"><h2>集成</h2><p>任务事件推送与分诊引擎</p></div>
     <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:start">
       <div style="display:grid;gap:14px">
       <div class="panel integ-card">
         <div class="integ-brand">
-          <div class="lg" style="background:#e8a33d">⇄</div>
+          <div class="lg" style="background:#cf8a3e">⇄</div>
           <div><h3>Webhook 开放接口</h3><span>任务事件实时推送到任意系统</span></div>
           <span class="status-pill ${cfg.webhookUrl ? 'idle' : 'offline'}" style="margin-left:auto">${cfg.webhookUrl ? '已配置' : '未配置'}</span>
         </div>
-        <div class="integ-desc">把任务的关键事件以 JSON POST 到你指定的地址。飞书群机器人、企业微信、Slack Incoming Webhook、n8n / 自建服务均可直接接收，无需中间件。</div>
+        <div class="integ-desc">任务事件会以 JSON POST 发送到你指定的地址，群机器人、自动化平台或自建服务均可直接接收。</div>
         ${window.reins ? `
-        <div class="f-row"><label>推送地址（http:// 或 https://）</label><input type="text" id="wh-url" value="${esc(cfg.webhookUrl || '')}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…"></div>
+        <div class="f-row"><label>推送地址（http:// 或 https://）</label><input type="text" id="wh-url" value="${esc(cfg.webhookUrl || '')}" placeholder="https://example.com/webhook"></div>
         <div class="f-row" style="flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap">
           ${evs.map(([k, l]) => `<label class="f-check" style="margin:0"><input type="checkbox" id="wh-ev-${k}" ${!cfg.webhookEvents || cfg.webhookEvents[k] !== false ? 'checked' : ''}> ${l}</label>`).join('')}
         </div>
@@ -633,15 +632,15 @@ function viewInteg() {
           <button class="btn btn-o" onclick="whTest()">发送测试</button>
         </div>
         <div class="sync-log" id="wh-log" style="margin-top:12px"></div>`
-        : `<div class="sync-log"><div><span style="color:#8d8779">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
+        : `<div class="sync-log"><div><span style="color:#87919a">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
       </div>
       <div class="panel integ-card">
         <div class="integ-brand">
-          <div class="lg" style="background:#7c6fe0">⚖</div>
+          <div class="lg" style="background:#6f6ac2">⚖</div>
           <div><h3>Jev 决策引擎</h3><span>TypeSafe AI · 结构化分诊判断</span></div>
           <span class="status-pill ${cfg.jevKey ? 'idle' : 'offline'}" style="margin-left:auto">${cfg.jevKey ? '已配置' : '未配置'}</span>
         </div>
-        <div class="integ-desc">任务分诊（类型 / 优先级 / 经办人）交给决策模型：输入任务与候选名单，直接输出带概率的结构化判断，百毫秒级响应、成本约为通用模型的几百分之一，批量分诊尤其划算。不配置则继续用 API 模型分诊，调用失败自动逐级降级。</div>
+        <div class="integ-desc">将任务分诊（类型、优先级、经办人）交给决策模型：输入任务与候选名单，输出带概率的结构化建议，适合批量分诊。不配置时继续用 API 模型分诊。</div>
         ${window.reins ? `
         <div class="f-row"><label>API Key（console.typesafe.ai 创建）</label><input type="password" id="jev-key" value="${esc(cfg.jevKey || '')}" placeholder="sk-…"></div>
         <div class="f-row"><label>接入地址（兼容 systemone 协议即可）</label><input type="text" id="jev-url" value="${esc(cfg.jevUrl || 'https://api.typesafe.ai/v1/systemone')}" placeholder="https://api.typesafe.ai/v1/systemone"></div>
@@ -658,20 +657,20 @@ function viewInteg() {
           <button class="btn btn-o" onclick="jevTest()">测试连接</button>
         </div>
         <div class="sync-log" id="jev-log" style="margin-top:12px"></div>`
-        : `<div class="sync-log"><div><span style="color:#8d8779">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
+        : `<div class="sync-log"><div><span style="color:#87919a">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
       </div>
       </div>
       <div>
         <div class="integ-grid-mini">${roadmap.map(o => `<div class="mini-integ" style="opacity:.75">${o[0]}<span>${o[1]}</span></div>`).join('')}</div>
         <div class="panel" style="margin-top:14px;font-size:13px;color:var(--ink-dim)">
-          <b style="color:var(--ink)">为什么先做 Webhook 和决策引擎？</b><br>开放接口是最通用的集成方式，任何能收 HTTP 的系统都能立刻接上；决策模型则让分诊这类高频小判断不再占用大模型。深度双向同步（状态回写、评论互转）在路线图上，需要各平台的企业凭证。
+          <b style="color:var(--ink)">关于集成方式</b><br>Webhook 是最通用的集成方式，任何能接收 HTTP 的系统都能直接对接；决策模型负责分诊这类高频判断，不占用通用模型。双向同步（状态回写、评论互转）在规划中。
         </div>
       </div>
     </div>`;
 }
 function whSave() {
   const url = $('#wh-url').value.trim();
-  if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠️'); return; }
+  if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
   const evs = {};
   for (const k of ['create', 'done', 'reject']) evs[k] = $('#wh-ev-' + k).checked;
   window.reins.setSettings({ webhookUrl: url, webhookEvents: evs }).then(s => { if (s) hookCfg = { ...hookCfg, ...s }; });
@@ -680,7 +679,7 @@ function whSave() {
 }
 async function whTest() {
   const url = $('#wh-url').value.trim();
-  if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠️'); return; }
+  if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
   if (url && url !== (hookCfg.webhookUrl || '')) {
     const s = await window.reins.setSettings({ webhookUrl: url });
     if (s) hookCfg = { ...hookCfg, ...s };
@@ -688,7 +687,7 @@ async function whTest() {
   const log = $('#wh-log'); log.innerHTML = '<div class="ln act">▸ 正在发送测试事件…</div>';
   const r = await window.reins.webhookTest();
   log.innerHTML = r.ok
-    ? '<div class="ln ok">✓ 测试事件已送达（HTTP ' + r.status + '），去接收端确认吧</div>'
+    ? '<div class="ln ok">✓ 测试事件已送达（HTTP ' + r.status + '），请到接收端确认</div>'
     : '<div class="ln err">✗ 送达失败：' + esc(r.error || ('HTTP ' + r.status)) + '</div>';
 }
 function jevSave() {
@@ -696,9 +695,9 @@ function jevSave() {
   const url = $('#jev-url').value.trim() || 'https://api.typesafe.ai/v1/systemone';
   const model = $('#jev-model').value.trim() || 'jev-latest';
   const engine = $('#jev-engine').value;
-  if (!/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠️'); return; }
+  if (!/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
   window.reins.setSettings({ jevKey: key, jevUrl: url, jevModel: model, triageEngine: engine }).then(s => { if (s) hookCfg = { ...hookCfg, ...s }; });
-  toast('已保存', key ? 'Jev 决策引擎已启用，分诊将优先走它' : '已清空 Jev 配置，分诊回到 API 模型', '⚖');
+  toast('已保存', key ? '分诊将优先使用 Jev' : '已清空 Jev 配置，分诊改用 API 模型', '⚖');
   render();
 }
 async function jevTest() {
@@ -734,16 +733,16 @@ function viewDash() {
     const cur = a.taskId ? byId(a.taskId) : null;
     const u = a.status === 'working' ? Math.min(96, a.taskId && runs[a.taskId] ? 20 + runPct(a.taskId) * 0.76 : 40) : 0;
     return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:13px">
-      <span style="width:130px;font-size:12.5px;font-weight:600;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${brandOf(a)} ${esc(a.name)}</span>
+      <span style="width:130px;font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${brandOf(a)} ${esc(a.name)}</span>
       <div class="util" style="flex:1;margin:0"><i style="width:${u}%"></i></div>
-      <span style="width:140px;font-size:11.5px;color:var(--ink-faint);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cur ? cur.key + ' · ' + Math.round(u) + '%' : '空闲'}</span>
+      <span style="width:140px;font-size:11px;color:var(--ink-faint);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cur ? cur.key + ' · ' + Math.round(u) + '%' : '空闲'}</span>
     </div>`;
   }).join('');
   return `<div class="stats">
       <div class="stat"><span class="ic" style="color:var(--doing)">▶</span><b>${doing.length}</b><span>进行中</span><div class="trend">含 Agent 执行 ${doing.filter(t => t.assignee?.kind === 'agent').length} 项</div></div>
-      <div class="stat"><span class="ic" style="color:var(--review)">☰</span><b>${review.length}</b><span>待验收</span><div class="trend">等待人工终审</div></div>
-      <div class="stat"><span class="ic" style="color:var(--done)">✓</span><b>${doneToday.length}</b><span>今日归档</span><div class="trend">吞吐稳定 ↑</div></div>
-      <div class="stat"><span class="ic" style="color:var(--accent)">✳</span><b>${working.length}/${online.length}</b><span>在役 Agent</span><div class="trend">并行执行中</div></div>
+      <div class="stat"><span class="ic" style="color:var(--review)">☰</span><b>${review.length}</b><span>待验收</span><div class="trend">需人工验收</div></div>
+      <div class="stat"><span class="ic" style="color:var(--done)">✓</span><b>${doneToday.length}</b><span>今日归档</span></div>
+      <div class="stat"><span class="ic" style="color:var(--accent)">✳</span><b>${working.length}/${online.length}</b><span>Agent 执行中 / 在线</span></div>
     </div>
     <div class="grid2" style="margin-bottom:14px">
       <div class="panel"><h3 style="font-size:14px;margin-bottom:4px">近 7 日吞吐</h3><span style="font-size:12px;color:var(--ink-faint)">归档任务数 / 天</span><div class="chart">${bars}</div></div>
@@ -764,7 +763,7 @@ function renderDrawer(id) {
   const r = runs[id];
   const pct = runPct(id);
   const assigneeOpts = `<option value="">未指派</option>
-    ${memberNames().map(m => `<option value="m:${esc(m)}" ${t.assignee?.kind === 'human' && t.assignee.name === m ? 'selected' : ''}>👤 ${esc(m)}</option>`).join('')}
+    ${memberNames().map(m => `<option value="m:${esc(m)}" ${t.assignee?.kind === 'human' && t.assignee.name === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
     ${O().agents.map(a => `<option value="a:${a.id}" ${t.assignee?.id === a.id ? 'selected' : ''} ${agentUsable(a) ? '' : 'disabled'}>◆ ${esc(a.name)}${a.status === 'working' && a.taskId !== id ? '（忙）' : ''}</option>`).join('')}`;
   const promptOpts = `<option value="">不附加</option>
     ${S().prompts.map(p => `<option value="${p.id}" ${t.attachPrompt === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}`;
@@ -794,20 +793,20 @@ function renderDrawer(id) {
       <div style="font-size:12px;color:var(--ink-faint);margin-top:8px">${a?.mode === 'api'
         ? '将调用 ' + esc(providerLabel(a.provider) + ' · ' + a.model) + '，实时流式返回，完成后交付物进入待验收。'
         : a?.mode === 'cli'
-          ? '在本机（或云端节点）真实执行：Agent 会直接创建/修改工作区里的文件，完成后附上改动文件清单。'
+          ? '在本机或云端节点执行，Agent 会直接创建或修改工作区中的文件，完成后附上改动文件清单。'
           : '演示引擎本地模拟执行，完成后进入待验收。'}</div></div>`;
   } else if (t.status === 'review') {
     execHTML = `<div class="d-sec"><h4>验收</h4>
       <div class="review-box">
         <span class="pr">${esc(t.pr || '交付 #—')}</span>
         ${t.result ? `<div class="result-box">${esc(t.result)}</div>`
-        : `<p>改动 ${rnd(2, 6)} 处 · 自动核对通过 · 无范围外内容</p>`}
+        : `<p>执行已完成，请核对改动后验收</p>`}
         <div style="display:flex;gap:9px;margin-top:12px">
           <button class="btn btn-p btn-sm" onclick="mergeTask('${t.id}')">✓ 通过并归档</button>
           <button class="btn btn-o btn-sm" onclick="rejectTask('${t.id}')">✗ 打回重做</button>
         </div>
       </div>
-      ${t.thread?.length ? `<div class="thread-note">该任务已执行 ${t.thread.filter(m => m.role === 'assistant').length} 轮，打回时 Agent 会带着此前的交付与你的反馈继续修改。</div>` : ''}</div>`;
+      ${t.thread?.length ? `<div class="thread-note">该任务已执行 ${t.thread.filter(m => m.role === 'assistant').length} 轮，打回时 Agent 会结合此前的交付与反馈继续修改。</div>` : ''}</div>`;
   } else if (t.status === 'done' && t.pr) {
     execHTML = `<div class="d-sec"><h4>结果</h4><div class="done-box">✓ 已归档 <span class="pr">${esc(t.pr)}</span> · 完成于 ${t.doneAt ? fmtRel(t.doneAt) : '—'}</div>
       ${t.result ? `<div class="result-box" style="margin-top:10px">${esc(t.result)}</div>` : ''}</div>`;
@@ -843,22 +842,22 @@ function renderDrawer(id) {
       <div class="d-sec"><h4>描述 / 验收标准</h4><div class="d-desc">${esc(t.desc) || '（无描述）'}</div></div>
       ${t.status === 'todo' ? `<div class="d-sec"><h4>AI 分诊</h4>
         <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-o btn-sm" id="tri-btn" onclick="triageDrawer('${t.id}')">✨ 分析类型 · 优先级 · 经办</button>
-          <span style="font-size:11.5px;color:var(--ink-faint)">让 Agent 判断这张卡该怎么归类、派给谁</span>
+          <button class="btn btn-o btn-sm" id="tri-btn" onclick="triageDrawer('${t.id}')">分析类型、优先级与经办人</button>
+          <span style="font-size:11px;color:var(--ink-faint)">由 Agent 基于标题与描述给出归类建议</span>
         </div>
         <div id="triage-out"></div>
       </div>` : ''}
       ${execHTML}
       ${t.worktree ? `<div class="d-sec"><h4>隔离工作区</h4>
-        <div class="wt-chip"><span>🌿 ${esc(t.worktree)}</span><button class="btn btn-o btn-sm" onclick="revealWt('${t.id}')">在访达中显示</button></div>
+        <div class="wt-chip"><span>${esc(t.worktree)}</span><button class="btn btn-o btn-sm" onclick="revealWt('${t.id}')">在访达中显示</button></div>
         ${(t.changes && t.changes.length) ? `<div class="chg-list">${t.changes.map(c => `<span class="chg-file"><i>${esc(c.flag || 'M')}</i>${esc(c.file)}</span>`).join('')}</div>` : ''}
-        <div style="font-size:12px;color:var(--ink-faint);margin-top:7px">改动在分支 reins/${t.key} 上，验收通过后再合并回主分支，不影响他人工作。</div></div>` : ''}
+        <div style="font-size:12px;color:var(--ink-faint);margin-top:7px">改动位于分支 reins/${t.key}，验收通过后合并回主分支。</div></div>` : ''}
       ${(t.history && t.history.length) ? `<div class="d-sec"><h4>动态 · ${t.history.length}</h4>
         <ul class="tl">${t.history.slice().reverse().map(h => `<li><span class="fic">${h.icon}</span><div><div>${esc(h.text)}</div><div class="ft">${fmtRel(h.at)}</div></div></li>`).join('')}</ul>
       </div>` : ''}
       <div class="d-sec"><h4>评论 · ${t.comments.length}</h4>
-        ${t.comments.map(c => `<div class="comment"><div class="av">${esc(c.who[0])}</div><div class="bubble"><div class="who"><b>${esc(c.who)}</b> · ${fmtRel(c.at)}</div>${esc(c.text)}</div></div>`).join('') || '<div style="font-size:12.5px;color:var(--ink-faint)">还没有评论</div>'}
-        <div class="c-input"><input id="c-input" placeholder="留下评论…（回车发送）" onkeydown="if(event.key==='Enter')sendComment('${t.id}')"><button class="btn btn-o btn-sm" onclick="sendComment('${t.id}')">发送</button></div>
+        ${t.comments.map(c => `<div class="comment"><div class="av">${esc(c.who[0])}</div><div class="bubble"><div class="who"><b>${esc(c.who)}</b> · ${fmtRel(c.at)}</div>${esc(c.text)}</div></div>`).join('') || '<div style="font-size:12px;color:var(--ink-faint)">还没有评论</div>'}
+        <div class="c-input"><input id="c-input" placeholder="输入评论，回车发送" onkeydown="if(event.key==='Enter')sendComment('${t.id}')"><button class="btn btn-o btn-sm" onclick="sendComment('${t.id}')">发送</button></div>
       </div>
       <div class="d-sec d-del"><button class="btn btn-o btn-sm btn-danger-o" onclick="confirmDeleteTask('${t.id}')">删除任务</button><span>永久删除，含执行记录、评论与交付物</span></div>
     </div>`;
@@ -886,7 +885,7 @@ function mergeTask(id) {
   const t = byId(id);
   th(t, '✅', '验收通过并归档');
   setStatus(t, 'done');
-  toast('已归档', t.key + ' ' + esc(t.pr || ''), '✅');
+  toast('已归档', t.key + ' ' + esc(t.pr || ''), '✓');
   addActivity('✅', t.key + ' 验收通过，已归档');
   notifyHook('task.done', t);
 }
@@ -894,7 +893,7 @@ function rejectTask(id) {
   const t = byId(id);
   openModal(`<div class="modal-head"><h3>打回重做</h3><span>${esc(t.key)}</span><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
-      <div class="f-row"><label>打回原因 / 修改要求（Agent 会带着交付物与这段反馈继续修改）</label>
+      <div class="f-row"><label>打回原因 / 修改要求（Agent 将结合交付物与反馈继续修改）</label>
       <textarea id="rj-text" placeholder="例如：第二部分缺少来源；语气再正式一点…"></textarea></div>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
@@ -906,10 +905,10 @@ function doReject(id) {
   t.thread = t.thread || [];
   t.thread.push({ role: 'user', content: '【验收反馈】' + feedback });
   t.status = 'todo'; t.pr = null;
-  t.comments.push({ who: 'Reins', text: '终审打回：' + feedback, at: now() });
+  t.comments.push({ who: 'Reins', text: '验收打回：' + feedback, at: now() });
   th(t, '↩️', '验收打回：' + feedback.slice(0, 40));
   addActivity('↩️', t.key + ' 验收打回，等待重做');
-  toast('已打回', t.key + ' 回到待处理，可重新指派执行', '↩️');
+  toast('已打回', t.key + ' 回到待处理，可重新指派执行', '↩');
   notifyHook('task.rejected', t);
   save(); closeModal(); refreshViews(); renderDrawer(id);
 }
@@ -974,7 +973,7 @@ function handleRunEvent(evt) {
     r.log.push(['ok', `✓ ${t2.pr} 已生成 → 卡片移入「待验收」`]);
     th(t2, '🚀', `${t2.pr} 交付${used ? ' · ' + used + ' tokens' : ''}`);
     addActivity('🔀', `${t2.key} 完成，${t2.pr} 等待验收（${t2.assignee?.name || 'Agent'}${used ? ' · ' + used + ' tokens' : ''}）`);
-    toast('任务完成', `${t2.key} 交付物已就绪，等待验收`, '🚀');
+    toast('任务完成', `${t2.key} 交付已生成，等待验收`, '✓');
     delete runs[taskId];
     save(); refreshViews();
     if (drawerTaskId === taskId) renderDrawer(taskId);
@@ -987,7 +986,7 @@ function handleRunEvent(evt) {
       const a = t.assignee ? agentById(t.assignee.id) : null;
       if (a) { a.status = 'idle'; a.taskId = null; }
     }
-    toast('执行失败', String(evt.message).slice(0, 60), '⚠️');
+    toast('执行失败', String(evt.message).slice(0, 60), '⚠');
     delete runs[taskId];
     save(); refreshViews();
     if (drawerTaskId === taskId) renderDrawer(taskId);
@@ -1014,7 +1013,7 @@ function cancelRun(taskId) {
 function confirmDeleteTask(id) {
   const t = byId(id); if (!t) return;
   openModal(`<div class="modal-head"><h3>删除任务</h3><span>${t.key}</span><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-body"><div style="font-size:13.5px;color:var(--ink-dim)">将永久删除 <b>${t.key} ${esc(t.title)}</b>${t.pr ? ' 及其交付物 ' + esc(t.pr) : ''}，含执行记录与评论${runs[id] ? '；正在执行的 Agent 会被立即终止' : ''}。此操作不可撤销。</div></div>
+    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将永久删除 <b>${t.key} ${esc(t.title)}</b>${t.pr ? ' 及其交付物 ' + esc(t.pr) : ''}，含执行记录与评论${runs[id] ? '；正在执行的 Agent 会被立即终止' : ''}。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="deleteTask('${t.id}')">确认删除</button></div>`);
 }
@@ -1025,7 +1024,7 @@ function deleteTask(id) {
   S().tasks = S().tasks.filter(x => x.id !== id);
   addActivity('🗑', '删除了 ' + t.key + ' ' + t.title);
   save(); closeModal(); closeDrawer(); refreshViews();
-  toast('已删除', t.key + ' ' + esc(t.title), '🗑');
+  toast('已删除', t.key + ' ' + esc(t.title), '✕');
 }
 
 /* ---- 演示引擎（本地模拟，零配置） ---- */
@@ -1054,7 +1053,7 @@ function buildSteps(task, inst) {
       ['', `检索知识库匹配条目 ${rnd(2, 8)} 篇 …`],
       ['act', `起草回复（附操作步骤 ${rnd(3, 6)} 步）`],
       ['', `检查语气规范（团队提示词：工单回复语气规范）`],
-      ['ok', `✓ 回复草稿已生成，提交人工终审`],
+      ['ok', `✓ 回复草稿已生成，提交人工验收`],
     ];
     case 'research': case 'writing': case 'data': return [
       ['act', `▸ 接收任务 ${task.key}，理解目标与验收标准`],
@@ -1083,16 +1082,16 @@ function buildSteps(task, inst) {
 
 function startRun(taskId, opts = {}) {
   const t = byId(taskId);
-  if (!t.assignee || t.assignee.kind !== 'agent') { toast('无法启动', '请先将任务指派给一个 Agent', '⚠️'); return; }
+  if (!t.assignee || t.assignee.kind !== 'agent') { toast('无法启动', '请先将任务指派给一个 Agent', '⚠'); return; }
   const a = agentById(t.assignee.id);
-  if (!a) { toast('Agent 不存在', '', '⚠️'); return; }
+  if (!a) { toast('Agent 不存在', '', '⚠'); return; }
   if (a.status === 'offline' || (a.mode === 'api' && !a.apiKey)) {
-    toast(a.mode === 'api' ? '缺少密钥' : 'Agent 离线', a.mode === 'api' ? '请在设置中配置 API Key' : '请先上线 ' + esc(a.name), '⚠️');
+    toast(a.mode === 'api' ? '缺少密钥' : 'Agent 离线', a.mode === 'api' ? '请在设置中配置 API Key' : '请先上线 ' + esc(a.name), '⚠');
     if (a.mode === 'api') openAgentConfig(a.id);
     return;
   }
   if (a.mode === 'cli' && a.runtime === 'cloud' && !hookCfg.cloudUrl) {
-    toast('未配置云端节点', '先在「设置 → 云端节点」填写服务器地址与令牌', '☁️');
+    toast('未配置云端节点', '先在「设置 → 云端节点」填写服务器地址与令牌', '☁');
     switchView('settings');
     return;
   }
@@ -1100,7 +1099,7 @@ function startRun(taskId, opts = {}) {
   t.status = 'doing'; a.status = 'working'; a.taskId = taskId;
   th(t, '🚀', a.name + ' 开始执行');
   addActivity('🚀', a.name + ' 开始执行 ' + t.key + ' ' + t.title);
-  if (opts.byUser) toast('已指派并启动', a.name + ' 开始执行 ' + t.key, '🚀');
+  if (opts.byUser) toast('已指派并启动', a.name + ' 开始执行 ' + t.key, '▶');
   save();
 
   if ((a.mode === 'api' || a.mode === 'cli') && window.reins) {
@@ -1133,13 +1132,13 @@ function finishRun(taskId) {
     `【演示引擎 · 模拟交付】${t.key} ${t.title}`,
     '',
     `- 执行轮次：${r.log.length} 步 · 用时 ${(rnd(40, 180) / 10).toFixed(1)} 分钟（模拟）`,
-    `- 产出：按任务描述生成的示意交付物，接入真实 API / CLI Agent 后此处为其完整产出`,
+    `- 产出：演示引擎生成的示意内容，接入 API 或 CLI Agent 后显示完整产出`,
     `- 建议：验收通过后归档，或打回并附上修改要求`,
   ].join('\n');
   if (a) { a.status = 'idle'; a.done++; a.taskId = null; a.tokens += rnd(30, 80) * 1000; }
   delete runs[taskId];
   addActivity('🔀', t.key + ' 完成，' + t.pr + ' 等待验收（' + (t.assignee?.name || 'Agent') + '）');
-  toast('任务完成', t.key + ' 已产出 ' + t.pr + '，等待验收', '🚀');
+  toast('任务完成', t.key + ' 已产出 ' + t.pr + '，等待验收', '✓');
   save(); refreshViews();
   if (drawerTaskId === taskId) renderDrawer(taskId);
 }
@@ -1170,9 +1169,9 @@ function renderSpaceButton() {
   $('#space-sprint').textContent = sp.sprint || '';
   $('#space-pop').innerHTML = (O().spaces || []).map(x => `<div class="sp-item ${x.id === state.activeSpaceId ? 'on' : ''}" onclick="switchSpace('${x.id}')">
       <span class="sq">${x.badge || (x.name || '空')[0]}</span>
-      <div style="flex:1;min-width:0"><b>${esc(x.name)}</b><span style="display:block;font-size:11px;color:#79746a">${(x.members || []).length} 名成员 · ${(x.tasks || []).filter(t => t.status !== 'done').length} 个进行中任务</span></div>
+      <div style="flex:1;min-width:0"><b>${esc(x.name)}</b><span style="display:block;font-size:11px;color:#7f8a92">${(x.members || []).length} 名成员 · ${(x.tasks || []).filter(t => t.status !== 'done').length} 个未完成任务</span></div>
     </div>`).join('')
-    + `<div class="sp-item" style="color:#8d8779" onclick="openSpaceSettings()"><span class="sq" style="background:#26231e">⚙</span><div style="flex:1"><b>空间设置</b><span style="display:block;font-size:11px;color:#79746a">成员 · 角色 · 邀请</span></div></div>`
+    + `<div class="sp-item" style="color:#87919a" onclick="openSpaceSettings()"><span class="sq" style="background:#22282c">⚙</span><div style="flex:1"><b>空间设置</b><span style="display:block;font-size:11px;color:#7f8a92">成员 · 角色 · 邀请</span></div></div>`
     + `<button class="sp-act" onclick="openSpaceCreate()">＋ 创建新空间</button>`;
 }
 function toggleSpaceMenu(e) { e && e.stopPropagation(); closeOrgMenu(); $('#space-pop').classList.toggle('show'); }
@@ -1187,9 +1186,9 @@ function renderOrgLine() {
 function renderOrgPop() {
   $('#org-pop').innerHTML = (state.orgs || []).map(o => `<div class="sp-item ${o.id === state.activeOrgId ? 'on' : ''}" onclick="switchOrg('${o.id}')">
       <span class="sq">${esc(o.badge || o.name[0])}</span>
-      <div style="flex:1;min-width:0"><b>${esc(o.name)}</b><span style="display:block;font-size:11px;color:#79746a">${o.spaces.length} 个空间 · ${o.agents.length} 个 Agent</span></div>
+      <div style="flex:1;min-width:0"><b>${esc(o.name)}</b><span style="display:block;font-size:11px;color:#7f8a92">${o.spaces.length} 个空间 · ${o.agents.length} 个 Agent</span></div>
     </div>`).join('')
-    + `<div class="sp-item" style="color:#8d8779" onclick="openOrgSettings()"><span class="sq" style="background:#26231e">⚙</span><div style="flex:1"><b>组织设置</b><span style="display:block;font-size:11px;color:#79746a">名称 · 删除组织</span></div></div>`
+    + `<div class="sp-item" style="color:#87919a" onclick="openOrgSettings()"><span class="sq" style="background:#22282c">⚙</span><div style="flex:1"><b>组织设置</b><span style="display:block;font-size:11px;color:#7f8a92">名称 · 删除组织</span></div></div>`
     + `<button class="sp-act" onclick="openOrgCreate()">＋ 新建组织</button>`;
 }
 function switchOrg(id) {
@@ -1213,7 +1212,7 @@ function openOrgSettings() {
         <div class="f-row"><label>组织名称</label><input type="text" id="og-name" value="${esc(o.name)}"></div>
         <div class="f-row"><label>标识（一个字）</label><input type="text" id="og-badge" maxlength="1" value="${esc(o.badge || '')}"></div>
       </div>
-      <div style="font-size:12.5px;color:var(--ink-faint)">组织是最高一层：Agent 与密钥、空间都归属组织，互相隔离。当前 ${o.spaces.length} 个空间 · ${o.agents.length} 个 Agent。</div>
+      <div style="font-size:12px;color:var(--ink-faint)">Agent 与空间均归属组织，相互隔离。当前 ${o.spaces.length} 个空间 · ${o.agents.length} 个 Agent。</div>
       <h3 class="set-h" style="margin-top:18px;color:#c05656">危险操作</h3>
       <button class="btn btn-danger" onclick="confirmDeleteOrg()">删除组织</button>
       <div style="font-size:12px;color:var(--ink-faint);margin-top:6px">删除后其下空间、任务与 Agent 配置一并移除，至少保留一个组织。</div>
@@ -1226,17 +1225,17 @@ function saveOrgInfo() {
   o.name = $('#og-name').value.trim() || o.name;
   o.badge = $('#og-badge').value.trim() || o.name[0];
   save(); closeModal(); renderOrgLine(); renderSpaceButton();
-  toast('已保存', '组织信息已更新', '⚙️');
+  toast('已保存', '组织信息已更新', '⚙');
 }
 function openOrgCreate() {
   closeOrgMenu();
-  openModal(`<div class="modal-head"><h3>新建组织</h3><span>独立的 Agent 与空间池</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>新建组织</h3><span>空间与 Agent 相互隔离</span><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="f-2col">
         <div class="f-row"><label>组织名称</label><input type="text" id="no-name" placeholder="例如：个人项目 / 另一家公司"></div>
         <div class="f-row"><label>标识（一个字）</label><input type="text" id="no-badge" maxlength="1" placeholder="组"></div>
       </div>
-      <div style="font-size:12.5px;color:var(--ink-faint)">新组织自带一个空白空间；Agent 与密钥按组织隔离，需在组织内各自配置。</div>
+      <div style="font-size:12px;color:var(--ink-faint)">新组织自带一个空白空间；Agent 与密钥按组织隔离，需在组织内各自配置。</div>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="createOrg()">创建</button></div>`);
@@ -1254,18 +1253,18 @@ function createOrg() {
   });
   state.activeOrgId = id; state.activeSpaceId = state.orgs.at(-1).spaces[0].id;
   save(); closeModal(); renderOrgLine(); renderSpaceButton(); switchView('kanban');
-  toast('组织已创建', '当前：' + esc(name) + ' · 默认空间', '🏛');
+  toast('组织已创建', '当前：' + esc(name) + ' · 默认空间', '');
 }
 function confirmDeleteOrg() {
-  if (state.orgs.length <= 1) { toast('无法删除', '至少保留一个组织', '⚠️'); return; }
+  if (state.orgs.length <= 1) { toast('无法删除', '至少保留一个组织', '⚠'); return; }
   const o = O();
   openModal(`<div class="modal-head"><h3>删除组织</h3><span>${esc(o.name)}</span><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-body"><div style="font-size:13.5px;color:var(--ink-dim)">将删除 <b>${esc(o.name)}</b> 及其 ${o.spaces.length} 个空间、${o.agents.length} 个 Agent 配置（含密钥）。此操作不可撤销。</div></div>
+    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将删除 <b>${esc(o.name)}</b> 及其 ${o.spaces.length} 个空间、${o.agents.length} 个 Agent 配置（含密钥）。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="doDeleteOrg()">确认删除</button></div>`);
 }
 function doDeleteOrg() {
-  if (state.orgs.length <= 1) { toast('无法删除', '至少保留一个组织', '⚠️'); return; }
+  if (state.orgs.length <= 1) { toast('无法删除', '至少保留一个组织', '⚠'); return; }
   const idx = state.orgs.findIndex(x => x.id === state.activeOrgId);
   if (idx < 0) return;
   state.orgs.splice(idx, 1);
@@ -1274,7 +1273,7 @@ function doDeleteOrg() {
   save(); closeModal();
   closeDrawer(); filters = { type: '', who: '', search: '', iter: '', lane: '' }; $('#search').value = '';
   renderOrgLine(); renderSpaceButton(); switchView('kanban');
-  toast('组织已删除', '已切换到 ' + esc(O().name), '🗑');
+  toast('组织已删除', '已切换到 ' + esc(O().name), '✕');
 }
 function closeSpaceMenu() { $('#space-pop')?.classList.remove('show'); }
 function switchSpace(id) {
@@ -1319,7 +1318,7 @@ function createSpace() {
   state.activeSpaceId = id;
   closeDrawer(); filters = { type: '', who: '', search: '', iter: '', lane: '' }; $('#search').value = '';
   renderSpaceButton(); switchView('kanban');
-  toast('空间已创建', '「' + esc(name) + '」就绪，去邀请同事加入吧', '✳');
+  toast('空间已创建', '已切换到「' + esc(name) + '」', '✳');
 }
 
 /* —— 任务级仓库选择：空间维护仓库清单，每个任务可指定执行仓库 —— */
@@ -1333,13 +1332,13 @@ function repoOpts(sel) {
 function addRepo() {
   const path = $('#ss-r-path').value.trim();
   const name = $('#ss-r-name').value.trim() || repoName(path);
-  if (!path.startsWith('/')) { toast('路径无效', '需要绝对路径（以 / 开头）', '⚠️'); return; }
+  if (!path.startsWith('/')) { toast('路径无效', '需要绝对路径（以 / 开头）', '⚠'); return; }
   S().repos = S().repos || [];
-  if (S().repos.some(r => r.path === path)) { toast('已存在', '该仓库已在清单中', '⚠️'); return; }
+  if (S().repos.some(r => r.path === path)) { toast('已存在', '该仓库已在清单中', '⚠'); return; }
   S().repos.push({ name: name || '仓库', path });
   if (!S().repoRoot) S().repoRoot = path;
   save(); closeModal(); openSpaceSettings();
-  toast('仓库已添加', (name || '') + ' · 建任务时可选', '🌿');
+  toast('仓库已添加', (name || '') + ' · 建任务时可选', '');
 }
 function removeRepo(i) {
   const r = (S().repos || [])[i]; if (!r) return;
@@ -1351,7 +1350,7 @@ function setDefaultRepo(i) { setDefaultRepoByPath(((S().repos || [])[i] || {}).p
 function setDefaultRepoByPath(path) {
   S().repoRoot = path || '';
   save(); closeModal(); openSpaceSettings();
-  toast('默认仓库已更新', path ? repoName(path) + ' · ' + esc(path.slice(0, 46)) : '已设为不隔离执行', '🌿');
+  toast('默认仓库已更新', path ? repoName(path) + ' · ' + esc(path.slice(0, 46)) : '已设为不隔离执行', '');
 }
 
 function openSpaceSettings() {
@@ -1382,7 +1381,7 @@ function openSpaceSettings() {
         ${sp.repoRoot === r.path ? '<span class="status-pill idle" style="font-size:11px">默认</span>' : ''}
         <button class="btn btn-o btn-sm" onclick="setDefaultRepo(${i})">设默认</button>
         <button class="btn btn-o btn-sm" onclick="removeRepo(${i})">移除</button>
-      </div>`).join('') || '<div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:8px">还没有仓库——多项目团队的效率关键：把常用仓库加进来，建任务时一键选择。</div>'}</div>
+      </div>`).join('') || '<div style="font-size:12px;color:var(--ink-faint);margin-bottom:8px">暂无仓库。添加常用仓库后，创建任务时可直接选择。</div>'}</div>
       <div class="mb-row" style="border-bottom:none">
         <input id="ss-r-name" placeholder="仓库名（如 官网）" style="width:120px;padding:6px 10px;border:1px solid var(--line-strong);border-radius:7px">
         <input id="ss-r-path" placeholder="/绝对路径/到 git 仓库" style="flex:1;padding:6px 10px;border:1px solid var(--line-strong);border-radius:7px;font-family:var(--mono);font-size:12px">
@@ -1393,7 +1392,7 @@ function openSpaceSettings() {
           <option value="" ${!sp.repoRoot ? 'selected' : ''}>不隔离执行</option>
           ${(sp.repos || []).map(r => `<option value="${esc(r.path)}" ${sp.repoRoot === r.path ? 'selected' : ''}>${esc(r.name || repoName(r.path))}</option>`).join('')}
         </select></div>
-      <div style="font-size:12px;color:var(--ink-faint);margin:-4px 0 4px">每个任务还可在创建时或任务抽屉里单独指定仓库；CLI Agent 执行时在所选仓库旁的 .reins-wt/&lt;任务号&gt; 建独立工作区与 reins/&lt;任务号&gt; 分支，多个 Agent、多个仓库并行互不干扰。</div>
+      <div style="font-size:12px;color:var(--ink-faint);margin:-4px 0 4px">任务也可在创建时或抽屉里单独指定仓库；CLI Agent 会在所选仓库旁的 .reins-wt/&lt;任务号&gt; 创建独立工作区与 reins/&lt;任务号&gt; 分支。</div>
 
       <h3 class="set-h">成员 · ${sp.members.length}</h3>
       ${rows}
@@ -1424,7 +1423,7 @@ function openSpaceSettings() {
         <button class="btn btn-o btn-sm" onclick="genInvite()">生成</button>
         <button class="btn btn-p btn-sm" onclick="copyInvite()">复制</button>
       </div>
-      <div class="set-desc" style="margin-top:6px">演示环境：链接为本地生成，不会真正发出；正式版将支持有效期与角色绑定。</div>
+      <div class="set-desc" style="margin-top:6px">当前为本地演示，链接不会实际发送。</div>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="confirmDeleteSpace()">删除空间</button>
       <span style="flex:1"></span>
@@ -1441,17 +1440,17 @@ function saveSpaceInfo() {
 function addMember() {
   const name = $('#ss-mb-name').value.trim();
   if (!name) { $('#ss-mb-name').focus(); return; }
-  if (S().members.some(m => m.name === name)) { toast('已存在', '该成员已在空间中', '⚠️'); return; }
+  if (S().members.some(m => m.name === name)) { toast('已存在', '该成员已在空间中', '⚠'); return; }
   S().members.push({ name, role: $('#ss-mb-role').value });
   save(); renderSpaceButton(); openSpaceSettings();
-  toast('已添加', name + ' 加入了空间', '👤');
+  toast('已添加', name + ' 已加入空间');
 }
 function removeMember(i) {
   const m = S().members[i];
   S().members.splice(i, 1);
   S().tasks.forEach(t => { if (t.assignee?.kind === 'human' && t.assignee.name === m.name) t.assignee = null; });
   save(); renderSpaceButton(); openSpaceSettings(); refreshViews();
-  toast('已移除', m.name + ' 已移出空间', '👤');
+  toast('已移除', m.name + ' 已移出空间');
 }
 function addIter() {
   const n = $('#ss-iter-name').value.trim(); if (!n) return;
@@ -1481,14 +1480,14 @@ function genInvite() {
 }
 function copyInvite() {
   if (!inviteCode) genInvite();
-  const done = () => toast('已复制', '邀请链接已到剪贴板', '🔗');
+  const done = () => toast('已复制', '邀请链接已复制到剪贴板', '');
   if (navigator.clipboard) navigator.clipboard.writeText('https://' + inviteCode).then(done, done); else done();
 }
 function confirmDeleteSpace() {
-  if (O().spaces.length <= 1) { toast('无法删除', '组织内至少保留一个空间', '⚠️'); return; }
+  if (O().spaces.length <= 1) { toast('无法删除', '组织内至少保留一个空间', '⚠'); return; }
   const sp = S();
   openModal(`<div class="modal-head"><h3>删除空间</h3><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-body"><div style="font-size:13.5px;color:var(--ink-dim)">将删除空间「${esc(sp.name)}」及其全部 ${sp.tasks.length} 个任务、成员与自动化配置。此操作不可撤销。</div></div>
+    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将删除空间「${esc(sp.name)}」及其全部 ${sp.tasks.length} 个任务、成员与自动化配置。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="deleteSpace()">确认删除</button></div>`);
 }
@@ -1500,18 +1499,18 @@ function deleteSpace() {
   save(); closeModal();
   closeDrawer(); filters = { type: '', who: '', search: '', iter: '', lane: '' }; $('#search').value = '';
   renderSpaceButton(); switchView('kanban');
-  toast('空间已删除', '已切换到 ' + esc(S().name), '🗑');
+  toast('空间已删除', '已切换到 ' + esc(S().name), '✕');
 }
 
 /* ============ 节点视图（本机 / 云端执行节点） ============ */
 let nodeLocalClis = null;
 function viewNodes() {
   const s = hookCfg || {};
-  return `<div class="view-head"><h2>节点</h2><p>任务的执行资源 · 本机常驻，云端扩展</p></div>
+  return `<div class="view-head"><h2>节点</h2><p>本机与云端执行节点</p></div>
     <div class="grid2">
       <div class="panel node-card">
         <div class="agent-top">
-          <div class="agent-av" style="background:@{brand-soft}">💻</div>
+          <div class="agent-av">▣</div>
           <div><h3 style="font-size:15px">本机节点</h3><div class="agent-meta">${s.platform || 'mac'} · 客户端 v${s.version || '1.0.0'}</div></div>
           <span class="status-pill idle" style="margin-left:auto">在线</span>
         </div>
@@ -1526,12 +1525,12 @@ function viewNodes() {
       </div>
       <div class="panel node-card">
         <div class="agent-top">
-          <div class="agent-av" style="background:#e8f0fb">☁️</div>
+          <div class="agent-av" style="background:#e8eef6">☁</div>
           <div><h3 style="font-size:15px">云端节点</h3><div class="agent-meta">${s.cloudUrl ? esc(s.cloudUrl.replace(/^https?:\/\//, '')) : '未配置'}</div></div>
           <span class="status-pill ${s.cloudUrl ? 'idle' : 'offline'}" style="margin-left:auto" id="nv-cloud-pill">${s.cloudUrl ? '检测中' : '未配置'}</span>
         </div>
         <div id="nv-cloud-body" style="font-size:13px;color:var(--ink-dim)">
-          ${s.cloudUrl ? '正在检测节点状态…' : `把 reins-node/server.js 部署到你的服务器，CLI 型 Agent 即可选择云端执行——合盖断线都不影响。<div style="margin-top:12px"><button class="btn btn-o btn-sm" onclick="switchView('settings')">去设置 → 云端节点</button></div>`}
+          ${s.cloudUrl ? '正在检测节点状态…' : `部署 reins-node/server.js 到你的服务器后，CLI 型 Agent 可选择在云端执行。<div style="margin-top:12px"><button class="btn btn-o btn-sm" onclick="switchView('settings')">去设置 → 云端节点</button></div>`}
         </div>
       </div>
     </div>`;
@@ -1564,21 +1563,21 @@ async function hydrateNodes() {
   }
 }
 async function togglePreventSleep(on) {
-  if (!window.reins) { toast('浏览器模式', '该设置仅在桌面客户端内生效', '⚠️'); render(); return; }
+  if (!window.reins) { toast('浏览器模式', '该设置仅在桌面客户端内生效', '⚠'); render(); return; }
   await window.reins.setSettings({ preventSleep: on });
   const ok = await window.reins.caffeinateSet(on);
   hookCfg = { ...hookCfg, preventSleep: on };
-  toast(on ? '防休眠已开启' : '防休眠已关闭', on ? (ok ? '任务执行期间系统保持唤醒' : '系统不支持，未生效') : '恢复系统默认策略', on ? '☕️' : '🌙');
+  toast(on ? '防休眠已开启' : '防休眠已关闭', on ? (ok ? '任务执行期间系统保持唤醒' : '系统不支持，未生效') : '恢复系统默认策略');
 }
 
 /* ============ 交付物中心 ============ */
 function viewDeliveries() {
   const ts = S().tasks.filter(t => t.result || t.pr).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0) || (b.key > a.key ? 1 : -1));
-  if (!ts.length) return `<div class="view-head"><h2>交付</h2><p>Agent 产出的交付物都会沉淀在这里</p></div>
-    <div class="panel" style="padding:40px;text-align:center;color:var(--ink-dim)">还没有交付物。<br>把一张卡指派给 Agent 执行，完成后这里会出现它的产出。</div>`;
+  if (!ts.length) return `<div class="view-head"><h2>交付</h2><p>Agent 执行任务的产出物</p></div>
+    <div class="panel" style="padding:40px;text-align:center;color:var(--ink-dim)">暂无交付物。<br>任务由 Agent 执行完成后，交付物会显示在这里。</div>`;
   const iterName = id => (S().iterations || []).find(i => i.id === id)?.name || '';
   const rows = ts.map(t => {
-    const who = t.assignee ? (t.assignee.kind === 'agent' ? '◆ ' + t.assignee.name : '👤 ' + t.assignee.name) : '—';
+    const who = t.assignee ? (t.assignee.kind === 'agent' ? '◆ ' + t.assignee.name : t.assignee.name) : '—';
     return `<div class="dlv-row">
       <div class="dlv-main">
         <div class="k"><span>${t.key}</span>${t.status === 'review' ? '<span class="dlv-wait">待验收</span>' : ''}<span class="pr">${esc(t.pr || '草稿')}</span></div>
@@ -1592,7 +1591,7 @@ function viewDeliveries() {
       </div>
     </div>`;
   }).join('');
-  return `<div class="view-head"><h2>交付</h2><p>共 ${ts.length} 份产出物 · Markdown 可直接归档到知识库</p></div>${rows}`;
+  return `<div class="view-head"><h2>交付</h2><p>共 ${ts.length} 份交付物</p></div>${rows}`;
 }
 function previewDelivery(id) {
   const t = byId(id);
@@ -1605,7 +1604,7 @@ function copyDelivery(id) {
   const t = byId(id);
   navigator.clipboard.writeText(t.result || '').then(
     () => toast('已复制', t.key + ' 的交付物已复制到剪贴板', '⧉'),
-    () => toast('复制失败', '当前环境未授权剪贴板', '⚠️'));
+    () => toast('复制失败', '当前环境未授权剪贴板', '⚠'));
 }
 function downloadDelivery(id) {
   const t = byId(id);
@@ -1620,7 +1619,7 @@ function downloadDelivery(id) {
 function revealWt(id) {
   const t = byId(id);
   if (t?.worktree && window.reins) window.reins.revealWorktree(t.worktree);
-  else toast('不可用', '浏览器预览模式下无法打开访达', '⚠️');
+  else toast('不可用', '浏览器预览模式下无法打开访达', '⚠');
 }
 
 /* —— 开放集成：任务事件推送到用户配置的 Webhook（桌面客户端内由主进程发送） —— */
@@ -1632,7 +1631,7 @@ function notifyHook(event, task) {
   window.reins.webhookSend({
     event, at: new Date().toISOString(), space: S().name,
     task: { key: task.key, title: task.title, status: task.status, pri: task.pri, deliver: task.pr || null },
-  }).then(r => { if (!r.ok) toast('Webhook 推送失败', r.error || ('HTTP ' + r.status), '⚠️'); }).catch(() => { });
+  }).then(r => { if (!r.ok) toast('Webhook 推送失败', r.error || ('HTTP ' + r.status), '⚠'); }).catch(() => { });
 }
 
 /* —— 侧栏折叠（窄栏图标模式，⌘B） —— */
@@ -1713,11 +1712,11 @@ async function runTriage(t) {
   return { ...heuristicTriage(t), engine: '本地规则' + (a ? '' : '（未配置 API Agent）') };
 }
 function triageSugSummary(s) {
-  const asg = s.assignee ? (s.assignee.kind === 'agent' ? '◆ ' + s.assignee.name : '👤 ' + s.assignee.name) : '保持未指派';
+  const asg = s.assignee ? (s.assignee.kind === 'agent' ? '◆ ' + s.assignee.name : s.assignee.name) : '保持未指派';
   return `<b>${TYPE_LABEL[s.type] || s.type}</b> · <b class="pri ${s.pri}">${s.pri}</b> · ${esc(asg)}`;
 }
 async function triageDrawer(id) {
-  const btn = $('#tri-btn'); if (btn) { btn.disabled = true; btn.textContent = '✨ 分析中…'; }
+  const btn = $('#tri-btn'); if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
   const s = await runTriage(byId(id));
   triSuggestions[id] = s;
   const out = $('#triage-out');
@@ -1727,9 +1726,9 @@ async function triageDrawer(id) {
     <div style="display:flex;gap:9px;margin-top:9px;align-items:center">
       <button class="btn btn-p btn-sm" onclick="applyTriageDrawer('${id}')">应用建议</button>
       <button class="btn btn-o btn-sm" onclick="$('#triage-out').innerHTML=''">忽略</button>
-      <span style="font-size:11.5px;color:var(--ink-faint)">分诊：${esc(s.engine)}</span>
+      <span style="font-size:11px;color:var(--ink-faint)">分诊：${esc(s.engine)}</span>
     </div></div>`;
-  if (btn) { btn.disabled = false; btn.textContent = '✨ 重新分析'; }
+  if (btn) { btn.disabled = false; btn.textContent = '重新分析'; }
 }
 function applyTriage(id, s, quiet) {
   const t = byId(id);
@@ -1749,14 +1748,14 @@ function applyTriage(id, s, quiet) {
   th(t, '✨', 'AI 分诊：' + before + ' → ' + to);
   addActivity('✨', t.key + ' 完成 AI 分诊（' + (s.engine || '') + '）');
   save(); refreshViews();
-  if (!quiet) toast('已应用分诊', t.key + ' → ' + TYPE_LABEL[t.type] + ' · ' + t.pri, '✨');
+  if (!quiet) toast('已应用分诊', t.key + ' → ' + TYPE_LABEL[t.type] + ' · ' + t.pri, '✦');
   delete triSuggestions[id];
 }
 function applyTriageDrawer(id) { applyTriage(id, triSuggestions[id] || {}); renderDrawer(id); }
 async function openTriageBatch() {
   const pool = S().tasks.filter(t => t.status === 'todo' && !t.assignee).slice(0, 8);
   const pool2 = pool.length ? pool : S().tasks.filter(t => t.status === 'todo').slice(0, 8);
-  if (!pool2.length) { toast('没有可分诊的任务', '待处理列暂时是空的', '✨'); return; }
+  if (!pool2.length) { toast('没有可分诊的任务', '待处理列暂时是空的', '✦'); return; }
   openModal(`<div class="modal-head"><h3>AI 分诊</h3><span>${pool2.length} 个待办 · 逐条分析</span><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body"><div id="tri-batch">准备中…</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
@@ -1783,13 +1782,13 @@ async function openTriageBatch() {
 }
 function applyTriageRow(id, el) {
   applyTriage(id, triSuggestions[id] || {}, true);
-  toast('已应用', byId(id).key + ' 分诊结果已生效', '✨');
+  toast('已应用', byId(id).key + ' 分诊结果已生效', '✦');
   const row = el.closest('.tri-brow'); if (row) row.remove();
 }
 function applyAllTriage() {
   const ids = Object.keys(triSuggestions);
   for (const id of ids) { if (byId(id)) applyTriage(id, triSuggestions[id], true); }
-  toast('批量分诊完成', ids.length + ' 个任务已应用建议', '✨');
+  toast('批量分诊完成', ids.length + ' 个任务已应用建议', '✦');
   closeModal();
 }
 
@@ -1800,16 +1799,16 @@ $('#modal-mask')?.addEventListener('click', e => { if (e.target.id === 'modal-ma
 
 function openNewTaskModal() {
   const assigneeOpts = `<option value="">暂不指派</option>
-    ${memberNames().map(m => `<option value="m:${esc(m)}">👤 ${esc(m)}</option>`).join('')}
+    ${memberNames().map(m => `<option value="m:${esc(m)}">${esc(m)}</option>`).join('')}
     ${O().agents.filter(a => agentUsable(a)).map(a => `<option value="a:${a.id}">◆ ${esc(a.name)}</option>`).join('')}`;
   openModal(`<div class="modal-head"><h3>新建任务</h3><span>REINS-${S().seq}</span><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
-      <div class="f-row"><label>标题</label><input type="text" id="nt-title" placeholder="用一句话说清楚要做什么"></div>
+      <div class="f-row"><label>标题</label><input type="text" id="nt-title" placeholder="用一句话说明要做什么"></div>
       <div class="f-2col">
         <div class="f-row"><label>类型</label><select id="nt-type">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
         <div class="f-row"><label>优先级</label><select id="nt-pri"><option>P2</option><option>P1</option><option>P0</option></select></div>
       </div>
-      <div class="f-row"><label>描述 / 验收标准</label><textarea id="nt-desc" placeholder="背景、期望产出、验收标准——写得越清楚，Agent 执行越好"></textarea></div>
+      <div class="f-row"><label>描述 / 验收标准</label><textarea id="nt-desc" placeholder="背景、期望产出与验收标准"></textarea></div>
       <div class="f-2col">
         <div class="f-row"><label>经办人</label><select id="nt-assignee">${assigneeOpts}</select></div>
         <div class="f-row" style="display:flex;align-items:flex-end"><label class="f-check" style="margin-bottom:9px"><input type="checkbox" id="nt-auto" checked> 指派 Agent 后立即启动</label></div>
@@ -1840,7 +1839,7 @@ function createTask() {
   save(); closeModal(); refreshViews();
   notifyHook('task.created', t);
   if (auto) startRun(t.id, { byUser: true, openDrawer: true });
-  else toast('已创建', t.key + ' ' + esc(t.title), '➕');
+  else toast('已创建', t.key + ' ' + esc(t.title), '');
 }
 
 /* ---- Agent 配置（真实 API） ---- */
@@ -1856,8 +1855,8 @@ function openAgentConfig(agentId) {
       </div>
       <div class="f-row"><label>命令模板（{prompt} 为任务提示词占位）</label><input type="text" id="ac-tpl" value="${esc(a.cliTemplate || '')}" placeholder="claude -p {prompt}"></div>
       <div class="f-row"><label>执行位置</label><select id="ac-runtime">
-        <option value="local" ${a.runtime !== 'cloud' ? 'selected' : ''}>本机节点（这台电脑上执行）</option>
-        <option value="cloud" ${a.runtime === 'cloud' ? 'selected' : ''}>云端节点（设置中配置的服务器上执行，适合合盖后继续跑）</option>
+        <option value="local" ${a.runtime !== 'cloud' ? 'selected' : ''}>本机节点（在这台电脑上执行）</option>
+        <option value="cloud" ${a.runtime === 'cloud' ? 'selected' : ''}>云端节点（在设置中配置的服务器上执行）</option>
       </select></div>
       ${['codebuddy', 'workbuddy'].includes(a.cliId) ? `<div class="f-row"><label>执行模型（留空用 CLI 默认）</label><input type="text" id="ac-climodel" list="climodel-list" value="${esc(a.cliModel || '')}" placeholder="例如 glm-5.3-flash">
       <datalist id="climodel-list">${['hy4-preview', 'hy3', 'hy3-x', 'step-5-preview', 'space-bunny', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx', 'glm-5.2', 'glm-5.1', 'glm-5v-turbo', 'minimax-m3-pay', 'minimax-m2.7', 'kimi-k3-2', 'kimi-k2.8-preview', 'kimi-k2.7', 'kimi-k2.6', 'deepseek-v4-pro'].map(m => `<option value="${m}">`).join('')}</datalist></div>` : ''}`
@@ -1882,7 +1881,7 @@ function openAgentConfig(agentId) {
       ${engineFields}
       <div class="f-row"><label>场景 / 角色附加提示（可选，执行时随任务发送）</label>
         <textarea id="ac-scene" style="min-height:64px" placeholder="例如：你是资深测试工程师，输出必须包含用例表">${esc(a.scenePrompt || '')}</textarea></div>
-      <div class="set-banner" style="margin:4px 0 0">密钥与配置只写入本机 userData，不经过任何第三方；CLI 模式通过子进程调用你本机安装的命令。</div>
+      <div class="set-banner" style="margin:4px 0 0">密钥与配置仅保存在本机；CLI 模式通过子进程调用本机已安装的命令。</div>
     </div>
     <div class="modal-foot">
       ${a.mode !== 'sim' ? `<button class="btn btn-o" onclick="acTest('${a.id}')">${a.mode === 'cli' ? '试运行' : '测试连接'}</button>` : ''}
@@ -1901,11 +1900,11 @@ function acModeSwap(id) {
 async function acDetectCli(id) {
   const a = agentById(id);
   const cmd = $('#ac-cmd')?.value.trim() || a.cliCommand;
-  if (!cmd) { toast('请先填写命令', '', '⚠️'); return; }
-  if (!window.reins) { toast('浏览器模式', '请在客户端内检测', '⚠️'); return; }
+  if (!cmd) { toast('请先填写命令', '', '⚠'); return; }
+  if (!window.reins) { toast('浏览器模式', '请在客户端内检测', '⚠'); return; }
   const r = await window.reins.cliDetect([cmd]);
   a.detected = !!r[cmd]; save();
-  toast(r[cmd] ? '已检测到' : '未安装', cmd + (r[cmd] ? ' 在本机可用' : ' 未在本机 PATH 中找到'), r[cmd] ? '✅' : '⚠️');
+  toast(r[cmd] ? '已检测到' : '未安装', cmd + (r[cmd] ? ' 在本机可用' : ' 未在本机 PATH 中找到'), r[cmd] ? '✓' : '⚠');
   openAgentConfig(id);
 }
 function acCollect(id) {
@@ -1939,7 +1938,7 @@ function acTest(id) {
       r = window.reins ? await window.reins.agentTest(a) : { ok: false, message: '浏览器模式无法测试' };
     }
     if (btn) { btn.disabled = false; btn.textContent = a.mode === 'cli' ? '试运行' : '测试连接'; }
-    toast(r.ok ? '连接成功' : '连接失败', esc(r.message || ''), r.ok ? '✅' : '⚠️');
+    toast(r.ok ? '连接成功' : '连接失败', esc(r.message || ''), r.ok ? '✓' : '⚠');
   })();
 }
 function acSave(id) {
@@ -1947,7 +1946,7 @@ function acSave(id) {
   if (a.mode === 'api' && a.apiKey && a.status === 'offline') a.status = 'idle';
   if (a.mode === 'cli' && a.status === 'offline' && a.detected) a.status = 'idle';
   save(); closeModal(); refreshViews();
-  toast('已保存', a.name + '（' + (a.mode === 'api' ? '真实 API' : a.mode === 'cli' ? '本机 CLI' : '演示') + '）', '🔑');
+  toast('已保存', a.name + '（' + (a.mode === 'api' ? '真实 API' : a.mode === 'cli' ? '本机 CLI' : '演示') + '）', '');
 }
 
 /* ---- 接入 Agent ---- */
@@ -1960,14 +1959,14 @@ function openAddAgentModal() {
     <b>${brandIcon(CLI_LOGO[p.id]) || brandMono(p.label)} ${p.label}</b><span>${p.cmd}</span>
     <span class="cli-st" data-st="checking">检测中…</span>
   </div>`).join('');
-  openModal(`<div class="modal-head"><h3>接入 Agent</h3><span>真实 API 或本机 CLI · 走你自己的账户</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>接入 Agent</h3><span>通过 API Key 或本机 CLI 接入</span><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="add-sec-h">API 服务商（OpenAI 兼容，需 API Key）</div>
       <div class="picklist">${provCards}</div>
-      <div class="add-sec-h" style="margin-top:18px">本机 CLI 工具（子进程调用，用你已有的 Coding Plan）</div>
+      <div class="add-sec-h" style="margin-top:18px">本机 CLI 工具（子进程调用）</div>
       <div class="picklist">${cliCards}</div>
       <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">
-        <div style="font-size:12.5px;color:var(--ink-dim);margin-bottom:10px">不需要真实调用？加一个演示引擎（本地模拟，零配置）：</div>
+        <div style="font-size:12px;color:var(--ink-dim);margin-bottom:10px">不需要真实调用？可添加演示引擎（本地模拟）：</div>
         <button class="btn btn-o btn-sm" onclick="addSimAgent()">＋ 添加演示引擎</button>
       </div>
     </div>`);
@@ -1997,7 +1996,7 @@ function addApiAgent(providerId) {
     status: 'offline', taskId: null, done: 0, tokens: 0,
   });
   save(); closeModal(); refreshViews();
-  toast('已接入', p.label + ' · 请填入 API Key', '🔑');
+  toast('已接入', p.label + ' · 请填入 API Key', '');
   openAgentConfig(id);
 }
 function addCliAgent(presetId) {
@@ -2017,11 +2016,11 @@ function addSimAgent() {
   const id = 'a' + now();
   O().agents.push({ id, name: '演示引擎 ' + (O().agents.filter(a => a.mode === 'sim').length + 1), glyph: pick(['✳', '⬡', '⬢', '✦', '◈']), mode: 'sim', status: 'idle', taskId: null, done: 0, tokens: 0 });
   save(); closeModal(); refreshViews();
-  toast('已添加', '演示引擎待命中（本地模拟执行）', '✳');
+  toast('已添加', '演示引擎（本地模拟执行）', '✳');
 }
 
 function openNewPromptModal() {
-  openModal(`<div class="modal-head"><h3>新建提示词</h3><span>沉淀为团队资产</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>新建提示词</h3><span>保存后可在任务中附加</span><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="f-row"><label>标题</label><input type="text" id="np-title" placeholder="例如：发布前检查清单"></div>
       <div class="f-row"><label>一句话说明</label><input type="text" id="np-desc" placeholder="什么场景用这条提示词"></div>
@@ -2040,7 +2039,7 @@ function createPrompt() {
     tags: $('#np-tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
     uses: 0,
   });
-  toast('已保存', '「' + esc(title) + '」进入团队提示词库', '✎');
+  toast('已保存', '「' + esc(title) + '」已存入提示词库', '✎');
   save(); closeModal(); refreshViews();
 }
 
@@ -2090,7 +2089,7 @@ function settingsHTML(s, live) {
         <b>执行位置可选云端的服务器</b>
         <span class="status-pill ${s.cloudUrl ? 'idle' : 'offline'}" id="cn-pill">${s.cloudUrl ? '已配置' : '未配置'}</span>
       </div>
-      <div class="set-desc" style="margin-bottom:8px">部署 reins-node/server.js 到你的服务器，CLI 型 Agent 可选「云端执行」：合盖、断线都不影响，输出实时流回。</div>
+      <div class="set-desc" style="margin-bottom:8px">部署 reins-node/server.js 到你的服务器后，CLI 型 Agent 可选择云端执行，输出实时回传。</div>
       <div class="f-2col">
         <div class="f-row"><label>节点地址</label><input type="text" id="cn-url" value="${esc(s.cloudUrl || '')}" placeholder="https://node.example.com:8787"></div>
         <div class="f-row"><label>访问令牌（--token）</label><input type="password" id="cn-token" value="${esc(s.cloudToken || '')}" placeholder="与服务器启动参数一致" autocomplete="off"></div>
@@ -2102,7 +2101,7 @@ function settingsHTML(s, live) {
       <div id="cn-log" style="margin-top:8px;font-size:12px;color:var(--ink-dim)"></div>
     </div>` : `<div class="set-row"><div><b>云端节点</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`}
     <h3 class="set-h">关于</h3>
-    <div class="set-row"><div><b>Reins 驭码 v1.0.0</b><div class="set-desc">AI Agent 任务协作平台${s.version ? ' · 客户端 ' + esc(s.version) : ''}<br>任务数据保存在本机（${window.reins ? 'userData/reins-data.json' : '浏览器 localStorage'}）</div></div></div>
+    <div class="set-row"><div><b>Reins 驭码 v1.0.0</b><div class="set-desc">Agent 任务协作工具${s.version ? ' · 客户端 ' + esc(s.version) : ''}<br>任务数据保存在本机（${window.reins ? 'userData/reins-data.json' : '浏览器 localStorage'}）</div></div></div>
     <h3 class="set-h">数据</h3>
     <div class="set-row"><div><b>导出数据</b><div class="set-desc">导出全部空间与 Agent 配置为 JSON 备份</div></div>
       <button class="btn btn-o btn-sm" onclick="exportData()">导出</button></div>
@@ -2115,9 +2114,9 @@ function settingsHTML(s, live) {
 function cloudSave() {
   const url = $('#cn-url').value.trim();
   const token = $('#cn-token').value.trim();
-  if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠️'); return; }
+  if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
   window.reins.setSettings({ cloudUrl: url, cloudToken: token }).then(s2 => { if (s2) hookCfg = { ...hookCfg, ...s2 }; });
-  toast('已保存', url ? '云端节点：' + esc(url.slice(0, 44)) : '已清空云端节点', '☁️');
+  toast('已保存', url ? '云端节点：' + esc(url.slice(0, 44)) : '已清空云端节点', '☁');
   hydrateSettings();
 }
 async function cloudTest() {
@@ -2125,17 +2124,17 @@ async function cloudTest() {
   const token = $('#cn-token').value;
   const log = $('#cn-log'); log.textContent = '正在连接…';
   const r = await window.reins.cloudTest(url, token);
-  if (!r.ok) { log.textContent = '✗ ' + r.error; toast('连接失败', r.error, '⚠️'); return; }
+  if (!r.ok) { log.textContent = '✗ ' + r.error; toast('连接失败', r.error, '⚠'); return; }
   log.textContent = '✓ 节点 ' + r.name + ' · 在线 · 可用 CLI：' + (r.agents && r.agents.length ? r.agents.join(', ') : '（未检测到）');
-  toast('云端节点在线', r.name + (r.agents && r.agents.length ? ' · ' + r.agents.length + ' 个 CLI 可用' : ''), '☁️');
+  toast('云端节点在线', r.name + (r.agents && r.agents.length ? ' · ' + r.agents.length + ' 个 CLI 可用' : ''), '☁');
 }
 
 async function setClient(key, val) {
-  if (!window.reins) { toast('浏览器模式', '该设置仅在桌面客户端内生效', '⚠️'); hydrateSettings(); return; }
+  if (!window.reins) { toast('浏览器模式', '该设置仅在桌面客户端内生效', '⚠'); hydrateSettings(); return; }
   try { await window.reins.setSettings({ [key]: val }); } catch (e) { }
   toast('设置已保存',
     key === 'launchAtLogin' ? (val ? '将在系统登录后自动启动' : '已取消开机自启') : (val ? '关闭窗口时将驻留菜单栏' : '关闭窗口即退出客户端'),
-    '⚙️');
+    '⚙');
 }
 
 function exportData() {
@@ -2144,7 +2143,7 @@ function exportData() {
   a.href = URL.createObjectURL(blob);
   a.download = 'reins-backup-' + new Date().toISOString().slice(0, 10) + '.json';
   a.click(); URL.revokeObjectURL(a.href);
-  toast('已导出', '备份文件已开始下载', '📦');
+  toast('已导出', '备份文件已开始下载', '⇩');
 }
 function importData(input) {
   const file = input.files[0]; if (!file) return;
@@ -2160,13 +2159,13 @@ function importData(input) {
       if (window.reins) await window.reins.stateSave(n, true);
       else localStorage.setItem(STORE_KEY, JSON.stringify(n));
       location.reload();
-    } catch (e) { toast('导入失败', esc(e.message), '⚠️'); }
+    } catch (e) { toast('导入失败', esc(e.message), '⚠'); }
   };
   reader.readAsText(file);
 }
 function confirmReset() {
   openModal(`<div class="modal-head"><h3>清空数据</h3><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-body"><div style="font-size:13.5px;color:var(--ink-dim)">将清空全部任务、空间与 Agent 配置（含密钥），恢复空白工作区；客户端设置与云端节点配置保留。此操作不可撤销。</div></div>
+    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将清空全部任务、空间与 Agent 配置（含密钥），恢复空白工作区；客户端设置与云端节点配置保留。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="doReset()">确认重置</button></div>`);
 }
@@ -2235,7 +2234,7 @@ function renderInbox() {
         <span class="fic">${GLYPH[i.kind] || i.icon}</span>
         <div class="ntf-body"><div class="ntf-text">${esc(i.text)}</div><div class="ft">${esc(i.spaceName)} · ${fmtRel(i.at)}</div></div>
         ${i.taskId ? '<span class="ntf-go">›</span>' : ''}
-      </div>`).join('') || '<div class="ntf-empty"><span>📭</span>这里很安静</div>'}</div>`;
+      </div>`).join('') || '<div class="ntf-empty">暂无通知</div>'}</div>`;
   S().readAt = now(); save(); renderBell();
 }
 function openInboxTask(spaceId, taskId) {
@@ -2247,7 +2246,7 @@ function openInboxTask(spaceId, taskId) {
 function markAllRead() {
   for (const sp of O().spaces) sp.readAt = now();
   save(); renderBell(); renderInbox();
-  toast('收件箱', '全部标记为已读', '📬');
+  toast('收件箱', '全部标记为已读', '✓');
 }
 
 /* ============ 初始化 ============ */
@@ -2338,7 +2337,7 @@ async function init() {
     $('#content').innerHTML = `<div class="panel" style="padding:26px"><h3 style="margin:0 0 8px">视图渲染失败</h3>
       <div style="font-size:13px;color:var(--ink-dim)">部分数据可能损坏。可先导出备份，再尝试「清空数据」。</div></div>`;
   }
-  if (faults.length) toast('界面初始化遇到问题', '已尽量恢复，详见控制台', '⚠️');
+  if (faults.length) toast('界面初始化遇到问题', '已尽量恢复，详见控制台', '⚠');
   updateNodePill(); setInterval(updateNodePill, 30000);
   boot('bell', () => renderBell());
 
@@ -2384,7 +2383,7 @@ function healUi(e) {
   const t = Date.now();
   if (t - lastHeal < 5000) return;        // 节流，避免错误风暴引发循环刷新
   lastHeal = t;
-  try { refreshViews(); toast('界面已自动恢复', '刚才有个渲染错误：' + msg.slice(0, 80), '⚠️'); } catch (err) { }
+  try { refreshViews(); toast('界面已自动恢复', '渲染错误：' + msg.slice(0, 80) + '，详见控制台', '⚠'); } catch (err) { }
 }
 window.addEventListener('error', healUi);
 window.addEventListener('unhandledrejection', healUi);
