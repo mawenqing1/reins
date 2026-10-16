@@ -1,0 +1,16 @@
+// ============================================================
+// Reins 驭码 — 共享 mixin
+// ============================================================
+
+// 细滚动条（用于可滚动内容区 / 终端 / 抽屉）
+.scrollbar(@thumb: #d5cfc2; @size: 8px) {
+  &::-webkit-scrollbar { width: @size; height: @size; }
+  &::-webkit-scrollbar-thumb { background: @thumb; border-radius: @size / 2; }
+}
+
+// 单行省略
+.ellipsis() {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

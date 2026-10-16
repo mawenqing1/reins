@@ -1,0 +1,44 @@
+// ============================================================
+// Reins 驭码 — 共享设计变量（LESS 编译期）
+// 注意：web/assets/*.css 中的 :root CSS 自定义属性是运行时
+// 供 JS 消费的接口（var(--doing) 等），与本文件分层共存。
+// ============================================================
+
+// —— 品牌色（琥珀/缰绳）
+@brand:        #14b8a6;
+@brand-deep:   #0d9488;
+@brand-dark:   #0f766e;
+@brand-bright: #2dd4bf;
+@brand-soft:   rgba(13, 148, 136, .10);
+@brand-line:   rgba(13, 148, 136, .32);
+@brand-glow:   rgba(13, 148, 136, .25);
+@brand-ink:    #ffffff;   // 品牌按钮上的文字
+@brand-text:   #0f766e;   // 纸面上的品牌文字
+@brand-bg-soft: #e6f5f3;
+@brand-border: #b5e0db;
+
+// —— 中性色
+@ink-warm:    #f2efe9;   // 深色底上的暖白文字
+
+// —— 任务状态
+@st-todo:   #8a867d;
+@st-doing:  #0d9488;
+@st-review: #7c6bd6;
+@st-review-bg: #f4f1fb;
+@st-review-line: #ddd6f3;
+@st-done:   #3d9e63;
+@st-done-bg: #e3f3ea;
+@danger:    #d05656;
+
+// —— 字体
+@sans: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC", "Segoe UI", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+@mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+// —— 圆角
+@r-lg: 16px;   // 模态/控制台窗口
+@r-md: 12px;   // 面板
+@r-sm: 9px;    // 输入/小按钮
+@r-xs: 7px;    // 迷你按钮
+
+// —— 阴影
+@shadow-panel: 0 8px 28px rgba(24, 24, 28, .08);

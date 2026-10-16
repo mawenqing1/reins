@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reins 驭码 — AI Agent 任务协作平台，什么活都能派</title>
+<meta name="description" content="像给同事派活一样给 AI Agent 派任务：写代码、做调研、整资料、处理工单，看板流转、并行执行、过程可回放。接入你已有的 Agent，免费开始。">
+<link rel="stylesheet" href="assets/landing.css">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-in">
+    <a class="logo" href="#">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <circle cx="5.5" cy="20.5" r="2.6" fill="#14b8a6"/>
+        <path d="M7.5 19 C12 16.5 14.5 12 15 6.5" stroke="#14b8a6" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+        <path d="M7.8 21.5 C13.5 20.5 18.5 16 19.5 9.5" stroke="#0f766e" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+        <circle cx="15.2" cy="5.8" r="1.7" fill="#f2efe9"/>
+        <circle cx="19.8" cy="9" r="1.7" fill="#f2efe9"/>
+      </svg>
+      Reins <span class="zh">驭码</span>
+    </a>
+    <div class="nav-links">
+      <a href="#cases">场景</a>
+      <a href="#features">产品能力</a>
+      <a href="#how">工作方式</a>
+      <a href="#integrations">集成</a>
+      <a href="#pricing">定价</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="app.html">进入控制台</a>
+      <a class="btn btn-primary" href="app.html">免费开始</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="badge"><span class="dot"></span>v1.0 正式发布 · 免费接入你正在用的 Agent</div>
+      <h1>你的 <em>AI 同事</em>，<br>已经到岗。</h1>
+      <p class="hero-sub">Reins 驭码，一块用来给 AI Agent 派活的看板。写代码、做调研、整资料、写文案、处理工单——<strong>把活儿说清楚，派出去</strong>，进度、过程、结果都在你眼前，验收你说了算。</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary btn-lg" href="app.html">免费开始使用</a>
+        <a class="btn btn-line btn-lg" href="#how">怎么派活？三步搞定 →</a>
+      </div>
+      <p class="hero-note">公有云 <b>¥0</b> · 不限席位 · token 走你自己的订阅，平台不抽成</p>
+    </div>
+
+    <div class="console">
+      <div class="console-bar">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="title">reins — 团队空间 · 迭代 Sprint 24</div>
+      </div>
+      <div class="console-body">
+        <div class="mini-cols">
+          <div class="mini-col">
+            <h5>待处理 <span>4</span></h5>
+            <div class="mini-card"><div class="k">REINS-96 · P1</div><div class="t">Q4 竞品调研：协作办公赛道</div><div class="row"><span class="chip-p">调研</span></div></div>
+            <div class="mini-card"><div class="k">REINS-98 · P0</div><div class="t">会员周公众号初稿</div><div class="row"><span class="chip-p" style="color:#e0a23c;background:rgba(224,162,60,.1)">文案</span></div></div>
+          </div>
+          <div class="mini-col">
+            <h5>进行中 <span>3</span></h5>
+            <div class="mini-card" style="border-color:rgba(232,163,61,.45)">
+              <div class="k">REINS-95 · P1</div><div class="t">供应商名单清洗与核对</div>
+              <div class="row"><span class="chip-a">◆ Claude</span><div class="progress"><i></i></div></div>
+            </div>
+            <div class="mini-card" style="border-color:rgba(232,163,61,.45)">
+              <div class="k">REINS-97 · P2</div><div class="t">登录接口参数校验</div>
+              <div class="row"><span class="chip-a">◆ Codex</span><div class="progress"><i style="animation-delay:1.2s"></i></div></div>
+            </div>
+          </div>
+          <div class="mini-col">
+            <h5>待审查 <span>2</span></h5>
+            <div class="mini-card"><div class="k">REINS-91 · 交付 #216</div><div class="t">行业政策周报 · 本期</div><div class="row"><span class="chip-a" style="color:#79c795;background:rgba(121,199,149,.08);border-color:rgba(121,199,149,.3)">✓ 待终审</span></div></div>
+            <div class="mini-card"><div class="k">REINS-93 · 交付 #217</div><div class="t">工单高频问题整理</div><div class="row"><span class="chip-a" style="color:#79c795;background:rgba(121,199,149,.08);border-color:rgba(121,199,149,.3)">✓ 待终审</span></div></div>
+          </div>
+        </div>
+        <div class="term" id="term"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="wrap">
+    <p>正在用哪个 Agent？直接接入，不用重新付费</p>
+    <div class="tools">
+      <span class="tool">Claude Code</span><span class="tool">Codex</span><span class="tool">OpenCode</span><span class="tool">Gemini CLI</span><span class="tool">Qwen Code</span><span class="tool">Cursor CLI</span><span class="tool">更多…</span>
+    </div>
+  </div>
+</div>
+
+<section class="light pad" id="cases">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">能派的活</div>
+      <h2>说得清楚的工作，<br>都可以派出去</h2>
+      <p class="sec-sub">不限开发。凡是能写成一张卡片的任务，Reins 都接得住。</p>
+    </div>
+    <div class="cases">
+      <div class="case reveal"><div class="ic">🧩</div><h3>产品开发</h3><p>写代码、修 Bug、补测试：需求拆进看板，多个 Agent 并行开工，改了哪几行、测试过没过，全程可回放。</p></div>
+      <div class="case reveal"><div class="ic">📊</div><h3>资料研究</h3><p>行业调研、竞品分析、论文摘要：Agent 先把材料读厚再读薄，结论给你，来源可查。</p></div>
+      <div class="case reveal"><div class="ic">✍️</div><h3>内容创作</h3><p>公众号、周报、产品文案：给个主题和口径，初稿自动来，你只管改到满意。</p></div>
+      <div class="case reveal"><div class="ic">🗂</div><h3>数据整理</h3><p>表格清洗、信息抽取、格式转换：重复劳动交给 Agent，一遍跑完还自动核对。</p></div>
+      <div class="case reveal"><div class="ic">💬</div><h3>客户支持</h3><p>工单转任务，Agent 起草回复、整理知识库，人工只做最后签发。</p></div>
+      <div class="case reveal"><div class="ic">📋</div><h3>流程杂务</h3><p>会议纪要、报名统计、日程协调：说得清楚的琐事，都值得派出去。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="features pad" id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker" style="color:var(--accent)">产品能力</div>
+      <h2 style="color:var(--ink)">指挥、并行、沉淀，<br>一个平台全搞定</h2>
+      <p class="sec-sub" style="color:var(--ink-dim)">Reins 不发明新 Agent——它让你手里的 Agent，真正进入团队的工作流。</p>
+    </div>
+    <div class="feats">
+      <div class="feat reveal"><div class="num">01 · 指派</div><h3>指派即执行</h3><p>把卡片拖给 Agent，上下文、验收标准、团队技能包一并送达，不用再复制粘贴提示词。</p></div>
+      <div class="feat reveal"><div class="num">02 · 并行</div><h3>并行不添乱</h3><p>每个任务有自己独立的工作区，多个 Agent 同时开工互不打架；成果各自交付，最后统一汇总到你面前。</p></div>
+      <div class="feat reveal"><div class="num">03 · 透明</div><h3>过程全透明</h3><p>查了什么、写了什么、怎么核对的，全程可回放。出了问题，能定位到具体某一步。</p></div>
+      <div class="feat reveal"><div class="num">04 · 资产</div><h3>经验变资产</h3><p>资深工程师的提示词与技能沉淀成团队资产，新人第一天就站在前人的肩膀上。</p></div>
+      <div class="feat reveal"><div class="num">05 · 自动</div><h3>例程自动化</h3><p>站会、周报、缺陷分诊、状态同步，交给定时例程。你到工位时，晨会材料已经写好了。</p></div>
+      <div class="feat reveal"><div class="num">06 · 一体</div><h3>管理在一起</h3><p>需求、迭代、评审、泳道与 Agent 执行同屏呈现，不必在 IM、表格和终端之间反复横跳。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="light pad" id="how">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">工作方式</div>
+      <h2>派一件活，只要三步</h2>
+      <p class="sec-sub">接入你正在用的 Agent，不换工具、不换账单。</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><span class="tag">约 3 分钟</span><h3>接入 Agent</h3><p>填上你已有的订阅或 API Key，Claude、Codex、OpenCode 一键连接，无需重新付费。</p></div>
+      <div class="step reveal"><span class="tag">拖一下的事</span><h3>派活</h3><p>把任务写成卡片拖给 Agent，或让自动化规则按标签、优先级自动分派。</p></div>
+      <div class="step reveal"><span class="tag">人做终审</span><h3>验收</h3><p>Agent 交付后进入待审查：过程可回放、结果可比对，满意就归档，不满意打回重做。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="pad" id="integrations" style="background:var(--paper);color:var(--paper-ink)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">集成</div>
+      <h2>长在你现有的流程上，<br>而不是让你搬家</h2>
+      <p class="sec-sub">不迁移、不替换，Reins 与你正在用的系统双向同步。</p>
+    </div>
+    <div class="integ-grid">
+      <div class="jira reveal">
+        <div class="kicker">双向同步</div>
+        <h3>Jira / 研发项目系统</h3>
+        <p>需求、缺陷、状态、评论实时互通：Jira 里建的票自动落进 Reins 看板，Agent 干完的状态自动回写。你的 PM 不用改变任何习惯。</p>
+        <div class="sync-demo">
+          <div><span class="ar">jira ⇄ reins</span></div>
+          <div class="in">← 引入 PAY-1042 「支付回调超时」 · P0</div>
+          <div class="in">← 引入 PAY-1043 「对账单导出乱码」 · P2</div>
+          <div class="out">→ 回写 PAY-1031 状态：已完成 · PR #216</div>
+          <div class="out">→ 回写 PAY-1035 状态：待审查 · PR #217</div>
+        </div>
+      </div>
+      <div class="integ-list reveal">
+        <div class="integ-item">Linear <span>双向同步</span></div>
+        <div class="integ-item">TAPD <span>双向同步</span></div>
+        <div class="integ-item">GitHub Issues <span>双向同步</span></div>
+        <div class="integ-item">GitLab <span>双向同步</span></div>
+        <div class="integ-item">飞书项目 <span>双向同步</span></div>
+        <div class="integ-item">Webhook / API <span>开放接口</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pad" id="pricing" style="background:var(--paper);color:var(--paper-ink);padding-top:20px">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">定价</div>
+      <h2>平台免费，算力归你</h2>
+      <p class="sec-sub">Reins 不从 token 里抽一分钱。用多少、花多少，账单始终躺在模型官方那里。</p>
+    </div>
+    <div class="price-grid">
+      <div class="plan reveal hot">
+        <div class="hot-tag">推荐</div>
+        <h3>公有云 SaaS</h3>
+        <div class="p">¥0 <small>/ 永久免费</small></div>
+        <ul>
+          <li>不限成员席位，团队随便拉</li>
+          <li>看板、并行执行、自动化、提示词库全功能开放</li>
+          <li>Jira / Linear 等双向同步</li>
+          <li>token 消耗走你自己的订阅</li>
+        </ul>
+        <a class="btn btn-primary btn-lg" href="app.html" style="width:100%;justify-content:center">免费开始</a>
+      </div>
+      <div class="plan reveal">
+        <h3>私有部署</h3>
+        <div class="p">按人数 <small>· 联系销售</small></div>
+        <ul>
+          <li>全部 SaaS 能力</li>
+          <li>数据不出内网，一个字节都不外传</li>
+          <li>审计日志与权限分级</li>
+          <li>专属支持与 SLA 保障</li>
+        </ul>
+        <a class="btn btn-line btn-lg" href="mailto:sales@reins.dev" style="width:100%;justify-content:center">联系销售</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="light pad" id="faq" style="padding-top:30px">
+  <div class="wrap">
+    <div class="sec-head reveal" style="text-align:center;max-width:none">
+      <div class="kicker">常见问题</div>
+      <h2>你可能想问</h2>
+    </div>
+    <div class="faq reveal">
+      <details open><summary>Reins 是又一个 AI Agent 吗？</summary><div class="a">不是，也不打算是。它不替代你正在用的 Claude、Codex、OpenCode，而是把它们组织成一支听指挥的队伍——你可以把 Reins 理解为这支队伍的派活台。</div></details>
+      <details><summary>只能干编程的活吗？</summary><div class="a">不限。凡是能写清楚的任务——调研、写作、整理、客服、开发——都能派。开发场景的工具链最全（独立代码工作区、PR 交付、测试回放），其他场景同样有过程记录和结果审核。</div></details>
+      <details><summary>要重新买模型订阅吗？</summary><div class="a">不用。接入时填你已有的订阅或 API Key 即可。Reins 不代理计费、不抽成，token 成本始终出现在你原来的账单里。</div></details>
+      <details><summary>好几个任务同时跑，不会乱吗？</summary><div class="a">不会。每个任务在自己的独立工作区里执行（写代码时就是独立的 git worktree），互不可见、互不干扰，成果各自交付，由人验收归档。</div></details>
+      <details><summary>Agent 干的活，我怎么放心？</summary><div class="a">每个任务的执行过程完整可回放：查了哪些资料、改了哪些内容、怎么核对的，一目了然。验收时，你像检查同事的交付一样检查它。</div></details>
+      <details><summary>数据安全怎么保障？</summary><div class="a">SaaS 模式下任务与资料加密存储；要求更高的团队可以私有部署，所有数据留在内网。</div></details>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap reveal">
+    <h2>别再一个人扛所有活儿了</h2>
+    <p>打开演示控制台，给 Agent 派出第一件任务。</p>
+    <a class="btn btn-primary btn-lg" href="app.html">进入控制台</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <span class="logo">
+      <svg width="20" height="20" viewBox="0 0 26 26" fill="none">
+        <circle cx="5.5" cy="20.5" r="2.6" fill="#14b8a6"/>
+        <path d="M7.5 19 C12 16.5 14.5 12 15 6.5" stroke="#14b8a6" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+        <path d="M7.8 21.5 C13.5 20.5 18.5 16 19.5 9.5" stroke="#0f766e" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+      </svg>
+      Reins 驭码
+    </span>
+    <div class="links">
+      <a href="#features">产品能力</a><a href="#pricing">定价</a><a href="app.html">控制台</a><a href="#">文档</a><a href="#">GitHub</a>
+    </div>
+    <span class="cp">© 2026 Reins · 本站为产品演示原型</span>
+  </div>
+</footer>
+
+<script>
+  // reveal on scroll
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); } }), { threshold: .12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // hero terminal typing loop（按墙钟时间推进，节流只跳帧不冻结）
+  const script = [
+    { c: 'cmd', t: '$ reins assign REINS-95 --to claude · 数据整理' },
+    { c: 'ok',  t: '✓ 上下文已装配 · 已创建独立工作区 ws/REINS-95' },
+    { c: '',    t: '● 正在读取 suppliers_2026Q3.xlsx（1.2 万行）…' },
+    { c: 'acc', t: '● 清洗完成：去重 214 行 · 补全 96 格 · 标出存疑 12 处' },
+    { c: 'ok',  t: '✓ 交付 #216 已生成 → 卡片移动至「待审查」' },
+    { c: 'cmd', t: '$ reins assign REINS-97 --to codex --parallel' },
+    { c: 'ok',  t: '✓ codex 已并行开工 · 当前 2 个 Agent 在役' },
+  ];
+  const term = document.getElementById('term');
+  const CPS = 42, LINE_PAUSE = 460, HOLD = 3200;
+  const durations = script.map(l => l.t.length / CPS * 1000 + LINE_PAUSE);
+  const total = durations.reduce((a, b) => a + b, 0) + HOLD;
+  let t0 = performance.now();
+  setInterval(() => {
+    const el = (performance.now() - t0) % total;
+    let acc = 0, html = '';
+    for (let i = 0; i < script.length && acc <= el; i++) {
+      const within = el - acc, shown = Math.min(script[i].t.length, Math.floor(within / 1000 * CPS));
+      if (shown > 0) html += `<div class="ln ${script[i].c}">${script[i].t.slice(0, shown)}</div>`;
+      acc += durations[i];
+    }
+    term.innerHTML = html || '<div class="ln cmd">$</div>';
+  }, 90);
+</script>
+</body>
+</html>

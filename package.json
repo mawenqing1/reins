@@ -1,0 +1,53 @@
+{
+  "name": "reins",
+  "productName": "Reins 驭码",
+  "version": "1.0.0",
+  "description": "Reins 驭码 — 一站式 Agent 统一指挥管理平台（演示原型）",
+  "main": "main.js",
+  "author": "Reins Demo",
+  "license": "MIT",
+  "scripts": {
+    "build:css": "node tools/build-css.js",
+    "watch:css": "node tools/build-css.js --watch",
+    "start": "node tools/brand-electron.js && npm run build:css && electron .",
+    "dist": "npm run build:css && npx electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^44.7.1",
+    "less": "^4.9.1"
+  },
+  "build": {
+    "appId": "dev.reins.desktop",
+    "productName": "Reins 驭码",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "web/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icons/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "assets/icons/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "icon": "assets/icons/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development"
+    }
+  }
+}

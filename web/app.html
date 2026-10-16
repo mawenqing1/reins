@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reins 控制台 — 一站式 Agent 统一指挥管理平台</title>
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+</head>
+<body>
+
+<div class="app">
+  <!-- ===== 侧边栏 ===== -->
+  <aside class="sidebar">
+    <div class="side-logo">
+      <svg width="24" height="24" viewBox="0 0 26 26" fill="none">
+        <circle cx="5.5" cy="20.5" r="2.6" fill="#14b8a6"/>
+        <path d="M7.5 19 C12 16.5 14.5 12 15 6.5" stroke="#14b8a6" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+        <path d="M7.8 21.5 C13.5 20.5 18.5 16 19.5 9.5" stroke="#0f766e" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+        <circle cx="15.2" cy="5.8" r="1.7" fill="#f2efe9"/>
+        <circle cx="19.8" cy="9" r="1.7" fill="#f2efe9"/>
+      </svg>
+      <span class="txt">Reins</span> <span class="zh txt">驭码</span>
+    </div>
+    <div class="space-menu">
+      <button class="side-space" id="space-btn" onclick="toggleSpaceMenu(event)">
+        <div class="sq" id="space-badge">研</div>
+        <div style="flex:1;min-width:0">
+          <span class="org-line" onclick="event.stopPropagation();toggleOrgMenu(event)"><b id="org-name">我的团队</b> ▾</span>
+          <b id="space-name">产品研发组</b><span id="space-sprint"></span>
+        </div>
+        <span class="caret">▾</span>
+      </button>
+      <div class="space-pop" id="space-pop"></div>
+      <div class="org-pop" id="org-pop"></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <div class="node-pill" onclick="switchView('settings')" title="本机节点：桌面客户端保持在线，Agent 才能继续接收并执行任务">
+        <span class="ndot"></span>本机节点在线 · <span id="node-uptime">刚刚启动</span>
+      </div>
+      <div class="side-user">
+        <div class="av">我</div>
+        <div><b>我</b><span>空间管理员</span></div>
+      </div>
+      <button class="btn-reset" onclick="confirmReset()">清空数据</button>
+      <button class="side-collapse" id="side-collapse" onclick="toggleSidebar()" title="折叠/展开侧栏（⌘B）">«</button>
+    </div>
+  </aside>
+
+  <!-- ===== 主区域 ===== -->
+  <div class="main">
+    <div class="topbar">
+      <div><h1 id="view-title">看板</h1><div class="sub" id="view-sub"></div></div>
+      <div class="topbar-bell" id="bell-wrap">
+        <button class="bell-btn" onclick="toggleNotif(event)" title="通知中心">🔔<span class="badge" id="bell-badge" style="display:none"></span></button>
+        <div class="notif-pop" id="notif-pop"></div>
+      </div>
+      <div class="search"><input id="search" placeholder="搜索任务 / 关键字…"></div>
+      <button class="btn btn-p" onclick="openNewTaskModal()">＋ 新建任务</button>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<!-- ===== 任务详情抽屉 ===== -->
+<div class="drawer-mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer"></div>
+
+<!-- ===== 通用模态 ===== -->
+<div class="modal-mask" id="modal-mask"><div class="modal" id="modal"></div></div>
+
+<!-- ===== 通知 ===== -->
+<div class="toasts" id="toasts"></div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
