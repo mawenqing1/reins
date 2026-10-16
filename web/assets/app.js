@@ -2358,6 +2358,7 @@ function renderBell() {
   const n = unreadCount();
   badge.textContent = n > 99 ? '99+' : n;
   badge.style.display = n ? '' : 'none';
+  window.reins?.traySetBadge?.(n); // 菜单栏托盘图标同步未读角标
 }
 const INBOX_FILTERS = [['all', '全部'], ['done', '交付完成'], ['run', '执行中'], ['reject', '打回'], ['triage', '创建/分诊']];
 function toggleNotif(e) {

@@ -41,4 +41,6 @@ contextBridge.exposeInMainWorld('reins', {
   onTrayNotice: (cb) => ipcRenderer.on('reins:tray-notice', () => cb()),
   trayHide: () => ipcRenderer.invoke('reins:tray-hide'),
   trayQuit: () => ipcRenderer.invoke('reins:tray-quit'),
+  /* 托盘未读角标 */
+  traySetBadge: (n) => ipcRenderer.invoke('reins:tray-badge', n),
 });

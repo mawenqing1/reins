@@ -195,6 +195,7 @@ function createWindow(hidden) {
   });
   ipcMain.handle('reins:tray-hide', () => { mainWindow?.hide(); });
   ipcMain.handle('reins:tray-quit', () => { app.isQuitting = true; app.quit(); });
+  ipcMain.handle('reins:tray-badge', async (_e, n) => { await setTrayBadge(n); return trayBadgeCur; });
 
   // 页面内的外部链接交给系统浏览器打开
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -205,6 +206,63 @@ function createWindow(hidden) {
 
 
 /* ---------- 托盘 ---------- */
+/* —— 托盘未读角标：模板图上画实心圆 + 镂空数字（透明数字在深浅菜单栏都清晰），结果缓存 —— */
+let trayBadgeWin = null, trayBadgeCur = 0;
+const trayBadgeCache = new Map();
+function baseTrayImage() {
+  const t16 = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-16.png'));
+  const t32 = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-32.png'));
+  if (!t32.isEmpty()) t16.addRepresentation({ scaleFactor: 2, width: 32, height: 32, buffer: t32.toPNG() });
+  t16.setTemplateImage(true);
+  return t16;
+}
+function renderTrayBadge(n) {
+  return new Promise(resolve => {
+    try {
+      if (!trayBadgeWin) trayBadgeWin = new BrowserWindow({
+        width: 80, height: 80, show: false, transparent: true, frame: false,
+        webPreferences: { offscreen: true },
+      });
+      const imgSrc = 'file://' + path.join(__dirname, 'assets', 'tray-32.png');
+      const html = `<!doctype html><body style="margin:0"><canvas id="c" width="32" height="32"></canvas>
+        <img id="b" src="${imgSrc}" style="display:none">
+        <script>
+        const n=${n};
+        document.getElementById('b').onload=()=>{
+          const x=document.getElementById('c').getContext('2d');
+          x.drawImage(document.getElementById('b'),0,3,26,26);       // 主图形略缩至左侧给角标让位
+          x.fillStyle='#000';
+          x.beginPath(); x.arc(25,7,6.8,0,7); x.fill();               // 实心角标圆
+          x.globalCompositeOperation='destination-out';
+          x.fillStyle='#000'; x.textAlign='center'; x.textBaseline='middle';
+          x.font='bold '+(n<10?8.5:7)+'px -apple-system,Helvetica';
+          x.fillText(String(n),25,7.5);                               // 数字镂空
+          window.__ok=document.getElementById('c').toDataURL();
+        };
+        </script>`;
+      trayBadgeWin.webContents.once('did-finish-load', async () => {
+        for (let i = 0; i < 40 && !await trayBadgeWin.webContents.executeJavaScript('window.__ok?1:0').catch(() => 0); i++) {
+          await new Promise(r => setTimeout(r, 50));
+        }
+        const url = await trayBadgeWin.webContents.executeJavaScript('window.__ok||""').catch(() => '');
+        const img = nativeImage.createFromDataURL(url);
+        img.setTemplateImage(true);
+        resolve(img);
+      });
+      trayBadgeWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    } catch (e) { resolve(nativeImage.createEmpty()); }
+  });
+}
+async function setTrayBadge(n) {
+  n = Math.max(0, Math.min(99, n | 0));
+  if (!tray || n === trayBadgeCur) return;
+  trayBadgeCur = n;
+  if (!n) { tray.setImage(baseTrayImage()); return; }
+  let img = trayBadgeCache.get(n);
+  if (!img) { img = await renderTrayBadge(n); trayBadgeCache.set(n, img); }
+  if (tray && trayBadgeCur === n && img && !img.isEmpty()) tray.setImage(img);
+}
+
 function createTray() {
   // 单色 template 图标（系统按菜单栏明暗自适应着色）；16pt 槽位 + 2x 表示，图形撑满槽位
   const tray16 = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-16.png'));
