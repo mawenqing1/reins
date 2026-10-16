@@ -780,6 +780,7 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 11px; color: @side-ink-faint;
   background: #162125; border: 1px solid @side-line; border-radius: 7px;
   padding: 7px 11px; margin-bottom: 10px; cursor: pointer; transition: .15s;
+  white-space: nowrap; overflow: hidden; // 在线时长再长也只占一行，超宽截断（悬停有完整 title）
   &:hover { border-color: #3f3f46; color: @side-ink-dim; }
   .ndot {
     width: 7px; height: 7px; border-radius: 50%;

@@ -2276,7 +2276,15 @@ let bootTs = Date.now();
 function updateNodePill() {
   const el = document.getElementById('node-uptime'); if (!el) return;
   const m = Math.max(0, Math.round((Date.now() - bootTs) / 60000));
-  el.textContent = m < 1 ? '刚刚启动' : m < 60 ? `已运行 ${m} 分钟` : `已运行 ${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+  // 时长文案要有宽度上界：超过一天改用「X 天 Y 小时」，避免侧栏胶囊被撑到换行
+  let s;
+  if (m < 1) s = '刚刚启动';
+  else if (m < 60) s = `已运行 ${m} 分钟`;
+  else if (m < 1440) s = `已运行 ${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+  else s = `已运行 ${Math.floor(m / 1440)} 天 ${Math.floor((m % 1440) / 60)} 小时`;
+  el.textContent = s;
+  el.parentElement?.setAttribute('title', '本机节点在线 · ' + s);
+  const nv = document.getElementById('nv-uptime'); if (nv) nv.textContent = s; // 节点视图里的镜像同步刷新
 }
 
 /* —— 数据体检：无论数据来自本地存档、导入文件还是旧版迁移，进入渲染层前统一补齐缺失字段、
