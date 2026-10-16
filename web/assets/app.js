@@ -770,11 +770,11 @@ function renderDrawer(id) {
 
   let execHTML = '';
   if (r) {
-    execHTML = `<div class="d-sec"><h4>${r.mode === 'api' ? '真实执行 · 流式输出' : 'Agent 执行 · 实时回放'} · ${pct ? pct + '%' : '运行中'}</h4>
+    execHTML = `<div class="d-sec"><h4>${r.mode === 'api' ? '真实执行 · 流式输出' : 'Agent 执行 · 实时输出'} · ${pct ? pct + '%' : '运行中'}</h4>
       <div class="run-box">
         <div class="run-head"><span class="agent-name">${esc(t.assignee?.name || 'Agent')}</span><span>${r.mode === 'api' ? esc(r.model || '') : 'workspaces/' + t.key}</span><span class="pct" id="run-pct">${pct}%</span></div>
         <div class="run-bar"><i id="run-bar" style="width:${pct}%"></i></div>
-        <div class="term-scroll" id="drawer-log">${r.log.map(([c, x]) => `<div class="ln ${c}">${esc(x)}</div>`).join('')}${r.mode === 'api' ? `<div class="ln stream" id="drawer-stream">${esc(r.stream || '')}</div>` : ''}</div>
+        <div class="term-scroll" id="drawer-log">${r.log.map(([c, x]) => `<div class="ln ${c}">${esc(x)}</div>`).join('')}<div class="ln stream" id="drawer-stream">${esc(r.stream || '')}</div></div>
       </div>
       <div class="run-actions">
         <button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">■ 终止执行</button>
@@ -955,7 +955,8 @@ function handleRunEvent(evt) {
   if (evt.type === 'usage') { r.usage = evt.usage; return; }
   if (evt.type === 'note') { r.log.push(['', evt.text]); updateRunUI(taskId); return; }
   if (evt.type === 'done') {
-    r.done = true; r.stream = evt.result || r.stream;
+    // stream 里已经有完整执行过程（工具调用日志），只在为空时才用交付文本补位，别把过程日志冲掉
+    r.done = true; if (!r.stream) r.stream = evt.result || '';
     const t2 = byId(taskId); const a = t2.assignee ? agentById(t2.assignee.id) : null;
     t2.result = evt.result;
     t2.thread = t2.thread || [];

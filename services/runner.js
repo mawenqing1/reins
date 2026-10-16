@@ -270,7 +270,7 @@ const os = require('os');
 const CLI_PRESETS = [
   { id: 'claude-code', label: 'Claude Code', cmd: 'claude', template: 'claude -p {prompt} --output-format text' },
   { id: 'codex', label: 'Codex CLI', cmd: 'codex', template: 'codex exec --skip-git-repo-check {prompt}' },
-  { id: 'codebuddy', label: '腾讯 CodeBuddy Code', cmd: 'codebuddy', template: 'codebuddy -y -p {prompt} --output-format text' },
+  { id: 'codebuddy', label: '腾讯 CodeBuddy Code', cmd: 'codebuddy', template: 'codebuddy -y -p {prompt} --output-format text', streamJson: true },
   { id: 'workbuddy', label: '腾讯 WorkBuddy', cmd: 'workbuddy', template: 'workbuddy -y -p {prompt} --output-format text' },
   { id: 'zcode', label: 'ZCode', cmd: 'zcode', template: 'zcode -p {prompt} --no-color' },
   { id: 'opencode', label: 'OpenCode', cmd: 'opencode', template: 'opencode run {prompt}' },
@@ -378,6 +378,44 @@ function worktreeChanges(cwd) {
   } catch (e) { return null; }
 }
 
+/* 把 CLI 事件流（stream-json NDJSON 帧）翻译成人能读的执行过程日志行；返回 null 表示该帧不上屏
+   只展示两类信息：工具调用（执行流）与模型叙述文本；thinking/system/快照等噪声全部略过 */
+function fmtCliFrame(j) {
+  if (!j || typeof j !== 'object') return null;
+  if (j.type === 'system' || j.type === 'file-history-snapshot' || j.type === 'result') return null;
+  if (j.type === 'user') {
+    const arr = Array.isArray(j.message?.content) ? j.message.content : [];
+    const errs = arr.filter(b => b.type === 'tool_result' && b.is_error);
+    if (!errs.length) return null; // 工具正常返回不上屏，出错才报
+    const txt = errs.map(b => (typeof b.content === 'string' ? b.content : JSON.stringify(b.content))).join(' ').slice(0, 160);
+    return '  ↳ 出错 ' + txt.replace(/\n/g, ' ');
+  }
+  if (j.type === 'assistant') {
+    const arr = Array.isArray(j.message?.content) ? j.message.content : [];
+    const lines = [];
+    for (const b of arr) {
+      if (b.type === 'tool_use') {
+        const inp = b.input || {};
+        const f = String(inp.file_path || inp.path || inp.notebook_path || '');
+        const base = f.replace(/^.*\//, '');
+        let arg;
+        if (/^(Bash|PowerShell)$/.test(b.name)) arg = String(inp.command || '').replace(/\n/g, ' ').slice(0, 90);
+        else if (b.name === 'Grep' || b.name === 'Glob') arg = String(inp.pattern || '');
+        else if (b.name === 'WebFetch') arg = String(inp.url || '');
+        else if (b.name === 'WebSearch') arg = String(inp.query || '');
+        else if (base) arg = base;
+        else arg = JSON.stringify(inp).slice(0, 70);
+        lines.push('⚙ ' + b.name + (arg ? '  ' + arg : ''));
+      } else if (b.type === 'text' && b.text && b.text.trim()) {
+        lines.push(b.text.trim());
+      }
+    }
+    return lines.length ? lines.join('\n') : null;
+  }
+  return null;
+}
+
+
 async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
   const preset = CLI_PRESETS.find(p => p.id === agent.cliId) || { cmd: agent.cliCommand || 'echo', template: '{prompt}' };
   const template = agent.cliTemplate || preset.template;
@@ -385,15 +423,21 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
   const [head, tail = ''] = template.split('{prompt}');
   const argv = head.trim().split(/\s+/).filter(Boolean);
   const prompt = buildCliPrompt(task, extraPrompt, agent.scenePrompt);
-  const args = [...argv.slice(1), prompt, ...tail.trim().split(/\s+/).filter(Boolean), ...cliModelArgs(agent)];
+  let args = [...argv.slice(1), prompt, ...tail.trim().split(/\s+/).filter(Boolean), ...cliModelArgs(agent)];
   const cmd = argv[0] || preset.cmd;
+  // 事件流模式：CLI 输出 NDJSON 帧而非纯文本，主进程逐帧翻译成实时执行日志（模板自带的 --output-format 一律剥掉）
+  const streamJson = preset.streamJson === true;
+  if (streamJson) {
+    args = args.filter((a, i) => a !== '--output-format' && args[i - 1] !== '--output-format');
+    args.push('--output-format', 'stream-json');
+  }
 
   const env = { ...process.env };
   const lp = loginPath();
   const nd = bestNodeDir();
   env.PATH = [nd, lp].filter(Boolean).join(':') + ':' + (env.PATH || '');
 
-  onEvent({ type: 'start', model: cliRunLabel(cmd, agent) + '（本机 CLI）', provider: '本机命令', cli: true });
+  onEvent({ type: 'start', model: cliRunLabel(cmd, agent) + (streamJson ? '（本机 CLI · 过程实时回传）' : '（本机 CLI）'), provider: '本机命令', cli: true });
 
   // 隔离执行：空间配置了仓库根目录时，为任务准备独立 worktree（分支 reins/<KEY>），CLI 在其中改动互不干扰
   // 安全规则：配置了仓库但 worktree 准备失败 → 中止执行，绝不退化到应用目录裸跑；未配置仓库 → 落到独立临时目录
@@ -448,15 +492,47 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
 
   let out = '';
   let errTail = '';
+  let buf = '';
+  let finalResult = null;   // result 帧的干净交付文本
+  let resultError = false;
+  let resultAt = 0;         // result 帧到达时间：事件流模式下进程可能因 MCP/后台任务滞留，宽限后主动收尾
   await new Promise(resolve => {
-    child.stdout.on('data', d => { const s = d.toString(); out += s; onEvent({ type: 'delta', text: s }); });
+    let finished = false;
+    const finish = fn => { if (!finished) { finished = true; clearInterval(linger); fn(); resolve(); } };
+    const linger = setInterval(() => {
+      if (resultAt && Date.now() - resultAt > 8000) { try { child.kill('SIGTERM'); } catch (e) { } resultAt = 0; }
+    }, 2000);
+    if (streamJson) {
+      child.stdout.on('data', d => {
+        buf += d.toString();
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).trim();
+          buf = buf.slice(i + 1);
+          if (!line) continue;
+          let j = null;
+          try { j = JSON.parse(line); } catch (e) { }
+          if (!j) { out += line + '\n'; onEvent({ type: 'delta', text: line + '\n' }); continue; }
+          if (j.type === 'result') {
+            finalResult = typeof j.result === 'string' ? j.result : String(j.result ?? '');
+            if (j.is_error) resultError = true;
+            resultAt = Date.now();
+            continue;
+          }
+          const f = fmtCliFrame(j);
+          if (f) { out += f + '\n'; onEvent({ type: 'delta', text: f + '\n' }); }
+        }
+      });
+    } else {
+      child.stdout.on('data', d => { const s = d.toString(); out += s; onEvent({ type: 'delta', text: s }); });
+    }
     child.stderr.on('data', d => { errTail = (errTail + d.toString()).slice(-500); }); // stderr 不计入交付物，仅用于排错
-    child.on('error', e => { onEvent({ type: 'error', message: '无法启动命令 ' + cmd + '：' + e.message + '（本机未安装？可在配置中修改命令）' }); resolve(); });
-    child.on('close', code => {
-      if (code !== 0 && !out) { onEvent({ type: 'error', message: cmd + ' 退出码 ' + code + (errTail ? '：' + errTail.slice(-200) : '') }); }
-      else onEvent({ type: 'done', result: out.trim() || '（无输出）', usage: null, worktree: cwd || null, changes: worktreeChanges(cwd) });
-      resolve();
-    });
+    child.on('error', e => finish(() => onEvent({ type: 'error', message: '无法启动命令 ' + cmd + '：' + e.message + '（本机未安装？可在配置中修改命令）' })));
+    child.on('close', code => finish(() => {
+      if (resultError) onEvent({ type: 'error', message: (finalResult || '执行失败').slice(0, 300) });
+      else if (code !== 0 && !out && finalResult === null) onEvent({ type: 'error', message: cmd + ' 退出码 ' + code + (errTail ? '：' + errTail.slice(-200) : '') });
+      else onEvent({ type: 'done', result: (finalResult !== null ? finalResult : out.trim()) || '（无输出）', usage: null, worktree: cwd || null, changes: worktreeChanges(cwd) });
+    }));
   });
   aborts.delete(task.id);
 }
