@@ -938,6 +938,12 @@ body.side-min {
 
 // —— 品牌图标（官方 SVG）与 monogram
 .brand-ico { width: 15px; height: 15px; flex: none; vertical-align: -2px; }
+svg.brand-ico { color: var(--ink-dim); } // 内联品牌 SVG：currentColor，浅色上下文用次级墨色
+.agent-av svg.brand-ico { width: 22px; height: 22px; color: #e6ebf0; } // 深色头像上提亮
+.agent-av .brand-mono { // 头像里的文字兜底：单字大号、去小盒子
+  width: auto; height: auto; background: none; border: none;
+  font-size: 17px; font-weight: 600; letter-spacing: .5px; color: var(--accent-bright);
+}
 
 // —— 内联线性图标（Lucide 子集，见 web/assets/icons.js）：currentColor 随文变色，尺寸按上下文 ——
 svg.lic { width: 16px; height: 16px; flex: none; vertical-align: -3px; }

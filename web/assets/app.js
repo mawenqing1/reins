@@ -62,21 +62,23 @@ const CB_MODELS = ['hy4-preview', 'hy3', 'hy3-x', 'step-5-preview', 'space-bunny
 
 /* —— 品牌 logo（simple-icons 官方 SVG）与 monogram 兜底：不用自制符号 —— */
 const CLI_LOGO = {
-  'claude-code': 'si-claude.svg', 'opencode': 'si-opencode.svg', 'gemini-cli': 'si-googlegemini.svg',
+  'claude-code': 'si-claude.svg', 'codex': 'si-openai.svg', 'opencode': 'si-opencode.svg', 'gemini-cli': 'si-googlegemini.svg',
   'cursor-cli': 'si-cursor.svg', 'qwen-code': 'si-qwen.svg', 'copilot': 'si-githubcopilot.svg',
-  'amp': 'si-amp.svg', 'kimi-cli': 'si-kimi.svg', 'trae': 'si-trae.svg',
+  'amp': 'si-amp.svg', 'kimi-cli': 'si-kimi.svg', 'trae': 'si-trae.svg', 'hermes': 'si-hermes.svg',
   'zcode': 'zcode.png',
 };
-const PROVIDER_LOGO = { deepseek: 'si-deepseek.svg', kimi: 'si-kimi.svg', qwen: 'si-qwen.svg' };
-const brandIcon = file => file ? `<img class="brand-ico" src="assets/icons/${file}" alt="" draggable="false">` : '';
+const PROVIDER_LOGO = { deepseek: 'si-deepseek.svg', kimi: 'si-kimi.svg', qwen: 'si-qwen.svg', openai: 'si-openai.svg' };
+/* 品牌 SVG 已内联（brands.js，fill=currentColor 随底色）；位图 logo（zcode.png）仍走 img */
+const brandIcon = file => {
+  if (!file) return '';
+  if (/\.png$/.test(file)) return `<img class="brand-ico" src="assets/icons/${file}" alt="" draggable="false">`;
+  return (typeof window !== 'undefined' && typeof bi === 'function') ? bi(file.replace(/^si-/, '').replace(/\.svg$/, '')) : '';
+};
+/* 无官方图标的品牌兜底：单个汉字或两个字母，单行居中（不再双字挤压） */
 const brandMono = name => {
   const s = String(name).replace(/[（(].*$/, '').trim();
-  const cjk = s.match(/[\u4e00-\u9fff]/g);
-  let t = cjk && cjk.length >= 2 ? cjk.slice(0, 2).join('') : '';
-  if (!t) {
-    const w = s.split(/[\s\-_]+/).filter(Boolean);
-    t = (w.length > 1 && w[1][0] ? (w[0][0] + w[1][0]) : w[0].slice(0, 2)).toUpperCase().replace(/[^A-Z0-9]/g, '') || s.slice(0, 2);
-  }
+  const cjk = s.match(/[\u4e00-\u9fff]/);
+  const t = cjk ? cjk[0] : (s.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || s.slice(0, 1));
   return `<span class="brand-mono">${esc(t)}</span>`;
 };
 const brandOf = a => brandIcon(a.mode === 'cli' ? CLI_LOGO[a.cliId] : a.mode === 'api' ? PROVIDER_LOGO[a.provider] : '') || brandMono(a.name);
@@ -1538,7 +1540,7 @@ function viewNodes() {
       </div>
       <div class="panel node-card">
         <div class="agent-top">
-          <div class="agent-av" style="background:#e8eef6">☁</div>
+          <div class="agent-av" style="background:#e8eef6">${ic('cloud')}</div>
           <div><h3 style="font-size:15px">云端节点</h3><div class="agent-meta">${s.cloudUrl ? esc(s.cloudUrl.replace(/^https?:\/\//, '')) : '未配置'}</div></div>
           <span class="status-pill ${s.cloudUrl ? 'idle' : 'offline'}" style="margin-left:auto" id="nv-cloud-pill">${s.cloudUrl ? '检测中' : '未配置'}</span>
         </div>
@@ -1975,7 +1977,7 @@ function acSave(id) {
 function openAddAgentModal() {
   const provCards = PROVIDER_PRESETS.map(p => `<div class="pick" onclick="addApiAgent('${p.id}')">
     <b>${brandIcon(PROVIDER_LOGO[p.id]) || brandMono(p.label)} ${p.label}</b><span>${p.model || '自填模型'}</span>
-    <span style="color:var(--accent)">接入 →</span>
+    <span style="color:var(--accent);white-space:nowrap">接入 →</span>
   </div>`).join('');
   const cliCards = CLI_PRESETS.map(p => `<div class="pick" onclick="addCliAgent('${p.id}')" id="cli-${p.id}">
     <b>${brandIcon(CLI_LOGO[p.id]) || brandMono(p.label)} ${p.label}</b><span>${p.cmd}</span>
