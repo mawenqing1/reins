@@ -1763,6 +1763,27 @@ function initSidebar() {
   if (min) toggleSidebar(true);
 }
 
+/* —— 关窗驻留提示：主进程在首次关窗时通知；确认后再隐藏窗口（先隐后弹会把窗口重新拉起） —— */
+function showTrayNoticeModal() {
+  openModal(`<div class="modal-head"><h3>Reins 将驻留菜单栏</h3><span>本机节点</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div style="width:44px;height:44px;border-radius:10px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;color:var(--accent);flex:none">${ic('server', 'ic-lg')}</div>
+        <div style="font-size:13px;color:var(--ink-dim);line-height:1.7">
+          收起窗口后 <b style="color:var(--ink)">本机节点保持在线</b>，Agent 可继续接收并执行任务。<br>
+          随时点菜单栏图标重新打开；如需彻底退出，请用托盘菜单中的「退出」。
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-o" onclick="trayQuitApp()">完全退出…</button>
+      <button class="btn btn-p" onclick="trayHideApp()">好，收起窗口</button>
+    </div>`);
+}
+if (window.reins?.onTrayNotice) window.reins.onTrayNotice(showTrayNoticeModal);
+function trayHideApp() { closeModal(); window.reins?.trayHide(); }
+function trayQuitApp() { closeModal(); window.reins?.trayQuit(); }
+
 /* —— 快捷键帮助 —— */
 function openShortcutHelp() {
   const rows = [['⌘1 – ⌘9', '切换视图（概览 / 看板 / 任务 / 交付 / Agent …）'], ['⌘K', '聚焦搜索'], ['⌘N', '新建任务'], ['Esc', '关闭弹窗 / 抽屉 / 菜单'], ['拖拽卡片', '流转状态；拖入「进行中」并指派 Agent 即自动执行']];

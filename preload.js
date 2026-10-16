@@ -36,4 +36,9 @@ contextBridge.exposeInMainWorld('reins', {
 
   /* 隔离工作区：在访达中定位 */
   revealWorktree: (p) => ipcRenderer.invoke('reins:worktree:reveal', p),
+
+  /* 关窗驻留提示：主进程通知渲染层弹窗，确认后隐藏/退出 */
+  onTrayNotice: (cb) => ipcRenderer.on('reins:tray-notice', () => cb()),
+  trayHide: () => ipcRenderer.invoke('reins:tray-hide'),
+  trayQuit: () => ipcRenderer.invoke('reins:tray-quit'),
 });

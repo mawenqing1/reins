@@ -176,20 +176,18 @@ function createWindow(hidden) {
 
   // 关闭驻留托盘：保持本机节点在线（Agent 可继续接单），除非用户从托盘退出
   mainWindow.on('close', (e) => {
+    console.log('[tray-close] hit, keepInTray=', readSettings().keepInTray, 'isQuitting=', app.isQuitting);
     if (readSettings().keepInTray && !app.isQuitting) {
       e.preventDefault();
-      mainWindow.hide();
-      if (!trayShownOnce) {
-        trayShownOnce = true;
-        dialog.showMessageBox(mainWindow, {
-          type: 'info',
-          title: 'Reins 仍在运行',
-          message: 'Reins 已驻留菜单栏',
-          detail: '本机节点保持在线，Agent 可继续接收并执行任务。\n如需完全退出，请使用托盘菜单中的「退出」。'
-        }).catch(() => { });
-      }
+      console.log('[tray-close] prevented, ack=', readSettings().trayNoticeAck);
+      // 首次：页面内弹提示，用户点「好，收起窗口」后再隐藏（先 hide 再弹原生对话框会把窗口重新拉起来）
+      if (readSettings().trayNoticeAck) { mainWindow.hide(); return; }
+      const s = readSettings(); s.trayNoticeAck = true; writeSettings(s);
+      mainWindow.webContents.send('reins:tray-notice');
     }
   });
+  ipcMain.handle('reins:tray-hide', () => { mainWindow?.hide(); });
+  ipcMain.handle('reins:tray-quit', () => { app.isQuitting = true; app.quit(); });
 
   // 页面内的外部链接交给系统浏览器打开
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -197,7 +195,7 @@ function createWindow(hidden) {
     return { action: 'deny' };
   });
 }
-let trayShownOnce = false;
+
 
 /* ---------- 托盘 ---------- */
 function createTray() {
