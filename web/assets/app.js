@@ -2416,7 +2416,11 @@ async function init() {
     if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); openShortcutHelp(); }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleSidebar(); }
   });
-  document.addEventListener('click', e => { if (!e.target.closest('.space-menu')) { closeSpaceMenu(); closeOrgMenu(); } });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.space-menu')) { closeSpaceMenu(); closeOrgMenu(); }
+      // 收件箱弹层：点击顶栏铃铛以外任意处即收起（铃铛按钮自带 stopPropagation，不会误关）
+      if (!e.target.closest('.topbar-bell')) document.getElementById('notif-pop')?.classList.remove('show');
+    });
 
   // 恢复/演示：进行中且指派演示引擎的任务自动继续（真实 API 不自动续跑，避免无感知扣费）
   setTimeout(() => {
