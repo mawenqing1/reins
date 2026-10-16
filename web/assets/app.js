@@ -1214,7 +1214,7 @@ function renderSpaceButton() {
       <span class="sq">${x.badge || (x.name || '空')[0]}</span>
       <div style="flex:1;min-width:0"><b>${esc(x.name)}</b><span style="display:block;font-size:11px;color:#7f8a92">${(x.members || []).length} 名成员 · ${(x.tasks || []).filter(t => t.status !== 'done').length} 个未完成任务</span></div>
     </div>`).join('')
-    + `<div class="sp-item" style="color:#87919a" onclick="openSpaceSettings()"><span class="sq" style="background:#22282c">${ic('settings')}</span><div style="flex:1"><b>空间设置</b><span style="display:block;font-size:11px;color:#7f8a92">成员 · 角色 · 邀请</span></div></div>`
+    + `<div class="sp-item" style="color:#87919a" onclick="openSpaceSettings()"><span class="sq" style="background:#e9ebef">${ic('settings')}</span><div style="flex:1"><b>空间设置</b><span style="display:block;font-size:11px;color:#7f8a92">成员 · 角色 · 邀请</span></div></div>`
     + `<button class="sp-act" onclick="openSpaceCreate()">${ic('plus')} 创建新空间</button>`;
 }
 function toggleSpaceMenu(e) { e && e.stopPropagation(); closeOrgMenu(); $('#space-pop').classList.toggle('show'); }
@@ -1231,7 +1231,7 @@ function renderOrgPop() {
       <span class="sq">${esc(o.badge || o.name[0])}</span>
       <div style="flex:1;min-width:0"><b>${esc(o.name)}</b><span style="display:block;font-size:11px;color:#7f8a92">${o.spaces.length} 个空间 · ${o.agents.length} 个 Agent</span></div>
     </div>`).join('')
-    + `<div class="sp-item" style="color:#87919a" onclick="openOrgSettings()"><span class="sq" style="background:#22282c">${ic('settings')}</span><div style="flex:1"><b>组织设置</b><span style="display:block;font-size:11px;color:#7f8a92">名称 · 删除组织</span></div></div>`
+    + `<div class="sp-item" style="color:#87919a" onclick="openOrgSettings()"><span class="sq" style="background:#e9ebef">${ic('settings')}</span><div style="flex:1"><b>组织设置</b><span style="display:block;font-size:11px;color:#7f8a92">名称 · 删除组织</span></div></div>`
     + `<button class="sp-act" onclick="openOrgCreate()">${ic('plus')} 新建组织</button>`;
 }
 function switchOrg(id) {
