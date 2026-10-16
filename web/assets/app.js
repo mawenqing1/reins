@@ -186,16 +186,16 @@ const fmtTokens = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1
 
 /* ============ 导航 ============ */
 const VIEWS = [
-  { id: 'dash', ic: '◧', label: '概览', sub: '任务、Agent 与近期动态', group: 'work' },
-  { id: 'kanban', ic: '▤', label: '看板', sub: '拖动卡片流转状态，指派 Agent 的任务自动执行', group: 'work' },
-  { id: 'list', ic: '☰', label: '任务', sub: '全部任务', group: 'work' },
-  { id: 'deliveries', ic: '⇩', label: '交付', sub: '任务的交付物，可预览、复制、下载', group: 'work' },
-  { id: 'nodes', ic: '▣', label: '节点', sub: '本机与云端执行节点', group: 'work' },
-  { id: 'agents', ic: '✳', label: 'Agent', sub: '接入 API 或本机 CLI，统一指派任务', group: 'cmd' },
-  { id: 'prompts', ic: '✎', label: '提示词库', sub: '共享的提示词，执行时可附加到任务', group: 'cmd' },
-  { id: 'autos', ic: '⟳', label: '自动化', sub: '站会、分诊与周报例程', group: 'cmd' },
-  { id: 'integ', ic: '⇄', label: '集成', sub: 'Webhook 推送与分诊引擎', group: 'cmd' },
-  { id: 'settings', ic: '⚙', label: '设置', sub: '模型与密钥 · 客户端偏好 · 数据', group: 'sys' },
+  { id: 'dash', ic: 'layout-dashboard', label: '概览', sub: '任务、Agent 与近期动态', group: 'work' },
+  { id: 'kanban', ic: 'kanban', label: '看板', sub: '拖动卡片流转状态，指派 Agent 的任务自动执行', group: 'work' },
+  { id: 'list', ic: 'list', label: '任务', sub: '全部任务', group: 'work' },
+  { id: 'deliveries', ic: 'package', label: '交付', sub: '任务的交付物，可预览、复制、下载', group: 'work' },
+  { id: 'nodes', ic: 'server', label: '节点', sub: '本机与云端执行节点', group: 'work' },
+  { id: 'agents', ic: 'bot', label: 'Agent', sub: '接入 API 或本机 CLI，统一指派任务', group: 'cmd' },
+  { id: 'prompts', ic: 'library', label: '提示词库', sub: '共享的提示词，执行时可附加到任务', group: 'cmd' },
+  { id: 'autos', ic: 'workflow', label: '自动化', sub: '站会、分诊与周报例程', group: 'cmd' },
+  { id: 'integ', ic: 'webhook', label: '集成', sub: 'Webhook 推送与分诊引擎', group: 'cmd' },
+  { id: 'settings', ic: 'settings', label: '设置', sub: '模型与密钥 · 客户端偏好 · 数据', group: 'sys' },
 ];
 
 function renderNav() {
@@ -209,7 +209,7 @@ function navItem(v) {
   if (v.id === 'kanban') cnt = (S()?.tasks || []).filter(t => t.status !== 'done').length;
   if (v.id === 'agents') cnt = (O().agents || []).filter(a => a.status !== 'offline').length;
   return `<button class="nav-item ${curView === v.id ? 'on' : ''}" onclick="switchView('${v.id}')">
-    <span class="ic">${v.ic}</span><span class="txt">${v.label}</span>${cnt ? `<span class="cnt">${cnt}</span>` : ''}</button>`;
+    <span class="ic">${ic(v.ic)}</span><span class="txt">${v.label}</span>${cnt ? `<span class="cnt">${cnt}</span>` : ''}</button>`;
 }
 function switchView(id) {
   curView = id;
@@ -254,7 +254,7 @@ function colHTML(st, ts, withHead = true) {
   return `<div class="col ${withHead ? '' : 'no-head'}" data-status="${st}">
       ${withHead ? `<div class="col-head"><span class="dot" style="background:var(--${st})"></span>${STATUS_LABEL[st]}<span class="cnt">${ts.length}</span></div>` : ''}
       ${ts.map(cardHTML).join('') || '<div class="empty-col">暂无卡片</div>'}
-      ${withHead && st === 'todo' ? '<button class="col-add" onclick="openNewTaskModal()">＋ 新建任务</button>' : ''}
+      ${withHead && st === 'todo' ? '<button class="col-add" onclick="openNewTaskModal()">' + ic('plus') + ' 新建任务</button>' : ''}
     </div>`;
 }
 function laneOf(t) {
@@ -432,8 +432,8 @@ function viewAgents() {
       <button class="btn btn-p" onclick="openAddAgentModal()">接入 Agent</button>
     </div>` : '';
   return `<div class="view-head"><h2>Agent</h2><p>API 与本机 CLI 两种接入方式，密钥保存在本机</p>
-      <span class="act"><button class="btn btn-p" onclick="openAddAgentModal()">＋ 接入 Agent</button></span></div>
-    <div class="grid3">${empty}${cards}<div class="add-card" onclick="openAddAgentModal()"><span class="plus">＋</span>接入 Agent</div></div>`;
+      <span class="act"><button class="btn btn-p" onclick="openAddAgentModal()">${ic('plus')} 接入 Agent</button></span></div>
+    <div class="grid3">${empty}${cards}<div class="add-card" onclick="openAddAgentModal()"><span class="plus">${ic('plus')}</span>接入 Agent</div></div>`;
 }
 
 function toggleAgent(id) {
@@ -469,7 +469,7 @@ function viewPrompts() {
     </div>
   </div>`).join('');
   return `<div class="view-head"><h2>提示词库</h2><p>执行任务时可在详情页附加，随任务一起发给 Agent</p>
-      <span class="act"><button class="btn btn-p" onclick="openNewPromptModal()">＋ 新建提示词</button></span></div>
+      <span class="act"><button class="btn btn-p" onclick="openNewPromptModal()">${ic('plus')} 新建提示词</button></span></div>
     <div class="grid3">${cards}</div>`;
 }
 function copyPrompt(id) {
@@ -481,7 +481,7 @@ function copyPrompt(id) {
 /* ============ 自动化 ============ */
 function viewAutos() {
   const rows = S().autos.map(a => `<div class="auto-row">
-    <div class="ic">${a.icon}</div>
+    <div class="ic">${gic(a.icon)}</div>
     <div style="flex:1"><h3>${esc(a.name)}</h3><div class="trig">${esc(a.trigger)}</div>
       <div class="last" style="margin-top:2px">${esc(a.desc)}</div></div>
     <span class="last">上次运行 ${fmtRel(a.lastRun)}</span>
@@ -529,7 +529,7 @@ function buildStandup() {
 }
 function openStandupModal() {
   const text = buildStandup();
-  openModal(`<div class="modal-head"><h3>每日站会报告</h3><span>自动化生成</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>每日站会报告</h3><span>自动化生成</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div class="standup-out" id="standup-out"></div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
       <button class="btn btn-p" onclick="copyStandup()">复制全文</button></div>`);
@@ -581,7 +581,7 @@ function buildWeekly() {
 }
 function openWeeklyModal() {
   const text = buildWeekly();
-  openModal(`<div class="modal-head"><h3>周报</h3><span>${esc(S().name)} · 自动化生成</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>周报</h3><span>${esc(S().name)} · 自动化生成</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div class="standup-out" id="weekly-out"></div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
       <button class="btn btn-o" onclick="copyWeekly()">复制全文</button>
@@ -617,7 +617,7 @@ function viewInteg() {
       <div style="display:grid;gap:14px">
       <div class="panel integ-card">
         <div class="integ-brand">
-          <div class="lg" style="background:#cf8a3e">⇄</div>
+          <div class="lg" style="background:#cf8a3e">${ic('webhook')}</div>
           <div><h3>Webhook 开放接口</h3><span>任务事件实时推送到任意系统</span></div>
           <span class="status-pill ${cfg.webhookUrl ? 'idle' : 'offline'}" style="margin-left:auto">${cfg.webhookUrl ? '已配置' : '未配置'}</span>
         </div>
@@ -636,7 +636,7 @@ function viewInteg() {
       </div>
       <div class="panel integ-card">
         <div class="integ-brand">
-          <div class="lg" style="background:#6f6ac2">⚖</div>
+          <div class="lg" style="background:#6f6ac2">${ic('chart-column')}</div>
           <div><h3>Jev 决策引擎</h3><span>TypeSafe AI · 结构化分诊判断</span></div>
           <span class="status-pill ${cfg.jevKey ? 'idle' : 'offline'}" style="margin-left:auto">${cfg.jevKey ? '已配置' : '未配置'}</span>
         </div>
@@ -739,17 +739,17 @@ function viewDash() {
     </div>`;
   }).join('');
   return `<div class="stats">
-      <div class="stat"><span class="ic" style="color:var(--doing)">▶</span><b>${doing.length}</b><span>进行中</span><div class="trend">含 Agent 执行 ${doing.filter(t => t.assignee?.kind === 'agent').length} 项</div></div>
-      <div class="stat"><span class="ic" style="color:var(--review)">☰</span><b>${review.length}</b><span>待验收</span><div class="trend">需人工验收</div></div>
-      <div class="stat"><span class="ic" style="color:var(--done)">✓</span><b>${doneToday.length}</b><span>今日归档</span></div>
-      <div class="stat"><span class="ic" style="color:var(--accent)">✳</span><b>${working.length}/${online.length}</b><span>Agent 执行中 / 在线</span></div>
+      <div class="stat"><span class="ic" style="color:var(--doing)">${ic('play')}</span><b>${doing.length}</b><span>进行中</span><div class="trend">含 Agent 执行 ${doing.filter(t => t.assignee?.kind === 'agent').length} 项</div></div>
+      <div class="stat"><span class="ic" style="color:var(--review)">${ic('clock')}</span><b>${review.length}</b><span>待验收</span><div class="trend">需人工验收</div></div>
+      <div class="stat"><span class="ic" style="color:var(--done)">${ic('check')}</span><b>${doneToday.length}</b><span>今日归档</span></div>
+      <div class="stat"><span class="ic" style="color:var(--accent)">${ic('bot')}</span><b>${working.length}/${online.length}</b><span>Agent 执行中 / 在线</span></div>
     </div>
     <div class="grid2" style="margin-bottom:14px">
       <div class="panel"><h3 style="font-size:14px;margin-bottom:4px">近 7 日吞吐</h3><span style="font-size:12px;color:var(--ink-faint)">归档任务数 / 天</span><div class="chart">${bars}</div></div>
       <div class="panel"><h3 style="font-size:14px;margin-bottom:14px">Agent 负载</h3>${utilRows}</div>
     </div>
     <div class="panel"><h3 style="font-size:14px;margin-bottom:6px">最近动态</h3>
-      <ul class="feed">${S().activity.slice(0, 10).map(a => `<li><span class="fic">${a.icon}</span><div><div>${esc(a.text)}</div><div class="ft">${fmtRel(a.at)}</div></div></li>`).join('')}</ul>
+      <ul class="feed">${S().activity.slice(0, 10).map(a => `<li><span class="fic">${gic(a.icon)}</span><div><div>${esc(a.text)}</div><div class="ft">${fmtRel(a.at)}</div></div></li>`).join('')}</ul>
     </div>`;
 }
 
@@ -819,7 +819,7 @@ function renderDrawer(id) {
         <div class="k">${t.key} <span class="pri ${t.pri}">${t.pri}</span> <span class="ttag ${t.type}">${TYPE_LABEL[t.type] || t.type}</span></div>
         <h3>${esc(t.title)}</h3>
       </div>
-      <button class="drawer-x" onclick="closeDrawer()">✕</button>
+      <button class="drawer-x" onclick="closeDrawer()">${ic('x')}</button>
     </div>
     <div class="drawer-body">
       <div class="d-sec">
@@ -854,7 +854,7 @@ function renderDrawer(id) {
         ${(t.changes && t.changes.length) ? `<div class="chg-list">${t.changes.map(c => `<span class="chg-file"><i>${esc(c.flag || 'M')}</i>${esc(c.file)}</span>`).join('')}</div>` : ''}
         <div style="font-size:12px;color:var(--ink-faint);margin-top:7px">改动位于分支 reins/${t.key}，验收通过后合并回主分支。</div></div>` : ''}
       ${(t.history && t.history.length) ? `<div class="d-sec"><h4>动态 · ${t.history.length}</h4>
-        <ul class="tl">${t.history.slice().reverse().map(h => `<li><span class="fic">${h.icon}</span><div><div>${esc(h.text)}</div><div class="ft">${fmtRel(h.at)}</div></div></li>`).join('')}</ul>
+        <ul class="tl">${t.history.slice().reverse().map(h => `<li><span class="fic">${gic(h.icon)}</span><div><div>${esc(h.text)}</div><div class="ft">${fmtRel(h.at)}</div></div></li>`).join('')}</ul>
       </div>` : ''}
       <div class="d-sec"><h4>评论 · ${t.comments.length}</h4>
         ${t.comments.map(c => `<div class="comment"><div class="av">${esc(c.who[0])}</div><div class="bubble"><div class="who"><b>${esc(c.who)}</b> · ${fmtRel(c.at)}</div>${esc(c.text)}</div></div>`).join('') || '<div style="font-size:12px;color:var(--ink-faint)">还没有评论</div>'}
@@ -892,7 +892,7 @@ function mergeTask(id) {
 }
 function rejectTask(id) {
   const t = byId(id);
-  openModal(`<div class="modal-head"><h3>打回重做</h3><span>${esc(t.key)}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>打回重做</h3><span>${esc(t.key)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-row"><label>打回原因 / 修改要求（Agent 将结合交付物与反馈继续修改）</label>
       <textarea id="rj-text" placeholder="例如：第二部分缺少来源；语气再正式一点…"></textarea></div>
@@ -1025,7 +1025,7 @@ function cancelRun(taskId) {
 }
 function confirmDeleteTask(id) {
   const t = byId(id); if (!t) return;
-  openModal(`<div class="modal-head"><h3>删除任务</h3><span>${t.key}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>删除任务</h3><span>${t.key}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将永久删除 <b>${t.key} ${esc(t.title)}</b>${t.pr ? ' 及其交付物 ' + esc(t.pr) : ''}，含执行记录与评论${runs[id] ? '；正在执行的 Agent 会被立即终止' : ''}。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="deleteTask('${t.id}')">确认删除</button></div>`);
@@ -1184,8 +1184,8 @@ function renderSpaceButton() {
       <span class="sq">${x.badge || (x.name || '空')[0]}</span>
       <div style="flex:1;min-width:0"><b>${esc(x.name)}</b><span style="display:block;font-size:11px;color:#7f8a92">${(x.members || []).length} 名成员 · ${(x.tasks || []).filter(t => t.status !== 'done').length} 个未完成任务</span></div>
     </div>`).join('')
-    + `<div class="sp-item" style="color:#87919a" onclick="openSpaceSettings()"><span class="sq" style="background:#22282c">⚙</span><div style="flex:1"><b>空间设置</b><span style="display:block;font-size:11px;color:#7f8a92">成员 · 角色 · 邀请</span></div></div>`
-    + `<button class="sp-act" onclick="openSpaceCreate()">＋ 创建新空间</button>`;
+    + `<div class="sp-item" style="color:#87919a" onclick="openSpaceSettings()"><span class="sq" style="background:#22282c">${ic('settings')}</span><div style="flex:1"><b>空间设置</b><span style="display:block;font-size:11px;color:#7f8a92">成员 · 角色 · 邀请</span></div></div>`
+    + `<button class="sp-act" onclick="openSpaceCreate()">${ic('plus')} 创建新空间</button>`;
 }
 function toggleSpaceMenu(e) { e && e.stopPropagation(); closeOrgMenu(); $('#space-pop').classList.toggle('show'); }
 
@@ -1201,8 +1201,8 @@ function renderOrgPop() {
       <span class="sq">${esc(o.badge || o.name[0])}</span>
       <div style="flex:1;min-width:0"><b>${esc(o.name)}</b><span style="display:block;font-size:11px;color:#7f8a92">${o.spaces.length} 个空间 · ${o.agents.length} 个 Agent</span></div>
     </div>`).join('')
-    + `<div class="sp-item" style="color:#87919a" onclick="openOrgSettings()"><span class="sq" style="background:#22282c">⚙</span><div style="flex:1"><b>组织设置</b><span style="display:block;font-size:11px;color:#7f8a92">名称 · 删除组织</span></div></div>`
-    + `<button class="sp-act" onclick="openOrgCreate()">＋ 新建组织</button>`;
+    + `<div class="sp-item" style="color:#87919a" onclick="openOrgSettings()"><span class="sq" style="background:#22282c">${ic('settings')}</span><div style="flex:1"><b>组织设置</b><span style="display:block;font-size:11px;color:#7f8a92">名称 · 删除组织</span></div></div>`
+    + `<button class="sp-act" onclick="openOrgCreate()">${ic('plus')} 新建组织</button>`;
 }
 function switchOrg(id) {
   if (id === state.activeOrgId) { closeOrgMenu(); return; }
@@ -1218,7 +1218,7 @@ function switchOrg(id) {
 function openOrgSettings() {
   closeOrgMenu();
   const o = O();
-  openModal(`<div class="modal-head"><h3>组织设置</h3><span>${esc(o.name)}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>组织设置</h3><span>${esc(o.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <h3 class="set-h">基本信息</h3>
       <div class="f-2col">
@@ -1242,7 +1242,7 @@ function saveOrgInfo() {
 }
 function openOrgCreate() {
   closeOrgMenu();
-  openModal(`<div class="modal-head"><h3>新建组织</h3><span>空间与 Agent 相互隔离</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>新建组织</h3><span>空间与 Agent 相互隔离</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-2col">
         <div class="f-row"><label>组织名称</label><input type="text" id="no-name" placeholder="例如：个人项目 / 另一家公司"></div>
@@ -1271,7 +1271,7 @@ function createOrg() {
 function confirmDeleteOrg() {
   if (state.orgs.length <= 1) { toast('无法删除', '至少保留一个组织', '⚠'); return; }
   const o = O();
-  openModal(`<div class="modal-head"><h3>删除组织</h3><span>${esc(o.name)}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>删除组织</h3><span>${esc(o.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将删除 <b>${esc(o.name)}</b> 及其 ${o.spaces.length} 个空间、${o.agents.length} 个 Agent 配置（含密钥）。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="doDeleteOrg()">确认删除</button></div>`);
@@ -1300,7 +1300,7 @@ function switchSpace(id) {
 
 function openSpaceCreate() {
   closeSpaceMenu();
-  openModal(`<div class="modal-head"><h3>创建空间</h3><span>数据独立 · 成员独立</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>创建空间</h3><span>数据独立 · 成员独立</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-2col">
         <div class="f-row"><label>空间名称</label><input type="text" id="ns-name" placeholder="例如：设计协作组"></div>
@@ -1377,7 +1377,7 @@ function openSpaceSettings() {
       </select>
       ${m.role === 'owner' ? '' : `<button class="btn btn-o btn-sm" onclick="removeMember(${i})">移除</button>`}
     </div>`).join('');
-  openModal(`<div class="modal-head"><h3>空间设置</h3><span>${esc(sp.name)}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>空间设置</h3><span>${esc(sp.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <h3 class="set-h">基本信息</h3>
       <div class="f-2col">
@@ -1499,7 +1499,7 @@ function copyInvite() {
 function confirmDeleteSpace() {
   if (O().spaces.length <= 1) { toast('无法删除', '组织内至少保留一个空间', '⚠'); return; }
   const sp = S();
-  openModal(`<div class="modal-head"><h3>删除空间</h3><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>删除空间</h3><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将删除空间「${esc(sp.name)}」及其全部 ${sp.tasks.length} 个任务、成员与自动化配置。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="deleteSpace()">确认删除</button></div>`);
@@ -1523,7 +1523,7 @@ function viewNodes() {
     <div class="grid2">
       <div class="panel node-card">
         <div class="agent-top">
-          <div class="agent-av">▣</div>
+          <div class="agent-av">${ic('server')}</div>
           <div><h3 style="font-size:15px">本机节点</h3><div class="agent-meta">${s.platform || 'mac'} · 客户端 v${s.version || '1.0.0'}</div></div>
           <span class="status-pill idle" style="margin-left:auto">在线</span>
         </div>
@@ -1608,7 +1608,7 @@ function viewDeliveries() {
 }
 function previewDelivery(id) {
   const t = byId(id);
-  openModal(`<div class="modal-head"><h3>${esc(t.title)}</h3><span>${esc(t.pr || t.key)}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>${esc(t.title)}</h3><span>${esc(t.pr || t.key)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div class="result-box" style="max-height:56vh;overflow:auto">${esc(t.result || '（该交付无文本产出）')}</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
       ${t.result ? `<button class="btn btn-p" onclick="downloadDelivery('${t.id}')">下载 .md</button>` : ''}</div>`);
@@ -1664,7 +1664,7 @@ function initSidebar() {
 /* —— 快捷键帮助 —— */
 function openShortcutHelp() {
   const rows = [['⌘1 – ⌘9', '切换视图（概览 / 看板 / 任务 / 交付 / Agent …）'], ['⌘K', '聚焦搜索'], ['⌘N', '新建任务'], ['Esc', '关闭弹窗 / 抽屉 / 菜单'], ['拖拽卡片', '流转状态；拖入「进行中」并指派 Agent 即自动执行']];
-  openModal(`<div class="modal-head"><h3>键盘快捷键</h3><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>键盘快捷键</h3><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><table class="sk-table">${rows.map(r => `<tr><td><kbd>${r[0]}</kbd></td><td>${r[1]}</td></tr>`).join('')}</table></div>
     <div class="modal-foot"><button class="btn btn-p" onclick="closeModal()">知道了</button></div>`);
 }
@@ -1769,7 +1769,7 @@ async function openTriageBatch() {
   const pool = S().tasks.filter(t => t.status === 'todo' && !t.assignee).slice(0, 8);
   const pool2 = pool.length ? pool : S().tasks.filter(t => t.status === 'todo').slice(0, 8);
   if (!pool2.length) { toast('没有可分诊的任务', '待处理列暂时是空的', '✦'); return; }
-  openModal(`<div class="modal-head"><h3>AI 分诊</h3><span>${pool2.length} 个待办 · 逐条分析</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>AI 分诊</h3><span>${pool2.length} 个待办 · 逐条分析</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div id="tri-batch">准备中…</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
       <button class="btn btn-p" onclick="applyAllTriage()">全部应用</button></div>`);
@@ -1814,7 +1814,7 @@ function openNewTaskModal() {
   const assigneeOpts = `<option value="">暂不指派</option>
     ${memberNames().map(m => `<option value="m:${esc(m)}">${esc(m)}</option>`).join('')}
     ${O().agents.filter(a => agentUsable(a)).map(a => `<option value="a:${a.id}">◆ ${esc(a.name)}</option>`).join('')}`;
-  openModal(`<div class="modal-head"><h3>新建任务</h3><span>REINS-${S().seq}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>新建任务</h3><span>REINS-${S().seq}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-row"><label>标题</label><input type="text" id="nt-title" placeholder="用一句话说明要做什么"></div>
       <div class="f-2col">
@@ -1889,7 +1889,7 @@ function openAgentConfig(agentId) {
       </div>
       <div class="f-row"><label>Base URL</label><input type="text" id="ac-baseurl" value="${esc(a.baseURL || '')}" placeholder="选服务商后自动填入"></div>
       <div class="f-row"><label>API Key（仅保存在本机）</label><input type="password" id="ac-key" value="${esc(a.apiKey || '')}" placeholder="sk-…" autocomplete="off"></div>`;
-  openModal(`<div class="modal-head"><h3>Agent 配置</h3><span>${esc(a.name)}</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>Agent 配置</h3><span>${esc(a.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-2col">
         <div class="f-row"><label>名称</label><input type="text" id="ac-name" value="${esc(a.name)}"></div>
@@ -1981,7 +1981,7 @@ function openAddAgentModal() {
     <b>${brandIcon(CLI_LOGO[p.id]) || brandMono(p.label)} ${p.label}</b><span>${p.cmd}</span>
     <span class="cli-st" data-st="checking">检测中…</span>
   </div>`).join('');
-  openModal(`<div class="modal-head"><h3>接入 Agent</h3><span>通过 API Key 或本机 CLI 接入</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>接入 Agent</h3><span>通过 API Key 或本机 CLI 接入</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="add-sec-h">API 服务商（OpenAI 兼容，需 API Key）</div>
       <div class="picklist">${provCards}</div>
@@ -2042,7 +2042,7 @@ function addSimAgent() {
 }
 
 function openNewPromptModal() {
-  openModal(`<div class="modal-head"><h3>新建提示词</h3><span>保存后可在任务中附加</span><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>新建提示词</h3><span>保存后可在任务中附加</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-row"><label>标题</label><input type="text" id="np-title" placeholder="例如：发布前检查清单"></div>
       <div class="f-row"><label>一句话说明</label><input type="text" id="np-desc" placeholder="什么场景用这条提示词"></div>
@@ -2186,7 +2186,7 @@ function importData(input) {
   reader.readAsText(file);
 }
 function confirmReset() {
-  openModal(`<div class="modal-head"><h3>清空数据</h3><button class="x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>清空数据</h3><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将清空全部任务、空间与 Agent 配置（含密钥），恢复空白工作区；客户端设置与云端节点配置保留。此操作不可撤销。</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-danger" onclick="doReset()">确认重置</button></div>`);
@@ -2200,7 +2200,7 @@ async function doReset() {
 /* ============ 通知 & 动态 ============ */
 function toast(title, sub = '', icon = '✓') {
   const el = document.createElement('div'); el.className = 'toast';
-  el.innerHTML = `<span class="ic">${icon}</span><div><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  el.innerHTML = `<span class="ic">${gic(icon)}</span><div><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
   $('#toasts').appendChild(el);
   setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 420); }, 3800);
 }
@@ -2253,7 +2253,7 @@ function renderInbox() {
     <div class="ibx-filters">${INBOX_FILTERS.map(([k, l]) => `<button class="${inboxFilter === k ? 'on' : ''}" onclick="inboxFilter='${k}';renderInbox()">${l}</button>`).join('')}</div>
     <div class="ibx-list">${items.map(i => `
       <div class="ntf-item k-${i.kind === 'all' ? 'misc' : i.kind} ${isUnread(i) ? 'unread' : ''} ${i.taskId ? 'lnk' : ''}" ${i.taskId ? `onclick="openInboxTask('${i.spaceId}','${i.taskId}')"` : ''}>
-        <span class="fic">${GLYPH[i.kind] || i.icon}</span>
+        <span class="fic">${gic(GLYPH[i.kind] || i.icon)}</span>
         <div class="ntf-body"><div class="ntf-text">${esc(i.text)}</div><div class="ft">${esc(i.spaceName)} · ${fmtRel(i.at)}</div></div>
         ${i.taskId ? '<span class="ntf-go">›</span>' : ''}
       </div>`).join('') || '<div class="ntf-empty">暂无通知</div>'}</div>`;

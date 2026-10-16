@@ -44,7 +44,7 @@
         <div><b>我</b><span>空间管理员</span></div>
       </div>
       <button class="btn-reset" onclick="confirmReset()">清空数据</button>
-      <button class="side-collapse" id="side-collapse" onclick="toggleSidebar()" title="折叠/展开侧栏（⌘B）">«</button>
+      <button class="side-collapse" id="side-collapse" onclick="toggleSidebar()" title="折叠/展开侧栏（⌘B）"><svg class="lic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg></button>
     </div>
   </aside>
 
@@ -53,11 +53,11 @@
     <div class="topbar">
       <div><h1 id="view-title">看板</h1><div class="sub" id="view-sub"></div></div>
       <div class="topbar-bell" id="bell-wrap">
-        <button class="bell-btn" onclick="toggleNotif(event)" title="通知中心">🔔<span class="badge" id="bell-badge" style="display:none"></span></button>
+        <button class="bell-btn" onclick="toggleNotif(event)" title="通知中心"><svg class="lic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span class="badge" id="bell-badge" style="display:none"></span></button>
         <div class="notif-pop" id="notif-pop"></div>
       </div>
       <div class="search"><input id="search" placeholder="搜索任务 / 关键字…"></div>
-      <button class="btn btn-p" onclick="openNewTaskModal()">＋ 新建任务</button>
+      <button class="btn btn-p" onclick="openNewTaskModal()"><svg class="lic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>新建任务</button>
     </div>
     <div class="content" id="content"></div>
   </div>
@@ -73,6 +73,7 @@
 <!-- ===== 通知 ===== -->
 <div class="toasts" id="toasts"></div>
 
+<script src="assets/icons.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
