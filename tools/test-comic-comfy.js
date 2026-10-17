@@ -112,7 +112,19 @@ async function main() {
     ok(!f.calls.some(c => c.url.includes('/videos/generations')), 'comfy 不触碰云端 videos 端点');
   }
 
-  console.log('\n[5] comic-manager：comfy 预设 / 缺口口径 / 探活');
+  console.log('\n[5.5] precheck：comfy 无 Key 放行（启动被拦回归——此前 precheck 仍无条件要 apiKey）');
+  {
+    const eng = { writer: { baseURL: 'https://x', apiKey: 'k' }, render: { provider: 'comfy', baseURL: BASE, apiKey: '' } };
+    const job = { comic: { id: 'c1', episodes: [] }, scope: {} };
+    const r = comic._internal.precheck(job, eng);
+    ok(r.ok === true, 'comfy + 地址 + 空 Key → 预检通过');
+    const r2 = comic._internal.precheck(job, { ...eng, render: { provider: 'comfy', baseURL: '', apiKey: '' } });
+    ok(r2.ok === false && /本地 ComfyUI 未配置地址/.test(r2.error), 'comfy 缺地址 → 点名地址而非 Key');
+    const r3 = comic._internal.precheck(job, { ...eng, render: { provider: 'zhipu', baseURL: 'https://x', apiKey: '' } });
+    ok(r3.ok === false && /缺少 API Key/.test(r3.error), '云端引擎无 Key 仍拦截（口径不回退）');
+  }
+
+  console.log('\n[6] comic-manager：comfy 预设 / 缺口口径 / 探活');
   {
     const os = require('os'); const path = require('path'); const fs = require('fs');
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'reins-cm-comfy-'));

@@ -575,9 +575,14 @@ function precheck(job, engines) {
   if (wantLlm && (!w.baseURL || !w.apiKey)) return { ok: false, error: '未配置编剧引擎：需要 OpenAI 兼容地址与 API Key（设置 → 模型与密钥）' };
   if (wantRender) {
     const target = st ? `「${st.label}」阶段` : '首帧 / 视频渲染';
-    if (!r.baseURL && !r.apiKey) return { ok: false, error: `渲染引擎未配置：${target}需要图像 / 视频生成服务（设置 → 渲染引擎）` };
-    if (!r.baseURL) return { ok: false, error: `渲染引擎缺少服务地址（Base URL）：${target}需要，请到「设置 → 渲染引擎」填写 API 根路径` };
-    if (!r.apiKey) return { ok: false, error: `渲染引擎缺少 API Key：${target}需要，请到「设置 → 渲染引擎」填写` };
+    /* 本地 ComfyUI：无 Key、模型走内嵌工作流，只需服务地址（与 manager renderConfigError 同口径） */
+    if (r.provider === 'comfy') {
+      if (!r.baseURL) return { ok: false, error: `本地 ComfyUI 未配置地址：${target}需要，请到「设置 → 渲染引擎」填写服务地址（默认 http://127.0.0.1:8188）` };
+    } else {
+      if (!r.baseURL && !r.apiKey) return { ok: false, error: `渲染引擎未配置：${target}需要图像 / 视频生成服务（设置 → 渲染引擎）` };
+      if (!r.baseURL) return { ok: false, error: `渲染引擎缺少服务地址（Base URL）：${target}需要，请到「设置 → 渲染引擎」填写 API 根路径` };
+      if (!r.apiKey) return { ok: false, error: `渲染引擎缺少 API Key：${target}需要，请到「设置 → 渲染引擎」填写` };
+    }
   }
   if (scope.episodeId && !comic.episodes.some(e => e.id === scope.episodeId)) return { ok: false, error: '剧集不存在：' + scope.episodeId };
   if (scope.shotId) {
@@ -825,5 +830,5 @@ module.exports = {
   runJob, cancelJob, jobSnapshot,
   /* 测试可见的内部谓词 */
   _predicates: { bibleDone, scriptDone, storyboardDone, shotImageDone, shotVideoDone, shotVoiceDone, assembleDone },
-  _internal: { genImage, genVideo, comfyGenImage, comfyGenVideo, comfySubmit, comfyWait, comfyUploadImage },
+  _internal: { genImage, genVideo, comfyGenImage, comfyGenVideo, comfySubmit, comfyWait, comfyUploadImage, precheck },
 };
