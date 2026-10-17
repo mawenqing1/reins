@@ -295,10 +295,16 @@ async function comfySubmit(base, workflow, { signal, fetchImpl }) {
 }
 /* 轮询直到完成；产物 = outputs 中首个含 filename 的文件对象（SaveImage→images / SaveVideo→gifs|videos 通吃） */
 async function comfyWait(base, promptId, { signal, fetchImpl, pollMs = 3000, pollTimeoutMs = 1200000 }) {
+  /* 放弃等待（超时/取消/出错）时，把自己从 ComfyUI 队列里摘掉（只删自己的排队项，
+     不 interrupt——共享服务上正在执行的可能不是我们的任务） */
+  const giveUp = async err => {
+    try { await (fetchImpl || defaultFetch)(base + '/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delete: [promptId] }) }); } catch (e) { }
+    throw err;
+  };
   const deadline = Date.now() + pollTimeoutMs;
   for (;;) {
-    if (signal && signal.aborted) throw new CancelError();
-    if (Date.now() > deadline) throw new Error('ComfyUI 执行超时（' + Math.round(pollTimeoutMs / 60000) + ' 分钟）');
+    if (signal && signal.aborted) throw await giveUp(new CancelError());
+    if (Date.now() > deadline) throw await giveUp(new Error('ComfyUI 执行超时（' + Math.round(pollTimeoutMs / 60000) + ' 分钟）'));
     await sleep(pollMs);
     const resp = await fetchRetry(base + '/history/' + encodeURIComponent(promptId), {}, { signal, timeoutMs: 30000, retries: 3, fetchImpl });
     const h = await resp.json().catch(() => null);
@@ -314,7 +320,7 @@ async function comfyWait(base, promptId, { signal, fetchImpl, pollMs = 3000, pol
           }
         }
       }
-      throw new Error('ComfyUI 已完成但产物里没有文件');
+      throw await giveUp(new Error('ComfyUI 已完成但产物里没有文件'));
     }
   }
 }
@@ -337,7 +343,7 @@ async function comfyGenImage(render, prompt, { aspect, signal, fetchImpl, pollMs
   wf['7'].inputs.width = dim[0]; wf['7'].inputs.height = dim[1];
   wf['4'].inputs.text = String(prompt || '').slice(0, 2000);
   const pid = await comfySubmit(base, wf, { signal, fetchImpl });
-  const f = await comfyWait(base, pid, { signal, fetchImpl, pollMs, pollTimeoutMs: 300000 });
+  const f = await comfyWait(base, pid, { signal, fetchImpl, pollMs, pollTimeoutMs: 10 * 60 * 1000 });
   return { url: comfyViewUrl(base, f) };
 }
 async function comfyGenVideo(render, { prompt, imageUrl, aspect }, { signal, fetchImpl, pollMs }) {
