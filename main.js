@@ -17,13 +17,39 @@ let tray = null;
 })();
 
 /* ---------- 客户端设置（userData/settings.json） ---------- */
+/* REINS-126 返工修复①（配置持久化交叉写入冲突）：
+   settings.json 有多个写方（设置页 settings:set / 漫剧 comic:render:set / 托盘首次提示），
+   交叉写丢配置的根源有三，逐一堵死：
+     a) readSettings 解析失败时返回纯默认值 —— 下一个写方会把默认值整档写回，
+        悄悄抹掉 renderEngine / cloudToken 等全部自定义配置（用 lastGood 记忆兜底）；
+     b) writeSettings 静默吞错 —— 界面提示「已保存」但磁盘上没有（改为抛错，调用方透传给 UI）；
+     c) 渲染层把 settings:get 的返回整包回传（带 platform/version 及过期 renderEngine 快照）
+        会挤掉 comic:render:set 的结果（保留字段在 settings:set 一律剔除）。 */
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 const defaultSettings = { launchAtLogin: false, keepInTray: true, webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, cloudUrl: '', cloudToken: '' , preventSleep: false, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto' };
+let settingsLastGood = null;   // 最近一次成功读到的整档；坏档/瞬时读失败时回退，防止后续写盘把配置抹平
 function readSettings() {
-  try { return { ...defaultSettings, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf-8')) }; }
-  catch (e) { return { ...defaultSettings }; }
+  try {
+    const s = { ...defaultSettings, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf-8')) };
+    settingsLastGood = s;
+    return { ...s };
+  } catch (e) {
+    return settingsLastGood ? { ...settingsLastGood } : { ...defaultSettings };
+  }
 }
-function writeSettings(s) { try { fs.writeFileSync(settingsFile(), JSON.stringify(s, null, 2)); } catch (e) { } }
+function writeSettings(s) {
+  /* 原子写（tmp+rename，与 store.js 同策略）：直接覆写 settings.json 一旦中途失败/掉电，
+     会留下半截文件，重启后渲染引擎等配置整体丢失（REINS-126 返工修复）。
+     写失败向上抛错：settings:set 把错误透给界面，comic:render:set 靠回读校验兜底 */
+  const f = settingsFile(), tmp = f + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
+  fs.renameSync(tmp, f);
+  settingsLastGood = { ...s };
+}
+/* 保留字段：renderEngine 的唯一写通道是 reins:comic:render:set（带服务商切换语义 + 回读校验）；
+   platform/version 是 settings:get 附加的只读信息。settings:set 收到这些键一律剔除，
+   杜绝渲染层把读到的快照整包回传造成的交叉覆盖（返工修复①c） */
+const SETTINGS_RESERVED = new Set(['renderEngine', 'platform', 'version']);
 function applySettings(s) {
   // 关闭态不调用系统 API：未签名/未打包环境下注册登录项会被 macOS 拒绝并打印报错
   if (!s.launchAtLogin) return;
@@ -32,9 +58,15 @@ function applySettings(s) {
 
 ipcMain.handle('reins:settings:get', () => ({ ...readSettings(), platform: process.platform, version: app.getVersion() }));
 ipcMain.handle('reins:settings:set', (_e, patch) => {
-  const s = { ...readSettings(), ...patch };
-  writeSettings(s); applySettings(s);
-  return s;
+  /* 读-改-写保留字段剔除（返工修复①）：只接受普通客户端键，写失败如实返回，不假装成功 */
+  const p = patch && typeof patch === 'object' ? patch : {};
+  const s = readSettings();
+  for (const k of Object.keys(p)) {
+    if (!SETTINGS_RESERVED.has(k)) s[k] = p[k];
+  }
+  try { writeSettings(s); } catch (e) { return { ok: false, error: '设置写入失败：' + e.message }; }
+  applySettings(s);
+  return { ok: true, settings: s };
 });
 
 /* ---------- 任务数据（文件持久化） ---------- */
@@ -64,6 +96,31 @@ ipcMain.handle('reins:run:start', (e, { task, agent, extraPrompt, repoRoot, runt
   return true;
 });
 ipcMain.handle('reins:run:cancel', (_e, taskId) => runner.cancelTask(taskId));
+
+/* ---------- 漫剧生成工作流（REINS-126）：引擎接入 + 渲染引擎配置 ----------
+   comic 对象由渲染层持有并随 state:save 持久化；这里只负责工厂/体检、
+   引擎装配与执行、事件推送（reins:comic:event）。接口契约见 docs/REINS-126-backend.md */
+const comicMgr = require('./services/comic-manager').create({
+  readSettings, writeSettings,   // 渲染引擎配置落在 settings.json；任务启动时读快照，改配置只影响新任务
+});
+ipcMain.handle('reins:comic:meta', () => comicMgr.meta());
+ipcMain.handle('reins:comic:create', (_e, input) => comicMgr.create(input));
+ipcMain.handle('reins:comic:normalize', (_e, raw) => comicMgr.normalize(raw));
+ipcMain.handle('reins:comic:adopt', (_e, c) => comicMgr.adopt(c));
+ipcMain.handle('reins:comic:render:get', () => comicMgr.getRenderEngine());
+ipcMain.handle('reins:comic:render:set', (_e, patch) => comicMgr.setRenderEngine(patch));
+ipcMain.handle('reins:comic:render:test', (_e, cfg) => comicMgr.testRenderEngine(cfg));
+ipcMain.handle('reins:comic:start', (e, payload) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!win) return { ok: false, error: '窗口不可用' };
+  // 与 reins:run:start 同款守卫：窗口销毁后静默丢弃事件，不阻塞引擎执行
+  const emit = evt => { if (!win.isDestroyed()) win.webContents.send('reins:comic:event', evt); };
+  return comicMgr.start(payload, emit);
+});
+ipcMain.handle('reins:comic:cancel', (_e, comicId) => comicMgr.cancel(comicId));
+ipcMain.handle('reins:comic:snapshot', (_e, comicId) => comicMgr.snapshot(comicId));
+/* 导出前按渲染层最新数据重建合成包：单镜头重跑/打回重生成后不再拿到旧包 */
+ipcMain.handle('reins:comic:package', (_e, comicRaw, episodeId) => comicMgr.rebuildPackage(comicRaw, episodeId));
 
 /* ---------- 云端节点连通测试 ---------- */
 ipcMain.handle('reins:cloud:test', async (_e, url, token) => {
@@ -190,7 +247,7 @@ function createWindow(hidden) {
       console.log('[tray-close] prevented, ack=', readSettings().trayNoticeAck);
       // 首次：页面内弹提示，用户点「好，收起窗口」后再隐藏（先 hide 再弹原生对话框会把窗口重新拉起来）
       if (readSettings().trayNoticeAck) { mainWindow.hide(); return; }
-      const s = readSettings(); s.trayNoticeAck = true; writeSettings(s);
+      try { const s = readSettings(); s.trayNoticeAck = true; writeSettings(s); } catch (e) { }   // 标记失败不阻断收起
       mainWindow.webContents.send('reins:tray-notice');
     }
   });

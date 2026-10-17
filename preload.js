@@ -20,6 +20,21 @@ contextBridge.exposeInMainWorld('reins', {
   runStart: ({ task, agent, extraPrompt, repoRoot, runtime }) => ipcRenderer.invoke('reins:run:start', { task, agent, extraPrompt, repoRoot, runtime }),
   runCancel: (taskId) => ipcRenderer.invoke('reins:run:cancel', taskId),
 
+  /* 漫剧生成工作流（REINS-126）：项目工厂/体检 + 引擎执行 + 渲染引擎配置（契约见 docs/REINS-126-backend.md） */
+  comicMeta: () => ipcRenderer.invoke('reins:comic:meta'),
+  comicCreate: (input) => ipcRenderer.invoke('reins:comic:create', input),
+  comicNormalize: (raw) => ipcRenderer.invoke('reins:comic:normalize', raw),
+  comicAdopt: (comic) => ipcRenderer.invoke('reins:comic:adopt', comic),
+  comicRenderGet: () => ipcRenderer.invoke('reins:comic:render:get'),
+  comicRenderSet: (patch) => ipcRenderer.invoke('reins:comic:render:set', patch),
+  comicRenderTest: (cfg) => ipcRenderer.invoke('reins:comic:render:test', cfg),
+  comicStart: (payload) => ipcRenderer.invoke('reins:comic:start', payload),
+  comicCancel: (comicId) => ipcRenderer.invoke('reins:comic:cancel', comicId),
+  comicSnapshot: (comicId) => ipcRenderer.invoke('reins:comic:snapshot', comicId),
+  comicPackage: (comic, episodeId) => ipcRenderer.invoke('reins:comic:package', comic, episodeId),
+  /* 事件通道：主进程按窗口批量推送 {type:'batch', events:[...]}（终态立即冲刷），渲染层一次应用整批 */
+  onComicEvent: (cb) => ipcRenderer.on('reins:comic:event', (_e, evt) => cb(evt)),
+
   /* 云端节点 */
   cloudTest: (url, token) => ipcRenderer.invoke('reins:cloud:test', url, token),
 
