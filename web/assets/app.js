@@ -2982,11 +2982,42 @@ function cmHeadHTML(c) {
   </div>`;
 }
 function cmDetailMenu(btn, id) {
+  const c = comicById(id);
   cmMenu(btn, [
+    /* 换绑编剧（Agent 余额耗尽/想换模型时免重建项目）：执行中不换，避免文字阶段中途变口径 */
+    ...(c && c.status !== 'running' ? [{ label: '切换编剧 Agent', fn: () => openComicWriterPick(id) }] : []),
     { label: '重命名', fn: () => openComicRename(id) },
     { label: '复制项目', fn: () => cmDuplicate(id) },
     { label: '删除漫剧', danger: true, fn: () => confirmDeleteComic(id) },
   ]);
+}
+/* 换绑编剧弹层：候选口径与新建弹层一致（API 模型 + 已配 Key + 非 offline），
+   当前绑定的 Agent 即便已失效也原样列出，便于看清「从哪换走」 */
+function openComicWriterPick(id) {
+  const c = comicById(id); if (!c) return;
+  const cur = c.writerAgentId ? agentById(c.writerAgentId) : null;
+  const usable = (O().agents || []).filter(a => a.mode === 'api' && a.apiKey && a.status !== 'offline');
+  const opts = usable.length
+    ? usable.map(a => ({ v: a.id, l: a.name + ' · ' + (a.model || providerLabel(a.provider)) }))
+    : [{ v: '', l: '暂无可用编剧 Agent', dis: true }];
+  const sel = usable.some(a => a.id === c.writerAgentId) ? c.writerAgentId : (usable[0] ? usable[0].id : '');
+  openModal(`<div class="modal-head"><h3>切换编剧 Agent</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body">
+      <div class="f-row"><label>当前编剧</label><div style="font-size:13px;color:var(--ink-dim)">${cur ? esc(cur.name + ' · ' + (cur.model || providerLabel(cur.provider))) : '未绑定'}</div></div>
+      <div class="f-row" style="margin-bottom:0"><label>切换为</label>${ds('cwp-writer', opts, sel)}</div>
+      <div class="cm-hint" style="margin-top:10px">只影响后续生成的设定 / 剧本 / 分镜文字阶段，已生成的内容不变。</div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
+      <button class="btn btn-p" onclick="cmWriterPick('${id}')">切换</button></div>`);
+}
+function cmWriterPick(id) {
+  const c = comicById(id); if (!c) return;
+  const v = $('#cwp-writer').value;
+  if (!v) { toast('无法切换', '暂无可用编剧 Agent（需 API 模型）', '⚠'); return; }
+  c.writerAgentId = v; c.updatedAt = now(); save(); closeModal();
+  const a = agentById(v);
+  toast('编剧已切换', a ? `后续生成走「${a.name}」` : '', '✓');
+  render();
 }
 
 /* —— 阶段轨：完成度口径与引擎 _predicates 等价（产物在场即完成） —— */
