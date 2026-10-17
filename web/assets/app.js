@@ -2703,7 +2703,7 @@ function cmRenderGapLabel(e) {
 }
 
 /* —— 通用迷你菜单（卡片 ⋯ / 详情 ⋯ / 剧集 ⋯ / 阶段节点共用；点外部或 Esc 关闭） —— */
-let cmMenuEl = null;
+let cmMenuEl = null, cmMenuOpening = false;
 function cmMenuClose() { if (cmMenuEl) { cmMenuEl.remove(); cmMenuEl = null; } }
 function cmMenu(btn, items) {
   cmMenuClose();
@@ -2721,8 +2721,13 @@ function cmMenu(btn, items) {
     it && it.fn && it.fn();
   });
   cmMenuEl = el;
+  /* 打开菜单的这次点击还在冒泡途中：置标志让 document 关闭监听放行，
+     否则菜单在同一次派发里建好即被移除（点 ⋯ 毫无反应的根因）；
+     setTimeout(0) 在本次事件派发完毕后复位 */
+  cmMenuOpening = true;
+  setTimeout(() => { cmMenuOpening = false; }, 0);
 }
-document.addEventListener('click', e => { if (cmMenuEl && !e.target.closest('.cm-menu')) cmMenuClose(); });
+document.addEventListener('click', e => { if (cmMenuEl && !cmMenuOpening && !e.target.closest('.cm-menu')) cmMenuClose(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cmMenuClose(); });
 
 /* ============ 视图一：漫剧库 ============ */
