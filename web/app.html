@@ -26,10 +26,10 @@
       <button class="side-space" id="space-btn" onclick="toggleSpaceMenu(event)">
         <div class="sq" id="space-badge">研</div>
         <div style="flex:1;min-width:0">
-          <span class="org-line" onclick="event.stopPropagation();toggleOrgMenu(event)"><b id="org-name">我的团队</b> ▾</span>
+          <span class="org-line" onclick="event.stopPropagation();toggleOrgMenu(event)"><b id="org-name">我的团队</b><svg class="ocaret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
           <b id="space-name">产品研发组</b><span id="space-sprint"></span>
         </div>
-        <span class="caret">▾</span>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       <div class="space-pop" id="space-pop"></div>
       <div class="org-pop" id="org-pop"></div>
@@ -37,7 +37,7 @@
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
       <div class="node-pill" onclick="switchView('settings')" title="本机节点：桌面客户端保持在线，Agent 才能继续接收并执行任务">
-        <span class="ndot"></span>本机节点在线 · <span id="node-uptime">刚刚启动</span>
+        <span class="ndot"></span><span class="np-txt">本机节点在线 · <span id="node-uptime">刚刚启动</span></span>
       </div>
       <div class="side-user">
         <div class="av">我</div>

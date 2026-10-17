@@ -14,8 +14,11 @@ contextBridge.exposeInMainWorld('reins', {
   providers: () => ipcRenderer.invoke('reins:providers'),
   agentTest: (agent) => ipcRenderer.invoke('reins:agent:test', agent),
   triageRun: (payload) => ipcRenderer.invoke('reins:triage:run', payload),
+  pipelinePlan: (payload) => ipcRenderer.invoke('reins:pipeline:plan', payload),
+  pipelineGate: (payload) => ipcRenderer.invoke('reins:pipeline:gate', payload),
   cliList: () => ipcRenderer.invoke('reins:cli:list'),
   cliDetect: (cmds) => ipcRenderer.invoke('reins:cli:detect', cmds),
+  cliModels: (agent) => ipcRenderer.invoke('reins:cli:models', agent),
   runtimeDiscover: () => ipcRenderer.invoke('reins:runtimes:discover'),
   runStart: ({ task, agent, extraPrompt, repoRoot, runtime }) => ipcRenderer.invoke('reins:run:start', { task, agent, extraPrompt, repoRoot, runtime }),
   runCancel: (taskId) => ipcRenderer.invoke('reins:run:cancel', taskId),
@@ -37,6 +40,18 @@ contextBridge.exposeInMainWorld('reins', {
 
   /* 隔离工作区：在访达中定位 */
   revealWorktree: (p) => ipcRenderer.invoke('reins:worktree:reveal', p),
+  deliveryApply: (worktree) => ipcRenderer.invoke('reins:delivery:apply', worktree),
+  deliveryDiscard: (worktree) => ipcRenderer.invoke('reins:delivery:discard', worktree),
+  deliveryReveal: (dir) => ipcRenderer.invoke('reins:delivery:reveal', dir),
+  deliveryRead: (dir, file) => ipcRenderer.invoke('reins:delivery:read', dir, file),
+
+  /* ComfyUI 本地视频生成：探活 / 选模板 / 解析节点 / 提交 / 取消 + 事件回推 */
+  comfyStatus: (cfg) => ipcRenderer.invoke('reins:comfy:status', cfg),
+  comfyPick: () => ipcRenderer.invoke('reins:comfy:pick'),
+  comfyInspect: (p) => ipcRenderer.invoke('reins:comfy:inspect', p),
+  comfySubmit: ({ jobId, prompt, negative }) => ipcRenderer.invoke('reins:comfy:submit', { jobId, prompt, negative }),
+  comfyCancel: (jobId) => ipcRenderer.invoke('reins:comfy:cancel', jobId),
+  onComfyEvent: (cb) => ipcRenderer.on('reins:comfy:event', (_e, evt) => cb(evt)),
 
   /* 关窗驻留提示：主进程通知渲染层弹窗，确认后隐藏/退出 */
   onTrayNotice: (cb) => ipcRenderer.on('reins:tray-notice', () => cb()),

@@ -1,9 +1,10 @@
 /* Reins — Electron 主进程 */
-const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, ipcMain, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const store = require('./services/store');
 const runner = require('./services/runner');
+const comfy = require('./services/comfy');
 
 const isMac = process.platform === 'darwin';
 let mainWindow = null;
@@ -18,11 +19,14 @@ let tray = null;
 
 /* ---------- 客户端设置（userData/settings.json） ---------- */
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
-const defaultSettings = { launchAtLogin: false, keepInTray: true, webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, cloudUrl: '', cloudToken: '' , preventSleep: false, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto' };
+const defaultSettings = { launchAtLogin: false, keepInTray: true, webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, cloudUrl: '', cloudToken: '' , preventSleep: false, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto', comfyUrl: 'http://127.0.0.1:8188', comfyWorkflow: '', comfyPosNode: '', comfyNegNode: '' };
 function readSettings() {
   try { return { ...defaultSettings, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf-8')) }; }
   catch (e) { return { ...defaultSettings }; }
 }
+
+/* comfy:// 媒体代理：绕开 Chromium <video> 直接消费 ComfyUI(aiohttp) /view 时的 Format error */
+comfy.registerProxy({ app, protocol, net }, readSettings);
 function writeSettings(s) { try { fs.writeFileSync(settingsFile(), JSON.stringify(s, null, 2)); } catch (e) { } }
 function applySettings(s) {
   // 关闭态不调用系统 API：未签名/未打包环境下注册登录项会被 macOS 拒绝并打印报错
@@ -45,16 +49,52 @@ ipcMain.handle('reins:state:save', (_e, data, immediate) => { store.saveState(da
 ipcMain.handle('reins:providers', () => runner.PROVIDERS);
 ipcMain.handle('reins:agent:test', (_e, agent) => runner.testAgent(agent));
 ipcMain.handle('reins:triage:run', (_e, payload) => runner.triageTask(payload.task, payload.agent, payload.roster));
+ipcMain.handle('reins:pipeline:plan', (_e, payload) => runner.planPipeline(payload.task, payload.agent));
+ipcMain.handle('reins:pipeline:gate', (_e, payload) => runner.judgePipelineGate(payload.task, payload.agent, payload));
 ipcMain.handle('reins:jev:triage', (_e, payload) => { const s = readSettings(); return runner.triageJev(payload.task, payload.roster, { ...s, ...(payload.cfg || {}) }); });
 ipcMain.handle('reins:jev:test', (_e, cfg) => { const s = readSettings(); return runner.testJev({ ...s, ...(cfg || {}) }); });
 ipcMain.handle('reins:cli:list', () => runner.CLI_PRESETS);
 ipcMain.handle('reins:cli:detect', (_e, cmds) => runner.detectClis(cmds));
+ipcMain.handle('reins:cli:models', (_e, agent) => runner.listAgentModels(agent));
 ipcMain.handle('reins:runtimes:discover', () => runner.discoverAppRuntimes());
 
 ipcMain.handle('reins:run:start', (e, { task, agent, extraPrompt, repoRoot, runtime }) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (!win) return false;
-  const emit = evt => { if (!win.isDestroyed()) win.webContents.send('reins:run:event', { taskId: task.id, ...evt }); };
+  /* 会话过程日志（第八轮）：tee 全部执行事件，结束时追加落盘 deliveries/<KEY>/session.log。
+     四条执行通路（API/CLI/ACP/云端）同构覆盖；done/error/cancelled 都留痕 */
+  const t0 = Date.now();
+  const sessLines = [];
+  let deliveryDir = path.join(app.getPath('userData'), 'deliveries', String(task.key || task.id).replace(/[^\w.-]+/g, '_'));
+  /* 流水线任务：各阶段交付落 stages/sN 子目录（报告/日志互不覆盖）；最终交付阶段落根目录（聚合全流程产出） */
+  if (task.pipeline && task.pipeline.on && !task.pipeline.final) {
+    deliveryDir = path.join(deliveryDir, 'stages', 's' + (task.pipeline.stageNo || 1));
+  }
+  const tee = evt => {
+    if (evt.type === 'start') sessLines.push('▶ 开始执行 · ' + (evt.model || '') + '\n');
+    else if (evt.type === 'model') sessLines.push('◆ 执行模型 ' + evt.model + (evt.final ? '（引擎确认）' : '') + '\n');
+    else if (evt.type === 'note') sessLines.push(evt.text + '\n');
+    else if (evt.type === 'delta' && evt.text) sessLines.push(evt.text);
+  };
+  const emit = evt => {
+    tee(evt);
+    if (evt.type === 'done') {
+      // done 时构建类型化交付：diff 解析 + report.md/changes.patch 落盘（交付页预览/下载/访达显示）
+      try { evt.delivery = runner.buildDelivery(evt, deliveryDir); } catch (err) { }
+    }
+    // 过程日志落盘：done 挂进交付清单；error/cancelled 也写文件并构造轻量交付（失败任务的排错线索不丢）
+    if (evt.type === 'done' || evt.type === 'error' || evt.type === 'cancelled') {
+      try {
+        const log = runner.appendSessionLog(deliveryDir, { task, agent, evt, lines: sessLines, ms: Date.now() - t0, model: evt.model });
+        if (log) {
+          const item = { kind: 'log', file: 'session.log', name: '过程日志.log' };
+          if (evt.type === 'done') { if (evt.delivery) evt.delivery.items.push(item); }
+          else evt.delivery = evt.delivery || { dir: deliveryDir, items: [item], diff: null, files: [] };
+        }
+      } catch (err) { }
+    }
+    if (!win.isDestroyed()) win.webContents.send('reins:run:event', { taskId: task.id, ...evt });
+  };
   if (runtime === 'cloud') {
     const s = readSettings();
     runner.runCloudTask(task, agent, extraPrompt, emit, { repoRoot, cloud: { url: s.cloudUrl, token: s.cloudToken } });
@@ -113,6 +153,25 @@ ipcMain.handle('reins:webhook:test', async () => {
   });
 });
 
+/* ---------- ComfyUI 本地视频生成（探活 / 选模板 / 提交 / 取消） ---------- */
+ipcMain.handle('reins:comfy:status', async (_e, cfg) => comfy.status({ ...readSettings(), ...(cfg || {}) }));
+ipcMain.handle('reins:comfy:pick', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: '选择 ComfyUI 工作流（API 格式导出的 JSON）',
+    properties: ['openFile'], filters: comfy.pickDialog.filters,
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle('reins:comfy:inspect', (_e, p) => comfy.inspectFile(p));
+ipcMain.handle('reins:comfy:submit', (e, { jobId, prompt, negative }) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!win) return false;
+  const emit = evt => { if (!win.isDestroyed()) win.webContents.send('reins:comfy:event', evt); };
+  comfy.submit({ jobId, prompt, negative }, readSettings(), emit);
+  return true;
+});
+ipcMain.handle('reins:comfy:cancel', (_e, jobId) => comfy.cancel(jobId));
+
 /* ---------- 执行期间防止系统休眠（caffeinate，接入电源时合盖也不中断） ---------- */
 let caffeinateProc = null;
 function setCaffeinate(on) {
@@ -125,6 +184,20 @@ ipcMain.handle('reins:caffeinate:set', (_e, on) => setCaffeinate(on));
 
 /* ---------- 隔离工作区直达 ---------- */
 ipcMain.handle('reins:worktree:reveal', (_e, p) => { shell.showItemInFolder(p); return true; });
+/* 交付物：确认应用 / 放弃变更（worktree 拟议变更的显式裁决）/ 在访达中显示交付目录 / 读取过程日志 */
+ipcMain.handle('reins:delivery:apply', (_e, worktree) => runner.applyDelivery(worktree));
+ipcMain.handle('reins:delivery:discard', (_e, worktree) => runner.discardDelivery(worktree));
+ipcMain.handle('reins:delivery:reveal', (_e, dir) => { shell.showItemInFolder(dir); return true; });
+ipcMain.handle('reins:delivery:read', (_e, dir, file) => {
+  try {
+    const root = path.resolve(app.getPath('userData'), 'deliveries');
+    const d = path.resolve(String(dir || ''));
+    if (!d.startsWith(root + path.sep)) return { ok: false, error: '目录不在交付区' };
+    const f = path.resolve(d, path.basename(String(file || '')));
+    const text = fs.readFileSync(f, 'utf8');
+    return { ok: true, text: text.length > 600000 ? '…（过长，只保留末尾）\n' + text.slice(-600000) : text };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
 
 /* ---------- 窗口 ---------- */
 const gotLock = app.requestSingleInstanceLock();

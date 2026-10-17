@@ -76,37 +76,88 @@ const PROVIDER_PRESETS = [
 ];
 /* 浏览器预览模式的离线兜底清单；桌面端启动时会被主进程 cliList() 覆盖——新增 CLI 只改 services/runner.js */
 const CLI_PRESETS = [
-  { id: 'claude-code', label: 'Claude Code', cmd: 'claude', template: 'claude -p {prompt} --output-format text' },
-  { id: 'codex', label: 'Codex CLI', cmd: 'codex', template: 'codex exec --skip-git-repo-check {prompt}' },
-  { id: 'codebuddy', label: '腾讯 CodeBuddy Code', cmd: 'codebuddy', template: 'codebuddy -y -p {prompt} --output-format text' },
-  { id: 'workbuddy', label: '腾讯 WorkBuddy', cmd: 'workbuddy', template: 'workbuddy -y -p {prompt} --output-format text' },
+  { id: 'claude-code', label: 'Claude Code', cmd: 'claude', template: 'claude -p {prompt} --output-format text', install: 'curl -fsSL https://claude.ai/install.sh | bash', modelFlag: '--model' },
+  { id: 'codex', label: 'Codex CLI', cmd: 'codex', template: 'codex exec --skip-git-repo-check {prompt}', install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh', modelFlag: '-m' },
+  { id: 'codebuddy', label: '腾讯 CodeBuddy Code', cmd: 'codebuddy', template: 'codebuddy -y -p {prompt} --output-format text', install: 'npm install -g @tencent-ai/codebuddy-code', modelFlag: '--model' },
+  { id: 'workbuddy', label: '腾讯 WorkBuddy', cmd: 'workbuddy', template: 'workbuddy -y -p {prompt} --output-format text', modelFlag: '--model' },
   { id: 'zcode', label: 'ZCode', cmd: 'zcode', template: 'zcode -p {prompt} --no-color' },
-  { id: 'opencode', label: 'OpenCode', cmd: 'opencode', template: 'opencode run {prompt}' },
-  { id: 'gemini-cli', label: 'Gemini CLI', cmd: 'gemini', template: 'gemini {prompt}' },
-  { id: 'cursor-cli', label: 'Cursor CLI', cmd: 'cursor-agent', template: 'cursor-agent {prompt}' },
-  { id: 'qwen-code', label: 'Qwen Code', cmd: 'qwen', template: 'qwen {prompt}' },
-  { id: 'copilot', label: 'GitHub Copilot CLI', cmd: 'copilot', template: 'copilot -p {prompt}' },
-  { id: 'droid', label: 'Droid', cmd: 'droid', template: 'droid {prompt}' },
+  { id: 'opencode', label: 'OpenCode', cmd: 'opencode', template: 'opencode run {prompt}', install: 'curl -fsSL https://opencode.ai/install | bash' },
+  { id: 'gemini-cli', label: 'Gemini CLI', cmd: 'gemini', template: 'gemini {prompt}', install: 'npm install -g @google/gemini-cli' },
+  { id: 'cursor-cli', label: 'Cursor CLI', cmd: 'cursor-agent', template: 'cursor-agent {prompt}', install: 'curl https://cursor.com/install -fsS | bash' },
+  { id: 'qwen-code', label: 'Qwen Code', cmd: 'qwen', template: 'qwen {prompt}', install: 'npm install -g @qwen-code/qwen-code@latest' },
+  { id: 'copilot', label: 'GitHub Copilot CLI', cmd: 'copilot', template: 'copilot -p {prompt}', install: 'npm install -g @github/copilot' },
+  { id: 'droid', label: 'Droid', cmd: 'droid', template: 'droid {prompt}', install: 'curl -fsSL https://app.factory.ai/cli | sh' },
   { id: 'amp', label: 'Amp', cmd: 'amp', template: 'amp {prompt}' },
-  { id: 'openclaw', label: 'OpenClaw', cmd: 'openclaw', template: 'openclaw {prompt}' },
-  { id: 'cline', label: 'Cline', cmd: 'cline', template: 'cline {prompt}' },
-  { id: 'goose', label: 'Goose', cmd: 'goose', template: 'goose run {prompt}' },
-  { id: 'grok', label: 'Grok CLI', cmd: 'grok', template: 'grok {prompt}' },
-  { id: 'kimi-cli', label: 'Kimi CLI', cmd: 'kimi', template: 'kimi -p {prompt}' },
-  { id: 'kilo', label: 'Kilo Code', cmd: 'kilo', template: 'kilo {prompt}' },
-  { id: 'kiro', label: 'Kiro', cmd: 'kiro', template: 'kiro {prompt}' },
-  { id: 'trae', label: 'Trae', cmd: 'trae', template: 'trae {prompt}' },
-  { id: 'qoder', label: 'Qoder', cmd: 'qoder', template: 'qoder {prompt}' },
-  { id: 'auggie', label: 'Auggie', cmd: 'auggie', template: 'auggie {prompt}' },
-  { id: 'qwenpaw', label: 'QwenPaw', cmd: 'qwenpaw', template: 'qwenpaw {prompt}' },
-  { id: 'hermes', label: 'Hermes', cmd: 'hermes', template: 'hermes {prompt}' },
-  { id: 'pi', label: 'Pi', cmd: 'pi', template: 'pi {prompt}' },
+  { id: 'openclaw', label: 'OpenClaw', cmd: 'openclaw', template: 'openclaw {prompt}', install: 'curl -fsSL https://openclaw.ai/install.sh | bash' },
+  { id: 'cline', label: 'Cline', cmd: 'cline', template: 'cline {prompt}', install: 'npm install -g cline' },
+  { id: 'goose', label: 'Goose', cmd: 'goose', template: 'goose run {prompt}', install: 'brew install block-goose-cli' },
+  { id: 'grok', label: 'Grok CLI', cmd: 'grok', template: 'grok {prompt}', install: 'curl -fsSL https://x.ai/cli/install.sh | bash' },
+  { id: 'kimi-cli', label: 'Kimi CLI', cmd: 'kimi', template: 'kimi -p {prompt}', install: 'npm install -g @moonshot-ai/kimi-code' },
+  { id: 'kilo', label: 'Kilo Code', cmd: 'kilo', template: 'kilo {prompt}', install: 'npm install -g @kilocode/cli' },
+  { id: 'kiro', label: 'Kiro', cmd: 'kiro', template: 'kiro {prompt}', install: 'curl -fsSL https://cli.kiro.dev/install | bash' },
+  { id: 'trae', label: 'Trae', cmd: 'trae', template: 'trae {prompt}', install: 'sh -c "$(curl -fsSL https://trae.cn/trae-cli/install_v2.sh)"' },
+  { id: 'qoder', label: 'Qoder', cmd: 'qodercli', template: 'qodercli -p {prompt}', install: 'npm install -g @qoder-ai/qodercli', modelFlag: '-m', modelListFlag: '--list-models' },
+  { id: 'qoder-cn', label: 'Qoder CN', cmd: 'qoderclicn', template: 'qoderclicn -p {prompt}', install: 'npm install -g @qodercn-ai/qoderclicn', modelFlag: '-m', modelListFlag: '--list-models' },
+  { id: 'auggie', label: 'Auggie', cmd: 'auggie', template: 'auggie {prompt}', install: 'npm install -g @augmentcode/auggie' },
+  { id: 'qwenpaw', label: 'QwenPaw', cmd: 'qwenpaw', template: 'qwenpaw {prompt}', install: 'pip install qwenpaw' },
+  { id: 'hermes', label: 'Hermes', cmd: 'hermes', template: 'hermes {prompt}', install: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash' },
+  { id: 'pi', label: 'Pi', cmd: 'pi', template: 'pi {prompt}', install: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent' },
 ];
 const providerLabel = id => (PROVIDER_PRESETS.find(p => p.id === id) || {}).label || id;
 
 /* 无头 CLI 的执行模型（codebuddy/workbuddy 引擎 --model 实测支持）；派发与 Agent 配置共用 */
 const CLI_CAN_MODEL = ['codebuddy', 'workbuddy'];
 const CB_MODELS = ['hy4-preview', 'hy3', 'hy3-x', 'step-5-preview', 'space-bunny', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx', 'glm-5.2', 'glm-5.1', 'glm-5v-turbo', 'minimax-m3-pay', 'minimax-m2.7', 'kimi-k3-2', 'kimi-k2.8-preview', 'kimi-k2.7', 'kimi-k2.6', 'deepseek-v4-pro'];
+
+/* 模型选择通用化（CLI_PRESETS.modelFlag 逐个实测标注）：qoder 家族 -m、codex -m、claude --model、
+   codebuddy/workbuddy --model。ACP 会话 Agent 暂不支持模型参数（协议层 setModel 后续接入） */
+const cliCanModel = a => !!(a && a.mode === 'cli' && !a.acp && (CLI_PRESETS.find(p => p.id === a.cliId) || {}).modelFlag);
+/* 模型列表：优先主进程动态获取（qoder 家族走 --list-models 实时拉取），渲染层缓存；
+   codebuddy/workbuddy 用静态表兜底；其余 CLI 空表（仅手输） */
+const _modelOpts = {};
+function modelOptsSync(a) {
+  const k = a && a.cliId;
+  if (k && _modelOpts[k]) return _modelOpts[k];
+  return CLI_CAN_MODEL.includes(k) ? CB_MODELS : [];
+}
+function hydrateModelSelect(selId, a, curVal) {
+  if (!window.reins || !a) return;
+  window.reins.cliModels(a).then(list => {
+    if (!Array.isArray(list) || !list.length) return;
+    _modelOpts[a.cliId] = list;
+    const sel = $('#' + selId);
+    if (!sel) return;
+    const cur = curVal || sel.value || '';
+    sel.innerHTML = `<option value="">${esc(a.cliModel ? a.cliModel + '（Agent 默认）' : '默认模型')}</option>`
+      + list.map(m => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(m)}</option>`).join('');
+  }).catch(() => { });
+}
+
+/* ==================== AI 角色（人设层）====================
+   角色 = 专用 Agent + 专属模型 + 独有提示词的打包预设（产品经理/开发/测试…），
+   指派任务时直接选角色；执行时角色提示词与 Agent 场景提示词叠加注入 */
+const ROLE_TEMPLATES = [
+  { key: 'pmgr', name: '项目经理', glyph: '⬢', prompt: '你是资深项目经理，负责把控整体交付流程。职责：把需求拆成按顺序执行的阶段链并指定负责成员；在测试报告出来后裁决下一步（通过交付 / 打回谁修改、怎么改）；最后汇总全流程产出形成交付说明。\n工作方式：结论先行，裁决必须给出明确动作与理由；关注风险、依赖与进度；不亲自写代码或文档正文。\n输出要求：结构化、简短、可执行；每个判断都给出依据。' },
+  { key: 'pm', name: '产品经理', glyph: '▣', prompt: '你是资深产品经理。职责：把需求拆成可执行的任务卡（背景/目标/验收标准），识别风险与依赖，平衡业务价值与实现成本。\n工作方式：输出结论先行；需求描述含用户故事与边界条件；不写代码实现细节。\n输出要求：给出结构化清单（任务/优先级/验收标准），不超过必要篇幅。' },
+  { key: 'fe', name: '前端开发', glyph: '◈', prompt: '你是资深前端工程师。职责：实现页面与交互，保证代码与现有工程风格一致（框架、命名、目录结构、注释密度）。\n工作方式：改动最小化，优先复用现有组件与工具函数；涉及样式走设计令牌；自测通过再交付。\n输出要求：列出改动文件清单与一句话说明，附验证结果。' },
+  { key: 'be', name: '后端开发', glyph: '◇', prompt: '你是资深后端工程师。职责：实现接口、数据模型与业务逻辑，重视边界条件、事务与错误处理。\n工作方式：遵循现有分层与命名约定；不引入新依赖除非必要并说明理由；关键路径写注释。\n输出要求：列出改动文件与接口变化（入参/出参），附自测结果。' },
+  { key: 'qa', name: '测试工程师', glyph: '◎', prompt: '你是资深测试工程师。职责：设计测试用例与回归方案，覆盖正常路径、边界与异常分支。\n工作方式：用表格输出用例（编号/前置/步骤/预期/优先级）；先冒烟后细节；发现问题给出最小复现步骤。\n输出要求：用例表 + 风险提示，不写与测试无关的实现建议。' },
+  { key: 'ui', name: 'UI 设计师', glyph: '◐', prompt: '你是资深 UI 设计师。职责：界面视觉与布局方案，遵循现有设计系统（颜色令牌、字号、间距、圆角）。\n工作方式：先给方案要点再给细节；改动说明具体到组件与属性；保持品牌一致性。\n输出要求：结构化描述方案（布局/色彩/组件变化），可直接交给前端落地。' },
+  { key: 'doc', name: '技术文档', glyph: '❏', prompt: '你是技术文档工程师。职责：把实现改写成清晰的文档/README/变更说明。\n工作方式：面向读者组织信息（是什么/怎么用/为什么）；命令与配置用代码块；不臆造未实现的行为。\n输出要求：Markdown 交付，标题层级清晰，删掉一切不改变读者行为的句子。' },
+];
+const roleById = id => (O().roles || []).find(r => r.id === id);
+const roleAgent = r => r && agentById(r.agentId);
+const roleUsable = r => { const a = roleAgent(r); return !!(a && a.status !== 'offline' && agentUsable(a)); };
+/* 角色解析为有效 Agent：角色提示词与 Agent 场景提示词叠加；模型取值优先级 任务级 > 角色级 > Agent 默认 */
+function resolveRoleAgent(t) {
+  const r = roleById(t.assignee && t.assignee.id);
+  const a = roleAgent(r);
+  if (!a) return null;
+  const scene = [a.scenePrompt, r.prompt].filter(Boolean).join('\n\n');
+  let eff = { ...a, scenePrompt: scene || a.scenePrompt };
+  if (r.cliModel && cliCanModel(a)) eff.cliModel = r.cliModel;
+  return { role: r, agent: eff };
+}
 
 /* —— 品牌 logo（simple-icons 官方 SVG）与 monogram 兜底：不用自制符号 —— */
 const CLI_LOGO = {
@@ -206,7 +257,7 @@ function seed() {
   };
   return {
     version: 3, activeOrgId: 'og1', activeSpaceId: 'sp1',
-    orgs: [{ id: 'og1', name: '我的团队', badge: '团', agents: [], spaces: [space] }],
+    orgs: [{ id: 'og1', name: '我的团队', badge: '团', agents: [], roles: [], spaces: [space] }],
   };
 }
 
@@ -280,6 +331,7 @@ const VIEWS = [
   { id: 'kanban', ic: 'kanban', label: '看板', sub: '拖动卡片流转状态，指派 Agent 的任务自动执行', group: 'work' },
   { id: 'list', ic: 'list', label: '任务', sub: '全部任务', group: 'work' },
   { id: 'deliveries', ic: 'package', label: '交付', sub: '任务的交付物，可预览、复制、下载', group: 'work' },
+  { id: 'video', ic: 'play', label: '视频', sub: 'ComfyUI 本地视频生成（Wan 等）', group: 'work' },
   { id: 'nodes', ic: 'server', label: '节点', sub: '本机与云端执行节点', group: 'work' },
   { id: 'agents', ic: 'bot', label: 'Agent', sub: '接入 API 或本机 CLI，统一指派任务', group: 'cmd' },
   { id: 'prompts', ic: 'library', label: '提示词库', sub: '共享的提示词，执行时可附加到任务', group: 'cmd' },
@@ -290,7 +342,7 @@ const VIEWS = [
 
 function renderNav() {
   const sec = (label, ids) => `${label ? `<div class="nav-label">${label}</div>` : ''}${ids.map(id => navItem(VIEWS.find(v => v.id === id))).join('')}`;
-  $('#nav').innerHTML = sec('工作台', ['dash', 'kanban', 'list', 'deliveries', 'nodes'])
+  $('#nav').innerHTML = sec('工作台', ['dash', 'kanban', 'list', 'deliveries', 'video', 'nodes'])
     + sec('指挥', ['agents', 'prompts', 'autos', 'integ'])
     + sec('', ['settings']);
 }
@@ -302,8 +354,9 @@ function navItem(v) {
     <span class="ic">${ic(v.ic)}</span><span class="txt">${v.label}</span>${cnt ? `<span class="cnt">${cnt}</span>` : ''}</button>`;
 }
 function switchView(id) {
-  curView = id;
   const v = VIEWS.find(x => x.id === id);
+  if (!v) { console.warn('[reins] 未知视图', id); return; }   // 守卫：未知 id 直接忽略，不崩渲染
+  curView = id;
   $('#view-title').textContent = v.label;
   $('#view-sub').textContent = v.sub;
   renderNav(); render();
@@ -317,6 +370,7 @@ function render() {
   if (curView === 'kanban') el.innerHTML = viewKanban();
   else if (curView === 'list') el.innerHTML = viewList();
   else if (curView === 'deliveries') el.innerHTML = viewDeliveries();
+  else if (curView === 'video') { el.innerHTML = viewVideo(); hydrateVideo(); }
   else if (curView === 'nodes') el.innerHTML = viewNodes();
   else if (curView === 'agents') el.innerHTML = viewAgents();
   else if (curView === 'prompts') el.innerHTML = viewPrompts();
@@ -335,6 +389,7 @@ function passFilter(t) {
     if (filters.who === 'none' && t.assignee) return false;
     if (filters.who === 'human' && t.assignee?.kind !== 'human') return false;
     if (filters.who.startsWith('a:') && t.assignee?.id !== filters.who.slice(2)) return false;
+    if (filters.who.startsWith('r:') && !(t.assignee?.kind === 'role' && t.assignee.id === filters.who.slice(2))) return false;
   }
   return true;
 }
@@ -349,15 +404,16 @@ function colHTML(st, ts, withHead = true) {
 }
 function laneOf(t) {
   if (!t.assignee) return ['__none', '未指派', 'none'];
-  if (t.assignee.kind === 'agent') {
-    const a = agentById(t.assignee.id);
-    return ['a:' + t.assignee.id, t.assignee.name, 'agent'];
+  if (t.assignee.kind === 'agent' || t.assignee.kind === 'role') {
+    const isRole = t.assignee.kind === 'role';
+    const a = isRole ? roleAgent(roleById(t.assignee.id)) : agentById(t.assignee.id);
+    return [(isRole ? 'r:' : 'a:') + t.assignee.id, (isRole ? '☆ ' : '') + t.assignee.name, 'agent'];
   }
   return ['h:' + t.assignee.name, t.assignee.name, 'human'];
 }
 function viewKanban() {
   const typeOpts = [{ v: '', l: '全部类型' }, ...Object.keys(TYPE_LABEL).map(k => ({ v: k, l: TYPE_LABEL[k] }))];
-  const whoOpts = [{ v: '', l: '全部经办' }, { v: 'none', l: '未指派' }, { v: 'human', l: '团队成员' }, ...O().agents.map(a => ({ v: 'a:' + a.id, l: a.name }))];
+  const whoOpts = [{ v: '', l: '全部经办' }, { v: 'none', l: '未指派' }, { v: 'human', l: '团队成员' }, ...(O().roles || []).map(r => ({ v: 'r:' + r.id, l: '☆ ' + r.name })), ...O().agents.map(a => ({ v: 'a:' + a.id, l: a.name }))];
   const iterOpts = [{ v: '', l: '全部迭代' }, ...(S().iterations || []).map(i => ({ v: i.id, l: i.name }))];
   const filtersBar = `<div class="kb-filters">
       ${ds('kb-lane', [{ v: '', l: '平铺视图' }, { v: 'who', l: '按经办人泳道' }], filters.lane, 'filters.lane=this.value;render()', 'inline')}
@@ -404,20 +460,34 @@ function viewKanban() {
 function cardHTML(t) {
   const running = runs[t.id];
   const pct = running ? runPct(t.id) : 0;
-  const assignee = t.assignee
+  const assignee = t.pipeline?.on
+    ? `<span class="assignee agent">🧭 项目经理</span>`
+    : t.assignee
     ? (t.assignee.kind === 'agent'
       ? `<span class="assignee agent">◆ ${esc(t.assignee.name)}</span>`
-      : `<span class="assignee human"><span class="av">${esc(t.assignee.name[0])}</span>${esc(t.assignee.name)}</span>`)
+      : t.assignee.kind === 'role'
+        ? `<span class="assignee agent">☆ ${esc(t.assignee.name)}</span>`
+        : `<span class="assignee human"><span class="av">${esc(t.assignee.name[0])}</span>${esc(t.assignee.name)}</span>`)
     : `<span class="assignee" style="color:var(--ink-faint)">未指派</span>`;
   return `<div class="tcard" draggable="true" data-task="${t.id}" onclick="openTask('${t.id}')">
     <div class="k"><span>${t.key}</span><span class="pri ${t.pri}">${t.pri}</span></div>
     <div class="t">${esc(t.title)}</div>
     <div class="row"><span class="ttag ${t.type}">${TYPE_LABEL[t.type] || t.type}</span>${assignee}</div>
+    ${t.pipeline?.on ? pipeCardLine(t) : ''}
     ${t.status === 'review' && t.pr ? `<div class="pr-chip">⇄ ${esc(t.pr)} · 待验收</div>` : ''}
     ${t.status === 'done' && t.pr ? `<div class="pr-chip" style="background:#e3f3ea;color:#3d8a5f">✓ ${esc(t.pr)} · 已归档</div>` : ''}
     ${running ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}
-    ${t.status === 'doing' && t.assignee?.kind === 'agent' && !running ? '<div class="bar"><i style="width:6%"></i></div>' : ''}
+    ${t.status === 'doing' && ['agent', 'role'].includes(t.assignee?.kind) && !running ? '<div class="bar"><i style="width:6%"></i></div>' : ''}
   </div>`;
+}
+/* 卡片上的流水线进度行：阶段点 + 当前阶段名（返工轮次超 1 时标注） */
+function pipeCardLine(t) {
+  const p = t.pipeline;
+  if (!p || !p.stages?.length) return `<div class="pipe-line"><span class="pl-badge">🧭</span><span class="pl-txt">${PIPE_STATE[p.status] || '流水线'}</span></div>`;
+  const dots = p.stages.map(s => `<i class="pdot ${s.state}"></i>`).join('');
+  const cur = p.stages[p.cur];
+  const label = p.status === 'running' && cur ? (cur.rework ? '返工 · ' : '') + cur.name : PIPE_STATE[p.status] || '';
+  return `<div class="pipe-line"><span class="pl-badge">🧭</span><span class="pdots">${dots}</span><span class="pl-txt">${esc(label)}${p.round > 1 ? ` · R${p.round - 1}` : ''}</span></div>`;
 }
 
 /* 拖拽（事件委托） */
@@ -442,14 +512,16 @@ function setStatus(t, st) {
   if (t.status !== st) th(t, '⇄', STATUS_LABEL[t.status] + ' → ' + STATUS_LABEL[st]);
   t.status = st;
   if (st === 'doing') {
-    if (t.assignee?.kind === 'agent') {
+    if (t.pipeline?.on) {
+      if (!runs[t.id] && !['running', 'planning'].includes(t.pipeline.status)) startPipeline(t.id);
+    } else if (['agent', 'role'].includes(t.assignee?.kind)) {
       if (!runs[t.id]) startRun(t.id, { byUser: true });
     } else if (!t.assignee) {
       t.assignee = { kind: 'human', name: '我' };
       toast('已自动指派', t.key + ' 已指派给我');
     }
   }
-  if (st === 'review' && !t.pr && t.assignee?.kind === 'agent') t.pr = '交付 #' + (S().deliverSeq++);
+  if (st === 'review' && !t.pr && ['agent', 'role'].includes(t.assignee?.kind)) t.pr = '交付 #' + (S().deliverSeq++);
   if (st === 'done') {
     t.doneAt = now(); S().chart[6]++;
     addActivity('✅', t.key + ' 已归档' + (t.pr ? ' · ' + t.pr : ''));
@@ -470,7 +542,7 @@ function viewList() {
       <td><span class="ttag ${t.type}">${TYPE_LABEL[t.type] || t.type}</span></td>
       <td><span class="pri ${t.pri}">${t.pri}</span></td>
       <td><span class="st ${t.status}"><span class="dot"></span>${STATUS_LABEL[t.status]}</span></td>
-      <td>${t.assignee ? (t.assignee.kind === 'agent' ? '◆ ' + esc(t.assignee.name) : esc(t.assignee.name)) : '<span style="color:var(--ink-faint)">未指派</span>'}</td>
+      <td>${t.assignee ? (t.assignee.kind === 'agent' ? '◆ ' + esc(t.assignee.name) : t.assignee.kind === 'role' ? '☆ ' + esc(t.assignee.name) : esc(t.assignee.name)) : '<span style="color:var(--ink-faint)">未指派</span>'}</td>
       <td>${t.pr ? `<span style="font-family:var(--mono);font-size:11px;color:${t.status === 'done' ? 'var(--done)' : 'var(--review)'}">${esc(t.pr)}</span>` : '—'}</td>
     </tr>`).join('')}</tbody></table>`;
 }
@@ -517,7 +589,107 @@ function viewAgents() {
     </div>` : '';
   return `<div class="view-head"><h2>Agent</h2><p>API 与本机 CLI 两种接入方式，密钥保存在本机</p>
       <span class="act"><button class="btn btn-p" onclick="openAddAgentModal()">${ic('plus')} 接入 Agent</button></span></div>
-    <div class="grid3">${empty}${cards}<div class="add-card" onclick="openAddAgentModal()"><span class="plus">${ic('plus')}</span>接入 Agent</div></div>`;
+    <div class="grid3">${empty}${cards}<div class="add-card" onclick="openAddAgentModal()"><span class="plus">${ic('plus')}</span>接入 Agent</div></div>
+    ${viewRoles()}`;
+}
+
+/* AI 角色：专用 Agent + 专属模型 + 独有提示词的打包预设，指派任务时直接选 */
+function viewRoles() {
+  const roles = O().roles || [];
+  const rows = roles.map(r => {
+    const a = roleAgent(r);
+    return `<div class="set-row">
+      <div><b>${esc(r.glyph || '☆')} ${esc(r.name)} <span class="mode-pill sim">角色</span></b>
+        <div class="set-desc">${a ? '使用 <b>' + esc(a.name) + '</b>' + (r.cliModel && cliCanModel(a) ? ' · 模型 ' + esc(r.cliModel) : '') : '<b style="color:#c05656">未绑定 Agent</b>'} · ${esc(String(r.prompt || '').slice(0, 60))}…</div></div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-o btn-sm" onclick="openRoleModal('${r.id}')">配置</button>
+        <button class="btn btn-o btn-sm btn-danger-o" onclick="confirmDeleteRole('${r.id}')">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+  const tplChips = ROLE_TEMPLATES.filter(t => !roles.some(r => r.name === t.name))
+    .map(t => `<button class="btn btn-o btn-sm" onclick="addRoleFromTemplate('${t.key}')">${t.glyph} ${t.name}</button>`).join('');
+  return `<div class="panel" style="margin-top:18px;padding:16px 18px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <h3 style="margin:0;font-size:14px">AI 角色</h3>
+      <span style="font-size:12px;color:var(--ink-dim)">专用 Agent + 专属模型 + 独有提示词，指派任务时直接选</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-o btn-sm" onclick="openRoleModal('')">＋ 自定义角色</button>
+    </div>
+    ${rows || '<div style="font-size:12.5px;color:var(--ink-faint);padding:6px 0 10px">还没有角色。从模板一键添加，或自定义：</div>'}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${tplChips}</div>
+  </div>`;
+}
+function addRoleFromTemplate(key) {
+  const t = ROLE_TEMPLATES.find(x => x.key === key);
+  if (!t) return;
+  if (!Array.isArray(O().roles)) O().roles = [];
+  O().roles.push({ id: 'r' + now(), tpl: t.key, name: t.name, glyph: t.glyph, agentId: '', cliModel: '', prompt: t.prompt });
+  save(); refreshViews();
+  openRoleModal(O().roles[O().roles.length - 1].id);
+  toast('已添加角色', t.name + ' · 请选择绑定的 Agent', '☆');
+}
+function openRoleModal(roleId) {
+  const r = roleById(roleId) || { id: '', name: '', glyph: '☆', agentId: '', cliModel: '', prompt: '' };
+  const agentOpts = [{ v: '', l: '（选择 Agent）' }, ...O().agents.map(a => ({ v: a.id, l: a.name }))];
+  const bound = r.agentId ? agentById(r.agentId) : null;
+  openModal(`<div class="modal-head"><h3>${r.id ? '角色配置' : '新建角色'}</h3><span>专用 Agent + 模型 + 提示词</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body">
+      <div class="f-2col">
+        <div class="f-row"><label>角色名称</label><input type="text" id="role-name" value="${esc(r.name)}" placeholder="例如 产品经理"></div>
+        <div class="f-row"><label>绑定 Agent（执行引擎）</label>${ds('role-agent', agentOpts, r.agentId, 'roleSyncModel()')}</div>
+      </div>
+      <div class="f-row" id="role-model-row" style="display:none"><label>执行模型（留空用 Agent 默认）</label><input type="text" id="role-model" list="role-model-list" value="${esc(r.cliModel || '')}" placeholder="该 Agent 支持的模型"></div>
+      <div class="f-row"><label>角色提示词（执行时注入，与 Agent 场景提示词叠加）</label><textarea id="role-prompt" style="min-height:120px" placeholder="角色定位、职责、工作方式与输出要求">${esc(r.prompt)}</textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-o" onclick="roleTest()">预览提示词</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-o" onclick="closeModal()">取消</button>
+      <button class="btn btn-p" onclick="roleSave('${r.id}')">保存</button>
+    </div>`);
+  roleSyncModel(bound);
+}
+function roleSyncModel(preAgent) {
+  const a = preAgent || agentById($('#role-agent')?.value || '');
+  const row = $('#role-model-row');
+  if (row) row.style.display = cliCanModel(a) ? '' : 'none';
+  if (a && cliCanModel(a) && window.reins) {
+    const inp = $('#role-model');
+    if (inp) {
+      const dl = $('#role-model-list');
+      if (dl) dl.innerHTML = modelOptsSync(a).map(m => `<option value="${esc(m)}">`).join('');
+      window.reins.cliModels(a).then(list => {
+        if (Array.isArray(list) && list.length && $('#role-model-list')) {
+          _modelOpts[a.cliId] = list;
+          $('#role-model-list').innerHTML = list.map(m => `<option value="${esc(m)}">`).join('');
+        }
+      }).catch(() => { });
+    }
+  }
+}
+function roleTest() {
+  const p = $('#role-prompt')?.value.trim() || '';
+  toast('角色提示词预览', p ? p.split('\n')[0].slice(0, 80) : '（空）', '☆');
+}
+function roleSave(roleId) {
+  const name = $('#role-name').value.trim();
+  const agentId = $('#role-agent').value;
+  if (!name) { toast('请填写角色名称', '', '⚠'); return; }
+  if (!agentId) { toast('请选择绑定的 Agent', '角色需要一个执行引擎', '⚠'); return; }
+  if (!Array.isArray(O().roles)) O().roles = [];
+  const rec = { id: roleId || 'r' + now(), name, glyph: (roleById(roleId) || {}).glyph || '☆', agentId, cliModel: $('#role-model')?.value.trim() || '', prompt: $('#role-prompt').value.trim() };
+  const i = O().roles.findIndex(x => x.id === rec.id);
+  if (i >= 0) O().roles[i] = rec; else O().roles.push(rec);
+  save(); closeModal(); refreshViews();
+  toast('已保存角色', name + ' · ' + (agentById(agentId) || {}).name, '☆');
+}
+function confirmDeleteRole(id) {
+  const r = roleById(id); if (!r) return;
+  O().roles = O().roles.filter(x => x.id !== id);
+  O().spaces.flatMap(sp => sp.tasks || []).forEach(t => { if (t.assignee?.kind === 'role' && t.assignee.id === id) t.assignee = null; });
+  save(); refreshViews();
+  toast('已删除角色', r.name, '');
 }
 
 function toggleAgent(id) {
@@ -535,6 +707,7 @@ function confirmDeleteAgent(id) {
   const a = agentById(id); if (!a) return;
   if (a.status === 'working') { toast('无法删除', a.name + ' 正在执行任务，请先等待完成或终止', '⚠'); return; }
   const using = O().spaces.flatMap(sp => sp.tasks || []).filter(t => t.assignee?.kind === 'agent' && t.assignee.id === id);
+  (O().roles || []).forEach(r => { if (r.agentId === id) r.agentId = ''; });   // 解绑引用该 Agent 的角色
   openModal(`<div class="modal-head"><h3>删除 Agent</h3><span>${esc(a.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将删除 <b>${esc(a.name)}</b>${a.mode === 'api' && a.apiKey ? '（含已保存的 API Key）' : ''}。${using.length ? '其名下 ' + using.length + ' 个任务将改为未指派，执行记录保留。' : '此操作不可撤销。'}</div></div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
@@ -770,6 +943,7 @@ function viewInteg() {
         <div class="sync-log" id="jev-log" style="margin-top:12px"></div>`
         : `<div class="sync-log"><div><span style="color:#87919a">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
       </div>
+      ${comfyIntegCard()}
       </div>
       <div>
         <div class="integ-grid-mini">${roadmap.map(o => `<div class="mini-integ" style="opacity:.75">${o[0]}<span>${o[1]}</span></div>`).join('')}</div>
@@ -827,6 +1001,217 @@ async function jevTest() {
 }
 
 
+/* ============ ComfyUI 视频生成 ============ */
+let comfyNodes = [];                        // 工作流解析出的文本节点：[{id, text, guess}]
+let comfySvc = { probing: false, ok: null };// 服务探活状态
+const comfyJobs = {};                       // id -> {id, prompt, negative, phase, at, endAt, video, error, promptId}
+const comfyCfgReady = () => !!(hookCfg.comfyWorkflow && hookCfg.comfyPosNode);
+/* 生成一条落一条：任务状态每次变化即写入 state 持久化（全局历史，最多留 50 条，重启不丢） */
+function comfyJobsSync() {
+  if (!state) return;
+  state.comfyJobs = Object.values(comfyJobs).sort((a, b) => a.at - b.at).slice(-50);
+  save();
+}
+
+/* —— 集成页配置卡片 —— */
+function comfyNodeOpts() {
+  let opts = comfyNodes.map(n => ({ v: n.id, l: '#' + n.id + ' · ' + (n.text || '').slice(0, 18) }));
+  // 已保存但未重新解析的节点也保留为可选项，避免下拉显示成「未选择」
+  for (const k of ['comfyPosNode', 'comfyNegNode']) {
+    const v = hookCfg[k];
+    if (v && !opts.find(o => o.v === v)) opts.push({ v, l: '#' + v + ' ·（已保存）' });
+  }
+  return opts.length ? opts : [{ v: '', l: '— 先选择工作流文件 —' }];
+}
+function comfyIntegCard() {
+  const cfg = hookCfg || {};
+  const wf = cfg.comfyWorkflow || '';
+  const opts = comfyNodeOpts();
+  return `
+      <div class="panel integ-card">
+        <div class="integ-brand">
+          <div class="lg" style="background:#12908a">${ic('play')}</div>
+          <div><h3>ComfyUI 视频生成</h3><span>本地文生视频 · Wan / LTX 等工作流</span></div>
+          <span class="status-pill ${wf ? 'idle' : 'offline'}" style="margin-left:auto">${wf ? '已配置' : '未配置'}</span>
+        </div>
+        <div class="integ-desc">把本机 ComfyUI（默认 127.0.0.1:8188）接入「视频」工作台：选择一个 ComfyUI 里「Save (API Format)」导出的工作流模板，指定正/负向提示词节点，即可在 Reins 内直接生成视频。</div>
+        ${window.reins ? `
+        <div class="f-row"><label>服务地址</label><input type="text" id="comfy-url" value="${esc(cfg.comfyUrl || 'http://127.0.0.1:8188')}" placeholder="http://127.0.0.1:8188"></div>
+        <div class="f-row"><label>工作流模板（API 格式 JSON）</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="comfy-wf" value="${esc(wf)}" placeholder="未选择" readonly style="flex:1;background:var(--bg)">
+            <button class="btn btn-o" style="flex-shrink:0" onclick="comfyPickWf()">选择文件</button>
+          </div>
+        </div>
+        <div class="f-2col">
+          <div class="f-row"><label>正向提示词节点</label>${ds('comfy-pos', opts, cfg.comfyPosNode)}</div>
+          <div class="f-row"><label>负向提示词节点（可选）</label>${ds('comfy-neg', [{ v: '', l: '不注入' }, ...opts], cfg.comfyNegNode)}</div>
+        </div>
+        <div style="display:flex;gap:9px;margin-top:4px">
+          <button class="btn btn-p" onclick="comfySave()">保存配置</button>
+          <button class="btn btn-o" onclick="comfyTest()">测试连接</button>
+          <button class="btn btn-o" onclick="switchView('video')">打开视频页</button>
+        </div>
+        <div class="sync-log" id="comfy-log" style="margin-top:12px"></div>`
+        : `<div class="sync-log"><div><span style="color:#87919a">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
+      </div>`;
+}
+async function comfyPickWf() {
+  const p = await window.reins.comfyPick();
+  if (!p) return;
+  const log = $('#comfy-log');
+  const r = await window.reins.comfyInspect(p);
+  if (!r.ok) {
+    $('#comfy-wf').value = ''; comfyNodes = [];
+    log.innerHTML = '<div class="ln err">✗ ' + esc(r.error) + '</div>';
+    return;
+  }
+  $('#comfy-wf').value = p;
+  comfyNodes = r.nodes;
+  const opts = comfyNodes.map(n => ({ v: n.id, l: '#' + n.id + ' · ' + (n.text || '').slice(0, 18) }));
+  dsSet('comfy-pos', opts, r.pos);
+  dsSet('comfy-neg', [{ v: '', l: '不注入' }, ...opts], r.neg || '');
+  log.innerHTML = '<div class="ln ok">✓ 已识别 ' + r.nodes.length + ' 个文本节点'
+    + (r.saveNodes ? '、' + r.saveNodes + ' 个输出节点' : '（未检测到视频/图像输出节点）')
+    + '。确认正/负向节点后保存。</div>';
+}
+function comfySave() {
+  const url = $('#comfy-url').value.trim() || 'http://127.0.0.1:8188';
+  if (!/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
+  const wf = $('#comfy-wf').value.trim();
+  const pos = $('#comfy-pos').value, neg = $('#comfy-neg').value;
+  if (wf && !pos) { toast('缺少正向节点', '选择工作流文件后会自动识别，也可手动指定', '⚠'); return; }
+  window.reins.setSettings({ comfyUrl: url, comfyWorkflow: wf, comfyPosNode: pos, comfyNegNode: neg }).then(s => { if (s) hookCfg = { ...hookCfg, ...s }; });
+  toast('已保存', wf ? '「视频」页已就绪' : '已清空 ComfyUI 配置', '▶');
+  render();
+}
+async function comfyTest() {
+  const log = $('#comfy-log'); if (!log) return;
+  const url = $('#comfy-url').value.trim() || 'http://127.0.0.1:8188';
+  log.innerHTML = '<div class="ln act">▸ 正在连接 ' + esc(url) + '…</div>';
+  const r = await window.reins.comfyStatus({ comfyUrl: url });
+  log.innerHTML = r.ok
+    ? '<div class="ln ok">✓ 已连接：ComfyUI ' + esc(r.version) + ' · ' + esc(r.device) + (r.vram ? ' · ' + esc(r.vram) : '') + '</div>'
+    : '<div class="ln err">✗ 连接失败：' + esc(r.error) + '（确认 ComfyUI 已启动）</div>';
+}
+
+/* —— 视频工作台 —— */
+function fmtElapsed(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return h ? h + ':' + String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0') : m + ':' + String(ss).padStart(2, '0');
+}
+function comfySvcHtml() {
+  if (comfySvc.probing) return '<span class="cv-svc-pill">⟳ 正在探测 ComfyUI…</span>';
+  if (comfySvc.ok) return '<span class="cv-svc-pill ok">● ComfyUI 在线 · ' + esc(comfySvc.version) + '</span>';
+  if (comfySvc.ok === false) return '<span class="cv-svc-pill off">● ComfyUI 离线（' + esc(comfySvc.error) + '）· 启动后可继续排队任务</span>';
+  return '<span class="cv-svc-pill">● 未探测</span>';
+}
+async function hydrateVideo() {
+  if (!window.reins || !$('#cv-svc')) return;
+  comfySvc = { probing: true };
+  $('#cv-svc').innerHTML = comfySvcHtml();
+  comfySvc = await window.reins.comfyStatus();
+  if ($('#cv-svc')) $('#cv-svc').innerHTML = comfySvcHtml();
+}
+function viewVideo() {
+  const wf = hookCfg.comfyWorkflow || '';
+  const head = `<div class="view-head"><h2>视频</h2><p>${wf ? 'ComfyUI 工作流：' + esc(wf.split('/').pop()) : 'ComfyUI 本地视频生成'}</p></div>`;
+  if (!window.reins) return head + `<div class="panel" style="padding:40px;text-align:center;color:var(--ink-dim)">视频生成需要在 <b>Reins 桌面客户端</b>中使用。</div>`;
+  if (!comfyCfgReady()) return head + `
+    <div class="panel" style="padding:40px;text-align:center;color:var(--ink-dim)">
+      还没有配置视频工作流。<br>先装好 ComfyUI 并导出工作流模板，再到「集成」页完成接入。
+      <div style="margin-top:14px"><button class="btn btn-p" onclick="switchView('integ')">去配置</button></div>
+    </div>`;
+  const PH = { submit: ['已提交', 'ph-queue'], queue: ['排队中', 'ph-queue'], run: ['生成中', 'ph-run'], done: ['已完成', 'ph-done'], error: ['失败', 'ph-err'], cancel: ['已取消', 'ph-err'] };
+  const jobs = Object.values(comfyJobs).sort((a, b) => b.at - a.at);
+  const rows = jobs.map(j => {
+    const active = j.phase === 'submit' || j.phase === 'queue' || j.phase === 'run';
+    const [pl, pc] = PH[j.phase] || PH.submit;
+    return `<div class="cv-job">
+      <div class="cv-head">
+        <span class="cv-dot ${pc}"></span><b>${pl}</b>
+        <span class="cv-el" id="cv-el-${j.id}">${active || j.phase === 'done' || j.phase === 'cancel' ? fmtElapsed((j.endAt || now()) - j.at) : '—'}</span>
+        <span class="cv-prompt" title="${esc(j.prompt)}">${esc(j.prompt.slice(0, 60))}</span>
+        <span style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
+          ${active ? `<button class="btn btn-o btn-sm" onclick="cancelComfyVideo('${j.id}')">取消</button>` : ''}
+          ${j.video ? `<button class="btn btn-o btn-sm" onclick="copyComfyUrl('${j.id}')">复制链接</button>` : ''}
+        </span>
+      </div>
+      ${j.phase === 'queue' || j.phase === 'run' ? '<div class="cv-bar"><i></i></div>' : ''}
+      ${j.video ? `<video class="cv-video" controls preload="metadata" src="${esc(j.video.src || j.video.url)}"></video>` : ''}
+      ${j.error ? `<div class="cv-err">✗ ${esc(j.error)}</div>` : ''}
+    </div>`;
+  }).join('');
+  return head + `
+    <div style="max-width:760px;display:grid;gap:14px">
+      <div class="panel">
+        <div class="cv-svc" id="cv-svc">${comfySvcHtml()}</div>
+        <div class="f-row"><label>画面描述（正向提示词）</label><textarea id="cv-prompt" class="cv-ta" placeholder="例如：一只橘猫在海边奔跑，电影感镜头，日落逆光"></textarea></div>
+        <div class="f-row"><label>负向提示词（可选）</label><input type="text" id="cv-neg" placeholder="留空则沿用模板里的负向词"></div>
+        <div style="display:flex;gap:9px;align-items:center">
+          <button class="btn btn-p" onclick="submitComfyVideo()">${ic('play')}&nbsp;生成视频</button>
+          <span style="font-size:12px;color:var(--ink-dim)">本地生成较慢（几分钟到几十分钟），关窗驻留也不中断</span>
+        </div>
+      </div>
+      <div class="panel" style="padding:14px 16px">
+        <h3 style="margin:0 0 4px;font-size:14px">生成任务</h3>
+        <div class="cv-list">${rows || '<div style="color:var(--ink-dim);font-size:13px;padding:8px 0">暂无任务。描述画面后点「生成视频」。</div>'}</div>
+      </div>
+    </div>`;
+}
+function submitComfyVideo() {
+  const prompt = $('#cv-prompt').value.trim();
+  if (!prompt) { toast('提示词为空', '先描述要生成的画面', '⚠'); return; }
+  if (!comfyCfgReady()) { switchView('integ'); return; }
+  const negative = $('#cv-neg').value.trim();
+  const id = 'cv' + now() + rnd(100, 999);
+  comfyJobs[id] = { id, prompt, negative, phase: 'submit', at: now() };
+  comfyJobsSync();
+  window.reins.comfySubmit({ jobId: id, prompt, negative });
+  toast('已提交', '任务已交给 ComfyUI', '▶');
+  render();
+}
+async function cancelComfyVideo(id) {
+  const j = comfyJobs[id]; if (!j) return;
+  j.phase = 'cancel'; j.endAt = now();
+  comfyJobsSync();
+  await window.reins?.comfyCancel?.(id);
+  toast('已取消', '已从 ComfyUI 队列移除', '✕');
+  if (curView === 'video') render();
+}
+function copyComfyUrl(id) {
+  const j = comfyJobs[id]; if (!j?.video) return;
+  navigator.clipboard.writeText(j.video.url).then(
+    () => toast('已复制', '产物链接已复制到剪贴板', '⧉'),
+    () => toast('复制失败', '当前环境未授权剪贴板', '⚠'));
+}
+function handleComfyEvent(evt) {
+  const j = comfyJobs[evt.jobId]; if (!j) return;
+  if (evt.type === 'queued') { j.phase = 'queue'; j.promptId = evt.promptId; }
+  else if (evt.type === 'running') { if (j.phase !== 'run') j.phase = 'run'; else return; }
+  else if (evt.type === 'done') {
+    j.phase = 'done'; j.endAt = now(); j.video = evt.video || null;
+    toast('视频已生成', j.prompt.slice(0, 40), '▶');
+    addActivity('▶', '视频已生成：' + j.prompt.slice(0, 30) + '…');
+  } else if (evt.type === 'error') {
+    j.phase = 'error'; j.endAt = now(); j.error = evt.error;
+    toast('生成失败', String(evt.error || '').slice(0, 60), '⚠');
+  }
+  comfyJobsSync();
+  if (curView === 'video') render();
+}
+/* 秒级计时：只更新进行中任务的耗时，不整页重绘 */
+setInterval(() => {
+  if (curView !== 'video') return;
+  const t = now();
+  for (const j of Object.values(comfyJobs))
+    if (j.phase === 'submit' || j.phase === 'queue' || j.phase === 'run') {
+      const el = document.getElementById('cv-el-' + j.id);
+      if (el) el.textContent = fmtElapsed(t - j.at);
+    }
+}, 1000);
+
 /* ============ 概览 ============ */
 function viewDash() {
   const doing = S().tasks.filter(t => t.status === 'doing');
@@ -869,12 +1254,40 @@ function openTask(id) { drawerTaskId = id; document.body.classList.add('drawer-o
 function closeDrawer() { drawerTaskId = null; document.body.classList.remove('drawer-open'); }
 function drawerOpenOn(id) { return drawerTaskId === id && document.body.classList.contains('drawer-open'); }
 
+/* 抽屉里的流水线面板：阶段清单（含产出预览）+ 裁决记录 + 启动/续跑按钮 */
+function renderPipelinePanel(t) {
+  const p = t.pipeline;
+  if (!p || !p.on) return '';
+  const modeTag = p.mode === 'auto' ? ' · 项目经理 AI 拆分' : p.mode === 'std' ? ' · 标准研发流水线' : '';
+  let body = '';
+  if (p.status === 'planning' && !p.stages) body = `<div class="pp-plan">🧭 项目经理正在拆解流程，指定各阶段负责成员 …</div>`;
+  if (p.stages?.length) {
+    body = p.stages.map((s, i) => {
+      const role = pipeRoleByKey(s.roleKey);
+      const cur = (i === p.cur && ['running', 'planning', 'paused'].includes(p.status)) || ['running', 'rework'].includes(s.state);
+      const icon = s.state === 'done' ? '✓' : s.state === 'rework' ? '↩' : cur ? '▶' : '○';
+      return `<div class="pp-stage ${s.state === 'done' ? 'done' : cur ? 'cur' : 'todo'}">
+        <span class="pp-ic">${icon}</span>
+        <div class="pp-main"><b>${esc(s.name)}</b><span>${esc(role ? role.name : s.roleKey)}${s.rework ? ' · 返工' : ''}${s.runs > 1 ? ' · 第 ' + s.runs + ' 次执行' : ''}${s.final ? ' · 终段' : ''}</span></div>
+      </div>${s.result ? `<details class="pp-res"><summary>阶段产出</summary><div class="result-box" style="margin:0">${mdToHtml(String(s.result).slice(0, 6000))}</div></details>` : ''}`;
+    }).join('');
+  }
+  const gateHTML = p.gate ? `<div class="pp-gate ${p.gate.action === 'pass' ? 'pass' : 'rework'}">⚖ 第 ${p.gate.round} 轮裁决 · ${p.gate.action === 'pass' ? '通过' : '打回 ' + (p.gate.targets || []).join('/')}（${esc(p.gate.engine || '')}）— ${esc(p.gate.reason || '')}${p.gate.evidence ? `<div class="pp-evid">依据：${esc(String(p.gate.evidence).slice(0, 200))}</div>` : ''}</div>` : '';
+  const btn = p.status === 'idle' || p.status === 'paused'
+    ? `<button class="btn btn-p btn-sm" onclick="startPipeline('${t.id}')">▶ ${p.status === 'paused' ? '从断点继续' : '启动流水线'}</button>` : '';
+  return `<div class="d-sec"><h4>流水线 · ${PIPE_STATE[p.status] || p.status}${modeTag}${p.round > 1 ? ` · 已返工 ${p.round - 1} 轮（上限 ${p.maxRework}）` : ''}</h4>
+    <div class="pp-body">${body || '<div class="pp-plan">尚未启动：启动后项目经理将拆解流程并分配成员。</div>'}${gateHTML}</div>
+    ${btn ? `<div style="display:flex;gap:9px;align-items:center;margin-top:9px">${btn}<span style="font-size:11px;color:var(--ink-faint)">拆流程 → 阶段接力 → 测试裁决 → 返工循环 → 汇总交付</span></div>` : ''}
+  </div>`;
+}
+
 function renderDrawer(id) {
   const t = byId(id); if (!t) { closeDrawer(); return; }
   const r = runs[id];
   const pct = runPct(id);
   const assigneeOpts = [{ v: '', l: '未指派' },
     ...memberNames().map(m => ({ v: 'm:' + m, l: m })),
+    ...(O().roles || []).filter(roleUsable).map(r => ({ v: 'r:' + r.id, l: '☆ ' + r.name })),
     ...O().agents.map(a => ({ v: 'a:' + a.id, l: a.name + (a.status === 'working' && a.taskId !== id ? '（忙）' : ''), dis: !agentUsable(a) }))];
   const promptOpts = [{ v: '', l: '不附加' }, ...S().prompts.map(p => ({ v: p.id, l: p.title }))];
 
@@ -889,14 +1302,14 @@ function renderDrawer(id) {
       <div class="run-actions">
         <button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">■ 终止执行</button>
       </div></div>`;
-  } else if (t.status === 'todo' && t.assignee?.kind === 'agent') {
-    const a = agentById(t.assignee.id);
-    const canModel = a && a.mode === 'cli' && CLI_CAN_MODEL.includes(a.cliId);
+  } else if (t.status === 'todo' && ['agent', 'role'].includes(t.assignee?.kind)) {
+    const a = t.assignee.kind === 'role' ? (resolveRoleAgent(t) || {}).agent : agentById(t.assignee.id);
+    const canModel = cliCanModel(a);
     execHTML = `<div class="d-sec"><h4>Agent 执行</h4>
       <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-p" onclick="startRun('${t.id}',{byUser:true});renderDrawer('${t.id}')">▶ 指派并启动</button>
         ${canModel ? `<label style="font-size:12.5px;color:var(--ink-dim);display:flex;align-items:center;gap:7px">执行模型
-          ${ds('run-model', [{ v: '', l: a.cliModel ? a.cliModel + '（Agent 默认）' : '默认模型' }, ...CB_MODELS.map(m => ({ v: m, l: m }))], t.runModel || '', `byId('${t.id}').runModel=this.value;save()`, 'inline')}</label>` : ''}
+          ${ds('run-model', [{ v: '', l: a.cliModel ? a.cliModel + '（Agent 默认）' : '默认模型' }, ...modelOptsSync(a).map(m => ({ v: m, l: m }))], t.runModel || '', `byId('${t.id}').runModel=this.value;save()`, 'inline')}</label>` : ''}
       </div>
       <div style="font-size:12px;color:var(--ink-faint);margin-top:8px">${a?.mode === 'api'
         ? '将调用 ' + esc(providerLabel(a.provider) + ' · ' + a.model) + '，实时流式返回，完成后交付物进入待验收。'
@@ -909,15 +1322,17 @@ function renderDrawer(id) {
         <span class="pr">${esc(t.pr || '交付 #—')}</span>
         ${t.result ? `<div class="result-box">${mdToHtml(t.result)}</div>`
         : `<p>执行已完成，请核对改动后验收</p>`}
+        ${renderDiffPanel(t)}
         <div style="display:flex;gap:9px;margin-top:12px">
           <button class="btn btn-p btn-sm" onclick="mergeTask('${t.id}')">✓ 通过并归档</button>
           <button class="btn btn-o btn-sm" onclick="rejectTask('${t.id}')">✗ 打回重做</button>
+          ${t.delivery?.items?.some(i => i.kind === 'log') ? `<button class="btn btn-o btn-sm" title="本次执行的完整过程日志（session.log）" onclick="viewSessionLog('${t.id}')">📜 过程日志</button>` : ''}
         </div>
       </div>
-      ${t.thread?.length ? `<div class="thread-note">该任务已执行 ${t.thread.filter(m => m.role === 'assistant').length} 轮，打回时 Agent 会结合此前的交付与反馈继续修改。</div>` : ''}</div>`;
+      ${t.thread?.length ? `<div class="thread-note">该任务已执行 ${t.thread.filter(m => m.role === 'assistant').length} 轮${t.acpSessionId ? '，打回重跑将恢复原会话（上下文延续）' : '，打回时 Agent 会结合此前的交付与反馈继续修改'}。</div>` : ''}</div>`;
   } else if (t.status === 'done' && t.pr) {
     execHTML = `<div class="d-sec"><h4>结果</h4><div class="done-box">✓ 已归档 <span class="pr">${esc(t.pr)}</span> · 完成于 ${t.doneAt ? fmtRel(t.doneAt) : '—'}</div>
-      ${t.result ? `<div class="result-box" style="margin-top:10px">${mdToHtml(t.result)}</div>` : ''}</div>`;
+      ${t.result ? `<div class="result-box" style="margin-top:10px">${mdToHtml(t.result)}</div>` : ''}${renderDiffPanel(t, true)}</div>`;
   }
 
   $('#drawer').innerHTML = `
@@ -936,7 +1351,9 @@ function renderDrawer(id) {
           <label>优先级</label>
           ${ds('d-pri', ['P0', 'P1', 'P2'].map(p => ({ v: p, l: p })), t.pri, `byId('${t.id}').pri=this.value;save();refreshViews();renderDrawer('${t.id}')`)}
           <label>经办人</label>
-          ${ds('d-assignee', assigneeOpts, t.assignee?.kind === 'human' ? 'm:' + t.assignee.name : t.assignee?.kind === 'agent' ? 'a:' + t.assignee.id : '', `updateAssignee('${t.id}',this.value)`)}
+          ${t.pipeline?.on
+            ? `<div style="min-height:36px;display:flex;align-items:center;font-size:12.5px;color:var(--ink-dim)">🧭 项目经理统筹 · 各阶段成员自动分配</div>`
+            : ds('d-assignee', assigneeOpts, t.assignee?.kind === 'human' ? 'm:' + t.assignee.name : t.assignee?.kind === 'role' ? 'r:' + t.assignee.id : t.assignee?.kind === 'agent' ? 'a:' + t.assignee.id : '', `updateAssignee('${t.id}',this.value)`)}
           <label>附加提示词</label>
           ${ds('d-prompt', promptOpts, t.attachPrompt || '', `byId('${t.id}').attachPrompt=this.value||null;save();toast('已附加','执行时将随任务一并发送','✎')`)}
           <label>迭代</label>
@@ -948,6 +1365,7 @@ function renderDrawer(id) {
         </div>
       </div>
       <div class="d-sec"><h4>描述 / 验收标准</h4><div class="d-desc">${esc(t.desc) || '（无描述）'}</div></div>
+      ${renderPipelinePanel(t)}
       ${t.status === 'todo' ? `<div class="d-sec"><h4>AI 分诊</h4>
         <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-o btn-sm" id="tri-btn" onclick="triageDrawer('${t.id}')">分析类型、优先级与经办人</button>
@@ -970,12 +1388,26 @@ function renderDrawer(id) {
       <div class="d-sec d-del"><button class="btn btn-o btn-sm btn-danger-o" onclick="confirmDeleteTask('${t.id}')">删除任务</button><span>永久删除，含执行记录、评论与交付物</span></div>
     </div>`;
   const dl = $('#drawer-log'); if (dl) dl.scrollTop = dl.scrollHeight;
+  if (t.status === 'todo' && ['agent', 'role'].includes(t.assignee?.kind)) {
+    const ha = t.assignee.kind === 'role' ? (resolveRoleAgent(t) || {}).agent : agentById(t.assignee.id);
+    if (cliCanModel(ha)) hydrateModelSelect('run-model', ha, t.runModel);
+  }
 }
 
 function updateAssignee(id, val) {
   const t = byId(id);
+  /* 流水线任务：各阶段成员由项目经理统筹分配，不允许手动改派（避免破坏阶段链） */
+  if (t.pipeline?.on) { toast('流水线任务', '各阶段成员由项目经理统筹分配，无需手动指派', '🧭'); renderDrawer(id); return; }
   if (!val) { t.assignee = null; }
   else if (val.startsWith('m:')) { t.assignee = { kind: 'human', name: val.slice(2) }; }
+  else if (val.startsWith('r:')) {
+    const r = roleById(val.slice(2));
+    if (r) {
+      t.assignee = { kind: 'role', id: r.id, name: r.name };
+      th(t, '👤', '指派给角色 ' + r.name + '（' + ((roleAgent(r) || {}).name || '未绑定 Agent') + '）');
+      if (t.status === 'doing' && !runs[id]) startRun(id, { byUser: true });
+    }
+  }
   else {
     const a = agentById(val.slice(2));
     t.assignee = { kind: 'agent', id: a.id, name: a.name };
@@ -991,6 +1423,12 @@ function sendComment(id) {
 }
 function mergeTask(id) {
   const t = byId(id);
+  /* 确认墙（借鉴 HiFox"未确认写入生效"）：有未裁决的拟议变更时先应用或放弃，再归档 */
+  if (t.delivery?.diff && t.delivery.diffState === 'pending') {
+    toast('请先裁决代码变更', '在下方"代码变更"面板确认应用或放弃后再归档', '⚠');
+    openTask(id);
+    return;
+  }
   th(t, '✅', '验收通过并归档');
   setStatus(t, 'done');
   toast('已归档', t.key + ' ' + esc(t.pr || ''), '✓');
@@ -1013,6 +1451,13 @@ function doReject(id) {
   t.thread = t.thread || [];
   t.thread.push({ role: 'user', content: '【验收反馈】' + feedback });
   t.status = 'todo'; t.pr = null;
+  /* 流水线任务打回：重置流水线，下一轮带着验收意见重新拆解执行 */
+  if (t.pipeline?.on) {
+    t.pipeline.status = 'idle'; t.pipeline.mode = ''; t.pipeline.stages = null;
+    t.pipeline.cur = 0; t.pipeline.round = 1; t.pipeline.stageNo = 0;
+    t.pipeline.gate = null; t.pipeline.reworkCtx = null;
+    th(t, '🧭', '流水线已重置：将带着验收意见重新拆解执行');
+  }
   t.comments.push({ who: 'Reins', text: '验收打回：' + feedback, at: now() });
   th(t, '↩️', '验收打回：' + feedback.slice(0, 40));
   addActivity('↩️', t.key + ' 验收打回，等待重做');
@@ -1036,15 +1481,19 @@ function startApiRun(taskId, agent, opts) {
   const t = byId(taskId);
   const r = runs[taskId] = { mode: 'api', log: [], stream: '', model: agent.model, usage: null, done: false };
   r.log.push(['act', `▸ 装配任务上下文（${t.key} · ${TYPE_LABEL[t.type] || t.type}）`]);
-  const extra = t.attachPrompt ? (S().prompts.find(p => p.id === t.attachPrompt)?.content || '') : '';
-  if (extra) r.log.push(['ok', `✓ 已附加团队提示词「${S().prompts.find(p => p.id === t.attachPrompt)?.title}」`]);
+  /* 流水线阶段上下文优先（编排器注入）；否则走任务卡附加的团队提示词 */
+  const extra = opts.extraPrompt || (t.attachPrompt ? (S().prompts.find(p => p.id === t.attachPrompt)?.content || '') : '');
+  if (extra) r.log.push(['ok', opts.extraPrompt
+    ? `✓ 已注入流水线阶段上下文（${t.pipeline?.stages?.[t.pipeline.cur]?.name || '当前阶段'}，含前序产出）`
+    : `✓ 已附加团队提示词「${S().prompts.find(p => p.id === t.attachPrompt)?.title}」`]);
+  if (opts.roleName) r.log.push(['ok', `☆ 角色执行：${esc(opts.roleName)}（专属提示词与模型已注入）`]);
   if (t.thread?.length) r.log.push(['', `↻ 带此前 ${t.thread.filter(m => m.role === 'assistant').length} 轮交付继续修改`]);
   r.log.push(['ok', agent.mode === 'cli'
     ? agent.runtime === 'cloud'
       ? `☁ 已派发云端节点：${agent.cliCommand || '命令见配置'}（流式回传）`
       : `✓ 调用本机 CLI：${agent.cliCommand || '命令见配置'}（子进程流式）`
     : `✓ 调用 ${providerLabel(agent.provider)} · ${agent.model}（流式）`]);
-  const effAgent = (agent.mode === 'cli' && t.runModel && CLI_CAN_MODEL.includes(agent.cliId)) ? { ...agent, cliModel: t.runModel } : agent;
+  const effAgent = (agent.mode === 'cli' && t.runModel && cliCanModel(agent)) ? { ...agent, cliModel: t.runModel } : agent;
   if (agent.mode === 'cli') r.model = effAgent.cliModel || '默认模型';
   const execLabel = agent.mode === 'cli'
     ? (agent.cliCommand || 'CLI') + (effAgent.cliModel ? ' · ' + effAgent.cliModel : ' · 默认模型')
@@ -1074,14 +1523,29 @@ function handleRunEvent(evt) {
   }
   if (evt.type === 'note') { r.log.push(['', evt.text]); updateRunUI(taskId); return; }
   if (evt.type === 'done') {
+    /* 流水线阶段完成 → 交编排器推进（裁决/返工/下一阶段），不走单任务验收路径 */
+    const t0 = byId(taskId);
+    if (t0 && t0.pipeline && t0.pipeline.on && t0.pipeline.status === 'running') return pipelineStageDone(taskId, evt);
     // stream 里已经有完整执行过程（工具调用日志），只在为空时才用交付文本补位，别把过程日志冲掉
     r.done = true; if (!r.stream) r.stream = evt.result || '';
-    const t2 = byId(taskId); const a = t2.assignee ? agentById(t2.assignee.id) : null;
+    const t2 = byId(taskId); const a = effAgentOf(t2);
     t2.result = evt.result;
     t2.thread = t2.thread || [];
     t2.thread.push({ role: 'assistant', content: evt.result });
     t2.status = 'review'; t2.pr = '交付 #' + (S().deliverSeq++);
     if (evt.worktree) { t2.worktree = evt.worktree; th(t2, '🌿', '改动落在隔离工作区 reins/' + t2.key); }
+    // ACP 会话锚点（第八轮）：存到任务上，打回重跑走 session/load 续会话，不重喂全量历史
+    if (evt.acpSessionId) {
+      t2.acpSessionId = evt.acpSessionId;
+      t2.acpAgentId = (effAgentOf(t2) || {}).id || null;   // role 指派也要存实际执行 Agent，断点续跑才能匹配上
+      th(t2, '🔗', '会话锚点已保存' + (evt.resumed ? '（本次为恢复续跑）' : '，断点/打回重跑将在原会话继续'));
+    }
+    if (evt.delivery) {
+      t2.delivery = evt.delivery;
+      t2.delivery.diffState = evt.delivery.diff ? 'pending' : null;
+      if (evt.delivery.diff) th(t2, '📝', `拟议变更 ${evt.delivery.diff.files.length} 个文件，待验收确认后应用`);
+      if (evt.delivery.dir) t2.delivery.dir = evt.delivery.dir;
+    }
     if (Array.isArray(evt.changes) && evt.changes.length) {
       t2.changes = evt.changes;
       th(t2, '📝', `实际改动 ${evt.changes.length} 个文件：` + evt.changes.slice(0, 5).map(c => c.file).join('、') + (evt.changes.length > 5 ? ' 等' : ''));
@@ -1100,11 +1564,32 @@ function handleRunEvent(evt) {
     return;
   }
   if (evt.type === 'error') {
+    /* ACP 超时但引擎已有完整产出（partial）：流水线按完成推进——成果在 worktree，
+       下一阶段（测试）会实际检验；比反复超时卡死强。时间线留痕可查 */
+    const t0 = byId(taskId);
+    if (t0 && t0.pipeline?.on && t0.pipeline.status === 'running' && evt.partial && evt.partial.length > 400 && !pipeOutputSuspect(evt.partial)) {
+      th(t0, '⚠', '阶段执行超时，但引擎已产出完整交付（按完成推进，测试阶段将实际检验）');
+      r.log.push(['', '⚠ 超时收尾：产出完整，按完成推进']);
+      return pipelineStageDone(taskId, { result: evt.partial, worktree: evt.worktree || null, changes: evt.changes, usage: evt.usage });
+    }
     r.log.push(['err', '✕ 调用失败：' + evt.message]);
     if (t) {
+      if (t.pipeline?.on && t.pipeline.status === 'running') {
+        t.pipeline.status = 'paused';
+        const st = t.pipeline.stages[t.pipeline.cur];
+        if (st && ['running', 'rework'].includes(st.state)) st.state = 'pending';
+        th(t, '⏸', '流水线暂停 · ' + (st ? st.name : '') + ' 执行失败，可从断点继续');
+        /* 失败也留会话锚点（ACP 超时/出错）：断点续跑优先恢复原会话，省去重读代码的冷启动 */
+        if (evt.acpSessionId) { t.acpSessionId = evt.acpSessionId; t.acpAgentId = (effAgentOf(t) || {}).id || null; }
+      }
       t.status = 'todo';
-      const a = t.assignee ? agentById(t.assignee.id) : null;
+      const a = effAgentOf(t);
       if (a) { a.status = 'idle'; a.taskId = null; }
+      // 失败也留过程日志（session.log 已落盘）：交付面板能打开排查，失败任务的线索不丢
+      if (evt.delivery && !t.delivery) {
+        t.delivery = evt.delivery;
+        t.delivery.diffState = evt.delivery.diff ? 'pending' : null;
+      }
     }
     toast('执行失败', String(evt.message).slice(0, 60), '⚠');
     delete runs[taskId];
@@ -1115,8 +1600,14 @@ function handleRunEvent(evt) {
   if (evt.type === 'cancelled') {
     r.log.push(['err', '■ 已终止']);
     if (t) {
+      if (t.pipeline?.on && t.pipeline.status === 'running') {
+        t.pipeline.status = 'paused';
+        const st = t.pipeline.stages[t.pipeline.cur];
+        if (st && ['running', 'rework'].includes(st.state)) st.state = 'pending';
+        th(t, '⏸', '流水线已终止 · 可从断点继续');
+      }
       t.status = 'todo';
-      const a = t.assignee ? agentById(t.assignee.id) : null;
+      const a = effAgentOf(t);
       if (a) { a.status = 'idle'; a.taskId = null; }
     }
     delete runs[taskId];
@@ -1202,12 +1693,18 @@ function buildSteps(task, inst) {
 
 function startRun(taskId, opts = {}) {
   const t = byId(taskId);
-  if (!t.assignee || t.assignee.kind !== 'agent') { toast('无法启动', '请先将任务指派给一个 Agent', '⚠'); return; }
-  const a = agentById(t.assignee.id);
-  if (!a) { toast('Agent 不存在', '', '⚠'); return; }
-  if (a.status === 'offline' || (a.mode === 'api' && !a.apiKey)) {
-    toast(a.mode === 'api' ? '缺少密钥' : 'Agent 离线', a.mode === 'api' ? '请在设置中配置 API Key' : '请先上线 ' + esc(a.name), '⚠');
-    if (a.mode === 'api') openAgentConfig(a.id);
+  /* 流水线任务：统一入口转给编排器（启动/断点续跑），运行中由 runs 守卫防重 */
+  if (t?.pipeline?.on && !['running', 'planning', 'done'].includes(t.pipeline.status)) return startPipeline(taskId);
+  if (!t.assignee || !['agent', 'role'].includes(t.assignee.kind)) { toast('无法启动', '请先将任务指派给一个 Agent 或角色', '⚠'); return; }
+  /* 角色指派：解析为绑定的 Agent，注入角色提示词与角色级模型（任务级 runModel 在 startApiRun 再覆盖） */
+  const rr = t.assignee.kind === 'role' ? resolveRoleAgent(t) : null;
+  if (t.assignee.kind === 'role' && !rr) { toast('角色不可用', '绑定的 Agent 不存在或已离线，请在 Agent 页重新配置角色', '⚠'); return; }
+  const real = rr ? agentById(rr.role.agentId) : agentById(t.assignee.id);   // 状态记录用（真实 Agent）
+  const a = rr ? rr.agent : real;                                            // 执行用（含角色提示词/模型）
+  if (!real) { toast('Agent 不存在', '', '⚠'); return; }
+  if (real.status === 'offline' || (real.mode === 'api' && !real.apiKey)) {
+    toast(real.mode === 'api' ? '缺少密钥' : 'Agent 离线', real.mode === 'api' ? '请在设置中配置 API Key' : '请先上线 ' + esc(real.name), '⚠');
+    if (real.mode === 'api') openAgentConfig(real.id);
     return;
   }
   if (a.mode === 'cli' && a.runtime === 'cloud' && !hookCfg.cloudUrl) {
@@ -1216,14 +1713,15 @@ function startRun(taskId, opts = {}) {
     return;
   }
   if (runs[taskId]) return;
-  t.status = 'doing'; a.status = 'working'; a.taskId = taskId;
-  th(t, '🚀', a.name + ' 开始执行');
-  addActivity('🚀', a.name + ' 开始执行 ' + t.key + ' ' + t.title);
-  if (opts.byUser) toast('已指派并启动', a.name + ' 开始执行 ' + t.key, '▶');
+  t.status = 'doing'; real.status = 'working'; real.taskId = taskId;
+  const runLabel = (rr ? '☆ ' + rr.role.name + ' · ' : '') + real.name;
+  th(t, '🚀', runLabel + ' 开始执行');
+  addActivity('🚀', runLabel + ' 开始执行 ' + t.key + ' ' + t.title);
+  if (opts.byUser) toast('已指派并启动', runLabel + ' 开始执行 ' + t.key, '▶');
   save();
 
   if ((a.mode === 'api' || a.mode === 'cli') && window.reins) {
-    startApiRun(taskId, a, opts);
+    startApiRun(taskId, a, { ...opts, roleName: rr ? rr.role.name : '' });
   } else {
     runs[taskId] = { mode: 'sim', steps: buildSteps(t), idx: 0, log: [], done: false };
     stepRun(taskId);
@@ -1246,7 +1744,12 @@ function stepRun(taskId) {
 function finishRun(taskId) {
   const r = runs[taskId]; const t = byId(taskId);
   if (!r || !t) return;
-  const a = t.assignee ? agentById(t.assignee.id) : null;
+  /* 演示引擎跑流水线：同样交编排器推进（接入 API/CLI Agent 后为真实交付） */
+  if (t.pipeline?.on && t.pipeline.status === 'running') {
+    delete runs[taskId];
+    return pipelineStageDone(taskId, { result: '（演示引擎模拟产出，接入 API 或本机 CLI Agent 后为真实交付）', usage: null });
+  }
+  const a = effAgentOf(t);
   t.status = 'review'; t.pr = '交付 #' + (S().deliverSeq++);
   t.result = t.result || [
     `【演示引擎 · 模拟交付】${t.key} ${t.title}`,
@@ -1278,6 +1781,290 @@ function updateRunUI(taskId) {
     }
   }
   document.querySelectorAll(`[data-task="${taskId}"] .bar i`).forEach(el => el.style.width = pct + '%');
+}
+
+/* ============================================================
+   流水线（虚拟团队）：项目经理统筹，阶段接力自动执行
+   t.pipeline = {
+     on, status: 'idle'|'planning'|'running'|'paused'|'done',
+     mode: 'auto'|'std',                       // 项目经理 AI 拆分 / 标准研发流水线
+     stages: [{roleKey, name, goal, state: 'pending'|'running'|'rework'|'done', result, runs, rework?, final?}],
+     cur, round, maxRework, stageNo,           // stageNo → 主进程交付子目录编号
+     gate, reworkCtx                           // 最近一次裁决 / 打回上下文
+   }
+   执行拓扑：串行接力（共享同一隔离 worktree，后一阶段拿前面所有产出当输入）；
+   QA 后由项目经理裁决：通过 → 交付总结；打回 → 定位目标阶段带意见返工 → 重新测试（上限 maxRework 轮）
+   ============================================================ */
+const PIPE_STATE = { idle: '待启动', planning: '规划中', running: '流转中', paused: '已暂停', done: '已完成' };
+const PIPE_STD = [
+  { roleKey: 'pm', name: '产品文档' },
+  { roleKey: 'be', name: '后端实现' },
+  { roleKey: 'fe', name: '前端实现' },
+  { roleKey: 'qa', name: '测试验证' },
+];
+const pipeRoleByKey = key => {
+  const tpl = ROLE_TEMPLATES.find(t => t.key === key);
+  if (!tpl) return null;
+  return (O().roles || []).find(r => r.tpl === key || r.name === tpl.name);
+};
+/* 流水线所需角色就位：缺失的按模板补建，未绑定 Agent 的自动绑到可用 Agent（用户可事后在角色页改绑） */
+function ensurePipelineRoles(keys) {
+  const agents = O().agents.filter(agentUsable);
+  if (!agents.length) return { ok: false, message: '没有可用 Agent：请先在 Agent 页接入 API 或本机 CLI' };
+  const bind = agents.find(a => a.mode === 'api') || agents[0];   // 规划/裁决需要 API 引擎，优先绑 API
+  const created = [];
+  for (const key of keys) {
+    let r = pipeRoleByKey(key);
+    const tpl = ROLE_TEMPLATES.find(t => t.key === key);
+    if (!r && tpl) {
+      r = { id: 'r' + now(), tpl: key, name: tpl.name, glyph: tpl.glyph, agentId: '', cliModel: '', prompt: tpl.prompt };
+      O().roles = O().roles || []; O().roles.push(r);
+      created.push(tpl.name);
+    }
+    if (r && !r.agentId) r.agentId = bind.id;
+  }
+  if (created.length) toast('已补建流水线角色', created.join('、') + ' → 绑定 ' + bind.name, '☆');
+  return { ok: true };
+}
+/* 规划/裁决引擎：项目经理角色绑定的 API Agent 优先，退而求任何可用 API Agent；没有则走启发式兜底 */
+function pipelineJudgeAgent() {
+  const mgr = pipeRoleByKey('pmgr');
+  const a0 = mgr && agentById(mgr.agentId);
+  if (a0 && a0.mode === 'api' && a0.apiKey && a0.status !== 'offline') return a0;
+  return O().agents.find(a => a.mode === 'api' && a0 !== a && a.apiKey && a.status !== 'offline') || null;
+}
+/* 任务的有效执行 Agent（role 指派时是角色绑定的 Agent）——顺带修复 role 任务收尾后 Agent 状态不复位 */
+function effAgentOf(t) {
+  if (!t || !t.assignee) return null;
+  if (t.assignee.kind === 'role') { const r = roleById(t.assignee.id); return r ? agentById(r.agentId) : null; }
+  if (t.assignee.kind === 'agent') return agentById(t.assignee.id);
+  return null;
+}
+function pipelineResetAgent(t, usedTokens) {
+  const a = effAgentOf(t);
+  if (a) { a.status = 'idle'; a.done = (a.done || 0) + 1; a.taskId = null; if (usedTokens) a.tokens = (a.tokens || 0) + usedTokens; }
+}
+
+/* 组装当前阶段上下文：任务卡由引擎注入，这里补阶段目标 + 前序产出 + 打回意见 */
+/* 文档类阶段：产出直接写正文（系统落盘为报告传给下游），不依赖仓库写权限 */
+const PIPE_DOC_STAGES = ['pm', 'ui', 'doc', 'qa', 'pmgr'];
+function pipelineStageContext(t) {
+  const p = t.pipeline; const st = p.stages[p.cur];
+  const parts = [];
+  parts.push(`【流水线阶段】${st.name}（${p.cur + 1}/${p.stages.length}${st.rework ? ' · 返工' : ''}）`);
+  if (st.goal) parts.push(`【本阶段目标】${st.goal}`);
+  const prev = p.stages.slice(0, p.cur).filter(s => s.result);
+  if (prev.length) parts.push('【前序阶段产出（已完成，是你的输入；勿重复劳动）】\n' + prev.map(s => `—— ${s.name} ——\n${String(s.result).slice(0, 4000)}`).join('\n\n'));
+  if (p.reworkCtx) parts.push(`【测试打回 · 项目经理裁决】\n修改要求：${p.reworkCtx.feedback}\n\n测试报告：\n${String(p.reworkCtx.qaReport).slice(0, 3000)}`);
+  if (st.final) parts.push('你是项目经理，做最终交付总结：按阶段汇总全流程（产品文档要点、开发改动、测试结论），给出验收建议与遗留风险。');
+  else parts.push('【流水线约定】你是虚拟团队中本阶段的负责人，只产出本阶段交付物；你的产出会自动交给下一阶段。');
+  /* 交付契约：无头 CLI 常无写权限（实测 qoder 停在"请批准写入"）——明确告诉它怎么交付，杜绝求助型空产出 */
+  if (st.flagged) parts.push('【重要】上一轮你停在权限请求上、没有产出交付物。本轮不要请求任何权限、不要等待批准：把完整交付物直接写在回复正文里。');
+  if (st.roleKey === 'qa') parts.push('【报告契约】报告必须分两个清单：① 失败项——实际执行未通过的用例/断言（编号+现象），没有则明确写「失败项：无」；② 风险提示——不阻塞交付的潜在风险与建议。项目经理只依据①决定是否返工；②会进入交付遗留清单。');
+  if (PIPE_DOC_STAGES.includes(st.roleKey)) parts.push('【交付契约】下游阶段只能读到你的回复正文，看不到仓库文件——完整文档必须直接写在回复正文（结构化 Markdown），系统会自动落盘并传给下一阶段。可以顺带把文件写入工作区，但写不了也不要紧，更不要为此请求权限。');
+  else parts.push('【交付契约】直接修改/创建工作区文件，改动清单（文件路径+说明）写在回复正文；若文件写入被拒，把完整改动以完整文件内容或 unified diff 的形式写进回复正文。绝不停下来等待权限批准。');
+  return parts.join('\n\n');
+}
+
+async function startPipeline(taskId) {
+  const t = byId(taskId); const p = t.pipeline;
+  if (!p || p.status === 'planning' || p.status === 'running') return;
+  /* 断点续跑：已有阶段计划，从当前阶段继续 */
+  if (p.status === 'paused' && p.stages?.length) {
+    p.status = 'running'; t.status = 'doing';
+    th(t, '▶', '流水线从断点继续 · ' + (p.stages[p.cur]?.name || ''));
+    save(); refreshViews();
+    runPipelineStage(taskId);
+    return;
+  }
+  /* 全新启动：角色就位 → 项目经理拆流程（AI 不可用退标准模板） */
+  const ensure = ensurePipelineRoles(['pmgr', ...new Set(PIPE_STD.map(s => s.roleKey))]);
+  if (!ensure.ok) { toast('无法启动流水线', ensure.message, '⚠'); return; }
+  p.status = 'planning'; p.round = 1; p.cur = 0; p.stageNo = 0; p.gate = null; p.reworkCtx = null; p.mode = '';
+  t.status = 'doing'; save(); refreshViews();
+  th(t, '🧭', '流水线启动 · 项目经理拆解流程');
+  let plan = null;
+  const judge = pipelineJudgeAgent();
+  if (judge && window.reins) {
+    const r = await window.reins.pipelinePlan({ task: t, agent: judge }).catch(() => null);
+    if (r && r.ok) {
+      plan = r.stages; p.mode = 'auto';
+      th(t, '🧭', '项目经理拆解：' + plan.map(s => s.name).join(' → ') + (r.reason ? '（' + r.reason + '）' : ''));
+    } else if (r && r.message) th(t, '⚠', 'AI 拆分不可用（' + r.message + '），改用标准研发流水线');
+  } else th(t, '⚠', '无 API 引擎可做规划，改用标准研发流水线');
+  if (!plan) { plan = PIPE_STD.map(s => ({ ...s })); p.mode = 'std'; }
+  p.stages = plan.map(s => ({ goal: '', ...s, state: 'pending', result: '', runs: 0 }));
+  p.status = 'running';
+  addActivity('🧭', t.key + ' 流水线启动 · ' + p.stages.map(s => s.name).join(' → '));
+  save(); refreshViews();
+  runPipelineStage(taskId);
+}
+
+function runPipelineStage(taskId) {
+  const t = byId(taskId); const p = t.pipeline;
+  if (!p || p.status !== 'running') return;
+  const st = p.stages[p.cur];
+  const role = pipeRoleByKey(st.roleKey);
+  if (!role || !roleUsable(role)) {
+    p.status = 'paused'; t.status = 'todo';
+    th(t, '⏸', '阶段「' + st.name + '」的负责角色不可用，流水线暂停');
+    toast('流水线暂停', '请在角色页为「' + (role ? role.name : st.roleKey) + '」绑定可用 Agent 后从断点继续', '⚠');
+    save(); refreshViews();
+    return;
+  }
+  st.state = st.rework ? 'rework' : 'running';
+  const isNewAttempt = st.runs === 0 || st.rework;   // 断点续跑（runs>0 非返工）保留会话锚点续会话；新阶段/返工清掉开新会话
+  st.runs++;
+  p.stageNo++; p.final = !!st.final;
+  t.assignee = { kind: 'role', id: role.id, name: role.name };
+  if (isNewAttempt) delete t.acpSessionId;
+  th(t, st.rework ? '↩' : '▶', (st.rework ? '返工 · ' : '') + st.name + '（' + role.name + '）开始执行');
+  save(); refreshViews();
+  startRun(taskId, { pipeline: true, extraPrompt: pipelineStageContext(t) });
+}
+
+async function pipelineStageDone(taskId, evt) {
+  const t = byId(taskId); const p = t.pipeline;
+  const st = p.stages[p.cur];
+  delete runs[taskId];
+  const result = String(evt.result || '（无输出）');
+  pipelineResetAgent(t, evt.usage?.total_tokens || 0);
+  /* 产出质量门：求助型产出（无头 CLI 卡在"请批准写入"）不算完成——
+     自动带修正契约重跑一次；两轮都废则暂停待人工，绝不把求助文本喂给下游阶段 */
+  if (st && !st.flagged && pipeOutputSuspect(result)) {
+    st.flagged = true; st.result = ''; st.state = 'pending';
+    th(t, '⚠', st.name + ' 产出疑似权限求助（非交付物），自动带修正契约重跑');
+    addActivity('⚠', t.key + ' ' + st.name + ' 阶段产出异常，自动重跑');
+    save(); refreshViews();
+    return runPipelineStage(taskId);
+  }
+  if (st && st.flagged && pipeOutputSuspect(result)) {
+    p.status = 'paused'; t.status = 'todo'; st.state = 'pending';
+    th(t, '⏸', st.name + ' 两轮产出均为求助文本，流水线暂停：建议在角色页为该阶段换绑 Agent，或处理后从断点继续');
+    toast('流水线暂停', st.name + ' 阶段无法产出有效交付（引擎疑似权限受限），建议换绑 Agent', '⚠');
+    save(); refreshViews();
+    if (drawerTaskId === taskId) renderDrawer(taskId);
+    return;
+  }
+  if (st) { st.state = 'done'; st.result = result; }
+  th(t, '✓', (st ? st.name : '阶段') + ' 完成');
+  if (evt.worktree && !t.worktree) t.worktree = evt.worktree;
+  if (st && st.final) return finishPipeline(taskId, evt);
+  if (st && st.roleKey === 'qa') return pipelineGate(taskId);
+  p.cur++;
+  save(); refreshViews();
+  if (p.stages[p.cur]) runPipelineStage(taskId);
+  else pipelineDeliver(taskId);
+}
+
+/* 求助型产出识别：无头 CLI 无写权限时的典型卡壳（"请批准写入"类短文本），不算交付 */
+const PIPE_BEG_RE = /(需要写入|需要.{0,8}权限|请批准|请授权|无法写入|无法创建|写入.{0,6}被拒|permission denied|cannot write|read-?only|等待批准|等待确认)/i;
+function pipeOutputSuspect(text) {
+  const s = String(text || '').trim();
+  return !!s && s.length < 600 && PIPE_BEG_RE.test(s);
+}
+
+/* QA 后的项目经理裁决：通过 → 交付总结；打回 → 目标阶段带意见返工 → 重测（上限轮数后挂起待人工） */
+async function pipelineGate(taskId) {
+  const t = byId(taskId); const p = t.pipeline;
+  const qa = p.stages[p.cur];
+  th(t, '⚖', '项目经理裁决测试结果 …');
+  let verdict = null;
+  const judge = pipelineJudgeAgent();
+  if (judge && window.reins) {
+    const r = await window.reins.pipelineGate({ task: t, agent: judge, qaReport: String(qa.result || ''), round: p.round, maxRework: p.maxRework, prevFeedback: p.reworkCtx ? p.reworkCtx.feedback : '' }).catch(() => null);
+    if (r && r.ok) verdict = r.verdict;
+  }
+  if (!verdict) verdict = pipeGateHeuristic(String(qa.result || ''));
+  p.gate = { ...verdict, round: p.round, engine: judge ? judge.name : '自动判定' };
+  if (verdict.action === 'pass') {
+    th(t, '⚖', '裁决通过 · ' + verdict.reason);
+    /* QA 通过≠全链完成：后继阶段（如技术文档）先走完，再进入交付 */
+    if (p.cur + 1 < p.stages.length && p.stages.slice(p.cur + 1).some(s => s.state !== 'done')) {
+      p.cur++;
+      save(); refreshViews();
+      return runPipelineStage(taskId);
+    }
+    return pipelineDeliver(taskId);
+  }
+  if (p.round >= p.maxRework) {
+    p.status = 'paused'; t.status = 'todo';
+    th(t, '⏸', `返工已达上限（${p.maxRework} 轮），流水线暂停待人工裁决 · ` + verdict.reason);
+    toast('返工超限', '已达 ' + p.maxRework + ' 轮上限，请查看测试报告后手动继续或验收打回', '⚠');
+    save(); refreshViews();
+    if (drawerTaskId === taskId) renderDrawer(taskId);
+    return;
+  }
+  const first = p.stages.findIndex(s => verdict.targets.includes(s.roleKey));
+  if (first < 0) { th(t, '⚖', '裁决未给出可打回阶段，按通过处理 · ' + verdict.reason); return pipelineDeliver(taskId); }
+  p.round++;
+  p.reworkCtx = { feedback: verdict.feedback || '按测试报告逐条修复', qaReport: String(qa.result || '').slice(0, 6000) };
+  const tname = k => (ROLE_TEMPLATES.find(x => x.key === k) || {}).name || k;
+  for (let i = first; i < p.stages.length; i++) {
+    const hit = verdict.targets.includes(p.stages[i].roleKey);
+    p.stages[i].result = '';
+    p.stages[i].state = hit ? 'rework' : 'pending';
+    p.stages[i].rework = hit;
+  }
+  p.cur = first;
+  th(t, '↩', `测试未通过 · 项目经理打回 ${verdict.targets.map(tname).join('、')}：${verdict.reason}`);
+  addActivity('↩', t.key + ' 测试打回（项目经理裁决）· ' + verdict.targets.map(tname).join('、'));
+  save(); refreshViews();
+  runPipelineStage(taskId);
+}
+
+/* 无 API 裁决引擎时的兜底：按测试报告关键词粗判，保证返工循环不断链 */
+function pipeGateHeuristic(report) {
+  const bad = /(未通过|不通过|测试失败|存在\s*\d+\s*(个)?(问题|缺陷|bug)|有\s*\d+\s*(个)?(问题|缺陷)|FAIL|❌|✕)/i.test(report);
+  return bad
+    ? { action: 'rework', targets: ['be', 'fe'], feedback: '测试发现问题（自动判定）：请逐条对照测试报告修复后重新提测。', reason: '无裁决引擎，按报告失败关键词自动打回' }
+    : { action: 'pass', reason: '无裁决引擎，报告未含失败关键词，按通过处理' };
+}
+
+/* 终段：项目经理汇总全流程产出（final 标记 → 主进程交付落根目录，聚合全流程 diff） */
+function pipelineDeliver(taskId) {
+  const t = byId(taskId); const p = t.pipeline;
+  const role = pipeRoleByKey('pmgr');
+  if (!role || !roleUsable(role)) {
+    /* 项目经理不可用：系统直接聚合各阶段产出进入验收 */
+    p.status = 'done';
+    t.result = p.stages.filter(s => s.result).map(s => `—— ${s.name} ——\n${s.result}`).join('\n\n');
+    th(t, '📦', '流水线完成（项目经理不可用，已直接聚合各阶段产出）');
+    return finishPipeline(taskId, { result: t.result });
+  }
+  /* 幂等：交付总结阶段已存在（如返工后二次交付）则复用，不重复追加 */
+  if (!p.stages.some(s => s.final)) {
+    p.stages.push({ roleKey: 'pmgr', name: '交付总结', goal: '汇总全流程产出，形成最终交付报告', state: 'pending', result: '', runs: 0, final: true });
+  } else {
+    const f = p.stages.find(s => s.final);
+    f.state = 'pending'; f.result = '';
+  }
+  p.cur = p.stages.findIndex(s => s.final);
+  th(t, '📦', '进入交付 · 项目经理汇总全流程产出');
+  save(); refreshViews();
+  runPipelineStage(taskId);
+}
+
+/* 流水线收尾：对齐单任务 done 路径（review / 交付面板 / 累计 diff） */
+function finishPipeline(taskId, evt) {
+  const t = byId(taskId); const p = t.pipeline;
+  p.status = 'done';
+  t.status = 'review';
+  t.pr = '交付 #' + (S().deliverSeq++);
+  t.result = evt.result || t.result || '（无输出）';
+  if (evt.worktree) t.worktree = evt.worktree;
+  if (evt.delivery) {
+    t.delivery = evt.delivery;
+    t.delivery.diffState = evt.delivery.diff ? 'pending' : null;
+  } else if (evt.result && !t.delivery) {
+    /* 项目经理直聚路径（无执行事件）：复用主进程落盘逻辑不可行，仅保留阶段产出聚合文本 */
+  }
+  if (Array.isArray(evt.changes) && evt.changes.length) t.changes = evt.changes;
+  th(t, '🚀', t.pr + ' 流水线交付 · ' + p.stages.filter(s => s.state === 'done').length + ' 个阶段完成');
+  addActivity('🔀', `${t.key} 流水线完成，${t.pr} 等待验收（项目经理统筹）`);
+  toast('流水线完成', t.key + ' 全流程交付已生成，等待验收', '✓');
+  save(); refreshViews();
+  if (drawerTaskId === taskId) renderDrawer(taskId);
 }
 
 /* ============ 团队空间 ============ */
@@ -1703,6 +2490,7 @@ function viewDeliveries() {
         <button class="btn btn-o btn-sm" onclick="previewDelivery('${t.id}')">预览</button>
         ${t.result ? `<button class="btn btn-o btn-sm" onclick="copyDelivery('${t.id}')">复制</button>
         <button class="btn btn-p btn-sm" onclick="downloadDelivery('${t.id}')">下载 .md</button>` : ''}
+        ${t.delivery?.dir ? `<button class="btn btn-o btn-sm" title="在访达中打开交付目录（report.md / changes.patch）" onclick="revealDeliveryDir('${t.id}')">📂 产物</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1711,9 +2499,36 @@ function viewDeliveries() {
 function previewDelivery(id) {
   const t = byId(id);
   openModal(`<div class="modal-head"><h3>${esc(t.title)}</h3><span>${esc(t.pr || t.key)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div class="result-box" style="max-height:56vh;overflow:auto">${mdToHtml(t.result || '（该交付无文本产出）')}</div></div>
+    <div class="modal-body">
+      <div class="result-box" style="max-height:44vh;overflow:auto">${mdToHtml(t.result || '（该交付无文本产出）')}</div>
+      ${t.delivery?.items?.length ? `<div style="font-size:12px;color:var(--ink-dim);margin:10px 0 4px">交付产物：${t.delivery.items.map(i => esc(i.name || i.file)).join(' · ')}
+        ${t.delivery.items.some(i => i.kind === 'log') ? `　<button class="btn btn-o btn-sm" onclick="closeModal();viewSessionLog('${t.id}')">📜 过程日志</button>` : ''}</div>` : ''}
+      <div style="max-height:34vh;overflow:auto">${renderDiffPanel(t, true)}</div>
+    </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
+      ${t.delivery?.dir && window.reins ? `<button class="btn btn-o" onclick="revealDeliveryDir('${t.id}')">📂 产物目录</button>` : ''}
       ${t.result ? `<button class="btn btn-p" onclick="downloadDelivery('${t.id}')">下载 .md</button>` : ''}</div>`);
+}
+function revealDeliveryDir(id) {
+  const t = byId(id);
+  if (t.delivery?.dir && window.reins) window.reins.deliveryReveal(t.delivery.dir);
+  else toast('不可用', '该交付没有落盘产物目录', '⚠');
+}
+/* 过程日志查看（第八轮）：读取 deliveries/<KEY>/session.log，多轮执行追加在同一文件 */
+async function viewSessionLog(id) {
+  const t = byId(id);
+  const it = t?.delivery?.items?.find(i => i.kind === 'log');
+  if (!it || !t.delivery.dir || !window.reins) { toast('不可用', '该任务没有过程日志', '⚠'); return; }
+  const r = await window.reins.deliveryRead(t.delivery.dir, it.file);
+  if (!r.ok) { toast('读取失败', r.error || '', '⚠'); return; }
+  openModal(`<div class="modal-head"><h3>过程日志</h3><span>${esc(t.key)} · session.log</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body">
+      <pre style="max-height:52vh;overflow:auto;font-family:var(--mono);font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-all;background:var(--ink-0,#f6f4f0);border:1px solid var(--line,#e4e0d8);border-radius:8px;padding:12px">${esc(r.text)}</pre>
+    </div>
+    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
+      <button class="btn btn-o" onclick="revealDeliveryDir('${t.id}')">📂 产物目录</button>
+      <button class="btn btn-p" onclick="navigator.clipboard.writeText(window.__sessLog).then(()=>toast('已复制','过程日志已复制到剪贴板','⧉'))">复制全文</button></div>`);
+  window.__sessLog = r.text;
 }
 function copyDelivery(id) {
   const t = byId(id);
@@ -1737,8 +2552,73 @@ function revealWt(id) {
   else toast('不可用', '浏览器预览模式下无法打开访达', '⚠');
 }
 
+/* —— 拟议变更审查（借鉴 HiFox 确认墙）：按文件 diff 展示，验收人显式"确认应用 / 放弃" —— */
+const diffExpanded = new Set();
+function renderDiffLines(t, f) {
+  const max = diffExpanded.has(t.id + '|' + f.path) ? 5000 : 60;
+  const lines = f.lines.slice(0, max).map(l => {
+    const cls = l.startsWith('@@') ? 'dhk' : l.startsWith('+') ? 'dadd' : l.startsWith('-') ? 'ddel' : 'dctx';
+    return `<span class="${cls}">${esc(l) || ' '}</span>`;
+  }).join('');
+  const more = f.lines.length > max
+    ? `<span class="dmore" onclick="expandDiff('${t.id}','${esc(f.path)}')">… 还有 ${f.lines.length - max} 行，点击展开</span>` : '';
+  return `<pre class="dff-lines" style="display:none">${lines}${more}</pre>`;
+}
+function renderDiffPanel(t, readOnly) {
+  const d = t.delivery && t.delivery.diff;
+  if (!d || !d.files || !d.files.length) return '';
+  const total = d.files.reduce((s, f) => ({ a: s.a + f.add, d: s.d + f.del }), { a: 0, d: 0 });
+  const badge = t.delivery.diffState === 'applied' ? '<span class="dff-badge ok">✓ 已应用到仓库</span>'
+    : t.delivery.diffState === 'discarded' ? '<span class="dff-badge no">已放弃</span>'
+    : '<span class="dff-badge warn">未确认写入生效</span>';
+  const filesHtml = d.files.map(f => `
+    <div class="dff-file" onclick="toggleDiffFile(this)">
+      <span class="dff-path">${esc(f.path)}</span>
+      <span class="dff-stat">+${f.add}</span><span class="dff-stat del">−${f.del}</span>
+    </div>${renderDiffLines(t, f)}`).join('');
+  const acts = (readOnly || t.delivery.diffState !== 'pending') ? '' : `
+    <div style="display:flex;gap:9px;margin-top:10px">
+      <button class="btn btn-p btn-sm" onclick="applyDiff('${t.id}')">✓ 确认应用到仓库</button>
+      <button class="btn btn-o btn-sm btn-danger-o" onclick="discardDiff('${t.id}')">✗ 放弃变更</button>
+    </div>`;
+  return `<div class="dff-panel">
+    <div class="dff-head"><b>代码变更</b><span>${d.files.length} 个文件 · <span class="dff-stat">+${total.a}</span> <span class="dff-stat del">−${total.d}</span></span>${badge}</div>
+    ${filesHtml}${acts}
+  </div>`;
+}
+function toggleDiffFile(el) { const nx = el.nextElementSibling; if (nx) nx.style.display = nx.style.display === 'none' ? '' : 'none'; }
+function expandDiff(taskId, p) {
+  diffExpanded.add(taskId + '|' + p);
+  if (drawerOpenOn(taskId)) renderDrawer(taskId);
+  else { const m = document.querySelector('.modal-body .dff-panel'); if (m) { const t = byId(taskId); previewDelivery(taskId); } }
+}
+function applyDiff(id) {
+  const t = byId(id);
+  if (!window.reins) return toast('浏览器模式', '请在客户端内操作', '⚠');
+  window.reins.deliveryApply(t.worktree).then(r => {
+    if (r.ok) {
+      t.delivery.diffState = 'applied';
+      th(t, '✅', '代码变更已应用到仓库（' + r.applied + ' 个文件）');
+      toast('已应用', r.applied + ' 个文件的变更已写入仓库工作区', '✓');
+    } else toast('应用失败', esc(r.message || ''), '⚠');
+    save(); refreshViews(); if (drawerOpenOn(id)) renderDrawer(id);
+  });
+}
+function discardDiff(id) {
+  const t = byId(id);
+  if (!window.reins) return toast('浏览器模式', '请在客户端内操作', '⚠');
+  window.reins.deliveryDiscard(t.worktree).then(r => {
+    if (r.ok) {
+      t.delivery.diffState = 'discarded'; t.worktree = null;
+      th(t, '🗑', '已放弃代码变更（隔离工作区已移除）');
+      toast('已放弃', '代码变更与隔离工作区已清除', '');
+    } else toast('操作失败', esc(r.message || ''), '⚠');
+    save(); refreshViews(); if (drawerOpenOn(id)) renderDrawer(id);
+  });
+}
+
 /* —— 开放集成：任务事件推送到用户配置的 Webhook（桌面客户端内由主进程发送） —— */
-let hookCfg = { webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto' };
+let hookCfg = { webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto', comfyUrl: 'http://127.0.0.1:8188', comfyWorkflow: '', comfyPosNode: '', comfyNegNode: '' };
 function notifyHook(event, task) {
   if (!window.reins || !hookCfg.webhookUrl) return;
   const key = event.split('.')[1];
@@ -1819,6 +2699,8 @@ function heuristicTriage(t) {
 async function runTriage(t) {
   const roster = {
     agents: (O().agents || []).filter(x => x.status !== 'offline').map(x => ({ id: x.id, name: x.name, mode: x.mode })),
+    roles: (O().roles || []).filter(r => r.agentId && (O().agents || []).some(x => x.id === r.agentId && x.status !== 'offline'))
+      .map(r => ({ id: r.id, name: r.name, agentName: (agentById(r.agentId) || {}).name || '' })),
     members: memberNames(),
   };
   /* 引擎链：Jev 决策模型（结构化判断+概率，百毫秒级）→ API 模型 → 本地规则，逐级降级并如实标注 */
@@ -1875,6 +2757,9 @@ function applyTriage(id, s, quiet) {
     if (s.assignee.kind === 'agent') {
       const a = (O().agents || []).find(x => x.id === s.assignee.id) || (O().agents || []).find(x => x.name === s.assignee.name);
       if (a) t.assignee = { kind: 'agent', id: a.id, name: a.name };
+    } else if (s.assignee.kind === 'role') {
+      const r = roleById(s.assignee.id) || (O().roles || []).find(x => x.name === s.assignee.name);
+      if (r) t.assignee = { kind: 'role', id: r.id, name: r.name };
     } else {
       const nm = memberNames().find(n => n === s.assignee.name);
       if (nm) t.assignee = { kind: 'human', name: nm };
@@ -1936,6 +2821,7 @@ $('#modal-mask')?.addEventListener('click', e => { if (e.target.id === 'modal-ma
 function openNewTaskModal() {
   const assigneeOpts = [{ v: '', l: '暂不指派' },
     ...memberNames().map(m => ({ v: 'm:' + m, l: m })),
+    ...(O().roles || []).filter(roleUsable).map(r => ({ v: 'r:' + r.id, l: '☆ ' + r.name })),
     ...O().agents.filter(a => agentUsable(a)).map(a => ({ v: 'a:' + a.id, l: a.name }))];
   openModal(`<div class="modal-head"><h3>新建任务</h3><span>REINS-${S().seq}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
@@ -1949,23 +2835,49 @@ function openNewTaskModal() {
         <div class="f-row"><label>经办人</label>${ds('nt-assignee', assigneeOpts, '', 'ntSyncModel()')}</div>
         <div class="f-row" style="display:flex;align-items:flex-end"><label class="f-check" style="margin-bottom:9px"><input type="checkbox" id="nt-auto" checked> 指派 Agent 后立即启动</label></div>
       </div>
-      <div class="f-row" id="nt-model-row" style="display:none"><label>执行模型</label>${ds('nt-model', [{ v: '', l: '默认模型' }, ...CB_MODELS.map(m => ({ v: m, l: m }))], '')}</div>
+      <div class="f-row" id="nt-pipe-row">
+        <label>流水线</label>
+        <label class="pipe-toggle" id="nt-pipe-wrap">
+          <input type="checkbox" id="nt-pipe" onchange="ntSyncPipe()">
+          <span class="pt-main">
+            <b>🧭 流水线模式 · 虚拟团队自动流转</b>
+            <span>项目经理拆解流程并裁决返工，产品 → 前后端 → 测试接力执行，测试通过后汇总交付</span>
+          </span>
+        </label>
+      </div>
+      <div class="f-row" id="nt-model-row" style="display:none"><label>执行模型</label>${ds('nt-model', [{ v: '', l: '默认模型' }], '')}</div>
       ${(S().repos || []).length || S().repoRoot ? `<div class="f-row"><label>代码仓库（CLI 任务在其隔离工作区执行）</label>${ds('nt-repo', repoOpts(''), '')}</div>` : ''}
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="createTask()">创建任务</button></div>`);
   setTimeout(() => { $('#nt-title')?.focus(); ntSyncModel(); }, 60);
 }
-/* 经办人换成支持选模型的 CLI Agent（codebuddy/workbuddy）时，露出执行模型下拉 */
+/* 经办人换成支持选模型的 CLI Agent 时，露出执行模型下拉并回填该 Agent 的模型列表 */
 function ntSyncModel() {
   const av = $('#nt-assignee')?.value || '';
   const a = av.startsWith('a:') ? agentById(av.slice(2)) : null;
   const row = $('#nt-model-row');
-  if (row) row.style.display = a && a.mode === 'cli' && CLI_CAN_MODEL.includes(a.cliId) ? '' : 'none';
+  const ok = cliCanModel(a);
+  if (row) row.style.display = ok ? '' : 'none';
+  if (ok) {
+    const sel = $('#nt-model');
+    if (sel) sel.innerHTML = `<option value="">${esc(a.cliModel ? a.cliModel + '（Agent 默认）' : '默认模型')}</option>`
+      + modelOptsSync(a).map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+    hydrateModelSelect('nt-model', a, '');
+  }
+}
+/* 流水线开关：勾选后经办人由项目经理统筹，隐藏手工指派 */
+function ntSyncPipe() {
+  const on = !!$('#nt-pipe')?.checked;
+  $('#nt-pipe-wrap')?.classList.toggle('on', on);
+  const sel = $('#nt-assignee');
+  if (sel) { sel.disabled = on; sel.closest('.f-row').style.opacity = on ? 0.55 : 1; }
+  if (on) { const mr = $('#nt-model-row'); if (mr) mr.style.display = 'none'; }
 }
 function createTask() {
   const title = $('#nt-title').value.trim();
   if (!title) { $('#nt-title').style.borderColor = 'var(--red)'; $('#nt-title').focus(); return; }
+  const pipe = !!$('#nt-pipe')?.checked;
   const t = {
     id: 't' + S().seq, key: 'REINS-' + S().seq,
     title, type: $('#nt-type').value, pri: $('#nt-pri').value,
@@ -1974,13 +2886,17 @@ function createTask() {
     runModel: $('#nt-model')?.value || '',
     createdAt: now(), doneAt: null,
   };
-  const av = $('#nt-assignee').value;
-  if (av.startsWith('m:')) t.assignee = { kind: 'human', name: av.slice(2) };
-  else if (av.startsWith('a:')) { const a = agentById(av.slice(2)); t.assignee = { kind: 'agent', id: a.id, name: a.name }; }
+  if (pipe) {
+    t.pipeline = { on: true, status: 'idle', mode: '', stages: null, cur: 0, round: 1, maxRework: 5, stageNo: 0, gate: null, reworkCtx: null };
+  } else {
+    const av = $('#nt-assignee').value;
+    if (av.startsWith('m:')) t.assignee = { kind: 'human', name: av.slice(2) };
+    else if (av.startsWith('a:')) { const a = agentById(av.slice(2)); t.assignee = { kind: 'agent', id: a.id, name: a.name }; }
+  }
   S().tasks.push(t); S().seq++;
-  th(t, '➕', '创建了任务');
-  addActivity('➕', '创建了 ' + t.key + ' ' + t.title);
-  const auto = $('#nt-auto').checked && t.assignee?.kind === 'agent';
+  th(t, '➕', '创建了任务' + (pipe ? '（流水线模式）' : ''));
+  addActivity('➕', '创建了 ' + t.key + ' ' + t.title + (pipe ? '（流水线）' : ''));
+  const auto = $('#nt-auto').checked && (pipe || ['agent', 'role'].includes(t.assignee?.kind));
   save(); closeModal(); refreshViews();
   notifyHook('task.created', t);
   if (auto) startRun(t.id, { byUser: true, openDrawer: true });
@@ -2003,8 +2919,8 @@ function openAgentConfig(agentId) {
         { v: 'local', l: '本机节点（在这台电脑上执行）' },
         { v: 'cloud', l: '云端节点（在设置中配置的服务器上执行）' },
       ], a.runtime === 'cloud' ? 'cloud' : 'local')}</div>
-      ${['codebuddy', 'workbuddy'].includes(a.cliId) ? `<div class="f-row"><label>执行模型（留空用 CLI 默认）</label><input type="text" id="ac-climodel" list="climodel-list" value="${esc(a.cliModel || '')}" placeholder="例如 glm-5.3-flash">
-      <datalist id="climodel-list">${['hy4-preview', 'hy3', 'hy3-x', 'step-5-preview', 'space-bunny', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx', 'glm-5.2', 'glm-5.1', 'glm-5v-turbo', 'minimax-m3-pay', 'minimax-m2.7', 'kimi-k3-2', 'kimi-k2.8-preview', 'kimi-k2.7', 'kimi-k2.6', 'deepseek-v4-pro'].map(m => `<option value="${m}">`).join('')}</datalist></div>` : ''}`
+      ${cliCanModel(a) ? `<div class="f-row"><label>执行模型（留空用 CLI 默认）</label><input type="text" id="ac-climodel" list="climodel-list" value="${esc(a.cliModel || '')}" placeholder="例如 glm-5.3-flash">
+      <datalist id="climodel-list">${modelOptsSync(a).map(m => `<option value="${m}">`).join('')}</datalist></div>` : ''}`
     : `
       <div class="f-2col">
         <div class="f-row"><label>服务商（OpenAI 兼容）</label>${ds('ac-provider', provOpts, a.provider, 'acProviderChanged()')}</div>
@@ -2030,6 +2946,12 @@ function openAgentConfig(agentId) {
       <button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="acSave('${a.id}')">保存</button>
     </div>`);
+  if (cliCanModel(a)) window.reins && window.reins.cliModels(a).then(list => {
+    if (!Array.isArray(list) || !list.length) return;
+    _modelOpts[a.cliId] = list;
+    const dl = $('#climodel-list');
+    if (dl) dl.innerHTML = list.map(m => `<option value="${esc(m)}">`).join('');
+  }).catch(() => { });
 }
 /* 切换服务商：自动带入 Base URL，模型为空时带入预置模型 */
 function acProviderChanged() {
@@ -2061,8 +2983,25 @@ function acCollect(id) {
   a.mode = $('#ac-mode').value;
   a.scenePrompt = $('#ac-scene')?.value.trim() || '';
   if (a.mode === 'cli') {
-    a.cliCommand = $('#ac-cmd')?.value.trim() || a.cliCommand;
-    a.cliTemplate = $('#ac-tpl')?.value.trim() || a.cliTemplate;
+    const cmdVal = $('#ac-cmd')?.value.trim() || '';
+    const oldCmd = a.cliCommand;
+    if (cmdVal) a.cliCommand = cmdVal;
+    const tplVal = $('#ac-tpl')?.value.trim() || '';
+    if (tplVal) a.cliTemplate = tplVal;
+    /* 命令与模板首 token 保持一致：规范态（模板首 token === 旧命令）下改了"本机命令"，
+       同步改写模板首 token（保留其余参数与 {prompt} 段）——实际执行走模板，只改命令不改模板等于没改。
+       模板被用户改成非规范形态（首 token ≠ 旧命令，如 env 包装）则不碰模板 */
+    const tpl = String(a.cliTemplate || '');
+    if (cmdVal && tpl.includes('{prompt}')) {
+      const at = tpl.indexOf('{prompt}');
+      const head = tpl.slice(0, at), tail = tpl.slice(at);
+      const fm = head.trim().match(/^("[^"]*"|'[^']*'|[^\s]+)/);
+      const first = fm ? fm[0].replace(/^["']|["']$/g, '') : '';
+      if (first && first === oldCmd && first !== cmdVal) {
+        const quoted = /\s/.test(cmdVal) ? '"' + cmdVal + '"' : cmdVal;
+        a.cliTemplate = head.trim().replace(/^("[^"]*"|'[^']*'|[^\s]+)/, quoted) + ' ' + tail;
+      }
+    }
     a.runtime = $('#ac-runtime')?.value || 'local';
     if ($('#ac-climodel')) a.cliModel = $('#ac-climodel').value.trim();
   } else if (a.mode === 'api') {
@@ -2081,7 +3020,27 @@ function acTest(id) {
     let r;
     if (a.mode === 'cli') {
       const det = window.reins ? await window.reins.cliDetect([a.cliCommand]) : {};
-      r = det[a.cliCommand] ? { ok: true, message: a.cliCommand + ' 已安装，可执行' } : { ok: false, message: a.cliCommand + ' 未在本机 PATH 中找到' };
+      if (det[a.cliCommand]) {
+        r = { ok: true, message: a.cliCommand + ' 已安装，可执行' };
+      } else {
+        /* 运行时自愈（与主进程 healCliRuntime 同策略）：接入时快照的绝对路径随 CLI 升级/重装失效，
+           按 runtimeId（精确）→ cliId 同族（qoder↔qoder-cn）重解析当前发现结果并回写配置 */
+        const fam = x => String(x || '').replace(/-cn$/, '');
+        const rts = (window.reins ? await window.reins.runtimeDiscover().catch(() => []) : []) || [];
+        const rt = rts.find(x => x.id === a.runtimeId) || rts.find(x => fam(x.cliId) === fam(a.cliId));
+        const det2 = rt && window.reins ? await window.reins.cliDetect([rt.cliCommand]) : {};
+        if (det2[rt.cliCommand]) {
+          Object.assign(a, { runtimeId: rt.id, cliCommand: rt.cliCommand, cliTemplate: rt.cliTemplate, cliEnv: rt.cliEnv || undefined, detected: true });
+          save();
+          /* 同步弹层表单：否则表单还留着旧值，点"保存"会用旧表单把刚自愈的数据覆盖回去（改了又弹回的根因） */
+          const cf = $('#ac-cmd'), tf = $('#ac-tpl');
+          if (cf) cf.value = a.cliCommand;
+          if (tf) tf.value = a.cliTemplate;
+          r = { ok: true, message: '原路径已失效，已自动切换到当前安装：' + rt.cliCommand };
+        } else {
+          r = { ok: false, message: a.cliCommand + ' 未在本机 PATH 中找到' };
+        }
+      }
     } else {
       r = window.reins ? await window.reins.agentTest(a) : { ok: false, message: '浏览器模式无法测试' };
     }
@@ -2133,7 +3092,13 @@ async function openAddAgentModal() {
         if (!el) return;
         const st = el.querySelector('.cli-st');
         st.dataset.st = found[p.cmd] ? 'ok' : 'miss';
-        st.textContent = found[p.cmd] ? '✓ 已安装 · 接入' : '未安装 · 仍可接入';
+        st.textContent = found[p.cmd] ? '✓ 已安装 · 接入' : (p.install ? '未安装 · 点击复制安装命令' : '未安装 · 仍可接入');
+        /* 未安装且有官方安装配方（逆向 HiFox 安装表）：点击状态标签直接复制，不触发卡片接入 */
+        st.style.cursor = found[p.cmd] || !p.install ? '' : 'pointer';
+        st.onclick = found[p.cmd] || !p.install ? null : (ev => {
+          ev.stopPropagation();
+          if (navigator.clipboard) navigator.clipboard.writeText(p.install).then(() => toast('已复制安装命令', '粘贴到终端执行即可：' + p.install, '⌨'));
+        });
       });
     });
   } else {
@@ -2176,6 +3141,7 @@ function addAppRuntime(rtId) {
   O().agents.push({
     id, name: r.label, mode: 'cli',
     cliId: r.cliId, cliCommand: r.cliCommand, cliTemplate: r.cliTemplate,
+    cliEnv: r.cliEnv || undefined, runtimeId: r.id, acp: r.acp || undefined,
     scenePrompt: '', detected: true,
     status: 'idle', taskId: null, done: 0, tokens: 0,
   });
@@ -2450,14 +3416,15 @@ let bootTs = Date.now();
 function updateNodePill() {
   const el = document.getElementById('node-uptime'); if (!el) return;
   const m = Math.max(0, Math.round((Date.now() - bootTs) / 60000));
-  // 时长文案要有宽度上界：超过一天改用「X 天 Y 小时」，避免侧栏胶囊被撑到换行
-  let s;
-  if (m < 1) s = '刚刚启动';
-  else if (m < 60) s = `已运行 ${m} 分钟`;
-  else if (m < 1440) s = `已运行 ${Math.floor(m / 60)} 小时 ${m % 60} 分`;
-  else s = `已运行 ${Math.floor(m / 1440)} 天 ${Math.floor((m % 1440) / 60)} 小时`;
+  // 胶囊文案有宽度上界（去掉「已运行」前缀 + 紧凑单位）；完整时长放悬停 title
+  let s, full;
+  if (m < 1) { s = '刚刚启动'; full = '刚刚启动'; }
+  else if (m < 60) { s = `${m} 分钟`; full = `已运行 ${m} 分钟`; }
+  else if (m < 1440) { s = `${Math.floor(m / 60)} 时 ${m % 60} 分`; full = `已运行 ${Math.floor(m / 60)} 小时 ${m % 60} 分`; }
+  else if (m < 14400) { s = `${Math.floor(m / 1440)} 天 ${Math.floor((m % 1440) / 60)} 时`; full = `已运行 ${Math.floor(m / 1440)} 天 ${Math.floor((m % 1440) / 60)} 小时`; }
+  else { s = `${Math.floor(m / 1440)} 天`; full = `已运行 ${Math.floor(m / 1440)} 天`; }
   el.textContent = s;
-  el.parentElement?.setAttribute('title', '本机节点在线 · ' + s);
+  document.querySelector('.node-pill')?.setAttribute('title', '本机节点在线 · ' + full + '\n桌面客户端保持在线，Agent 才能继续接收并执行任务');
   const nv = document.getElementById('nv-uptime'); if (nv) nv.textContent = s; // 节点视图里的镜像同步刷新
 }
 
@@ -2467,6 +3434,7 @@ function normalizeState(st) {
   if (!st || typeof st !== 'object') return null;
   if (!Array.isArray(st.orgs) || !st.orgs.length) return null;
   st.version = 3;
+  if (!Array.isArray(st.comfyJobs)) st.comfyJobs = [];   // 视频生成历史（全局机器级，不随组织/空间走）
   if (!st.orgs.some(x => x.id === st.activeOrgId)) st.activeOrgId = st.orgs[0].id;
   for (const org of st.orgs) {
     org.name = typeof org.name === 'string' && org.name.trim() ? org.name : '未命名组织';
@@ -2526,6 +3494,14 @@ async function init() {
     }
   } catch (e) { console.error('[boot] 状态数据异常，回退初始数据', e); booted = false; }
   if (!booted) state = seed();
+  // 视频任务历史回填：重启前仍在执行的任务，轮询链路已断、终态不可知，如实标注（产物若已生成仍在 ComfyUI 输出目录）
+  for (const j of (state.comfyJobs || [])) {
+    if (!j || !j.id) continue;
+    if (j.phase === 'submit' || j.phase === 'queue' || j.phase === 'run') {
+      j.phase = 'error'; j.endAt = j.endAt || now(); j.error = 'Reins 重启时任务仍在执行，轮询已中断；若已生成完，产物在 ComfyUI 输出目录（output/video）';
+    }
+    comfyJobs[j.id] = j;
+  }
   save();
 
   // 分步容错：任何一步渲染失败都不阻断后续步骤，避免停在空白壳
@@ -2547,6 +3523,7 @@ async function init() {
 
   // 主进程执行事件 → 更新运行 UI
   window.reins?.onRunEvent(evt => handleRunEvent(evt));
+  window.reins?.onComfyEvent?.(evt => handleComfyEvent(evt));
   window.reins?.getSettings?.().then(s => { if (s) hookCfg = { ...hookCfg, ...s }; }).catch(() => { });
 
   $('#search').addEventListener('input', e => { filters.search = e.target.value; if (curView === 'kanban' || curView === 'list') render(); });
@@ -2569,9 +3546,9 @@ async function init() {
 
   // 恢复/演示：进行中且指派演示引擎的任务自动继续（真实 API 不自动续跑，避免无感知扣费）
   setTimeout(() => {
-    S().tasks.filter(t => t.status === 'doing' && t.assignee?.kind === 'agent' && !runs[t.id])
+    S().tasks.filter(t => t.status === 'doing' && ['agent', 'role'].includes(t.assignee?.kind) && !runs[t.id])
       .forEach((t, i) => {
-        const a = agentById(t.assignee.id);
+        const a = t.assignee.kind === 'role' ? (resolveRoleAgent(t) || {}).agent : agentById(t.assignee.id);
         if (a && a.mode === 'sim') setTimeout(() => {
           if (!runs[t.id]) {
             a.status = 'working'; a.taskId = t.id;
