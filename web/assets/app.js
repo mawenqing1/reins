@@ -2692,6 +2692,8 @@ const comicById = id => (S()?.comics || []).find(c => c.id === id);
 function cmRenderGapLabel(e) {
   if (!e || (!e.baseURL && !e.apiKey)) return '渲染引擎未配置';
   if (!e.baseURL) return '渲染引擎缺服务地址（Base URL）';
+  /* 本地 ComfyUI：无 Key、模型走内嵌工作流，地址在即配齐 */
+  if (e.provider === 'comfy') return '';
   if (!e.apiKey) return '渲染引擎缺 API Key';
   const miss = [];
   if (!e.imageModel) miss.push('图像模型名');
@@ -2880,7 +2882,7 @@ function openNewComicModal() {
         <div class="f-row"><label>渲染引擎（图像 / 视频）</label>
           <div class="cm-engine-line">${reGap
             ? `<span class="warn">${ic('triangle-alert')} ${esc(reGap)}</span><a href="javascript:void 0" onclick="closeModal();switchView('settings')">去设置 →</a>`
-            : `<span class="ok">${ic('check')} ${esc(re.provider === 'zhipu' ? '智谱 CogView · CogVideoX' : '自定义端点')} · 密钥已配置</span>`}</div>
+            : `<span class="ok">${ic('check')} ${esc(re.provider === 'comfy' ? '本地 ComfyUI · FLUX 首帧 + Wan2.2 图生视频（零消耗）' : re.provider === 'zhipu' ? '智谱 CogView · CogVideoX · 密钥已配置' : '自定义端点 · 密钥已配置')}</span>`}</div>
         </div>
       </div>
       ${usable.length ? '' : `<div class="cm-hint">${ic('triangle-alert')} 暂无可用编剧 Agent，<a href="javascript:void 0" onclick="closeModal();switchView('agents')">去接入 →</a>（需 API 模型）</div>`}
@@ -4229,6 +4231,7 @@ async function setClient(key, val) {
 
 /* —— 渲染引擎配置（漫剧图像/视频/配音；独立于 LLM Agent，存 settings.renderEngine） —— */
 const CM_RENDER_PRESETS = {
+  comfy: { label: '本地 ComfyUI（FLUX 首帧 · Wan2.2 图生视频 · 零 API 消耗）', baseURL: 'http://127.0.0.1:8188', imageModel: '', videoModel: '', local: true },
   zhipu: { label: '智谱（CogView · CogVideoX）', baseURL: 'https://open.bigmodel.cn/api/paas/v4', imageModel: 'cogview-4', videoModel: 'cogvideox-3' },
   custom: { label: '自定义（兼容端点）', baseURL: '', imageModel: '', videoModel: '' },
 };
@@ -4243,10 +4246,15 @@ async function hydrateRenderEngineCfg() {
   comicRenderEngine = e;
   const preset = CM_RENDER_PRESETS[e?.provider || 'zhipu'];
   const gap = cmRenderGapLabel(e);   // 完整体检（返工③）：缺模型名也算缺口，按钮与描述一并点名
+  const isComfy = e?.provider === 'comfy';
+  const pill = isComfy ? '<span class="mode-pill" style="background:#e8f1ef;color:#0c6259">本地</span>' : e?.provider === 'custom' ? '<span class="mode-pill api">自定义</span>' : '<span class="mode-pill api">智谱</span>';
+  const desc = isComfy
+    ? `${esc(e?.baseURL || '未配置地址')} · 首帧 FLUX.1-schnell / 视频 Wan2.2 图生视频（内嵌工作流） · 零 API 消耗`
+    : `${esc(e?.baseURL || '未配置地址')} · 图像 ${esc(e?.imageModel || '—')} / 视频 ${esc(e?.videoModel || '—')} · ${e?.apiKey ? '密钥已配置' : '<b style="color:#c05656">密钥未配置</b>'} · 配音 ${e?.voiceModel ? esc(e.voiceModel) : '未启用（可选阶段）'}${gap && e?.baseURL && e?.apiKey ? ` · <b style="color:#c05656">${esc(gap)}</b>` : ''}`;
   box.innerHTML = `<h3 class="set-h">渲染引擎（漫剧 · 图像 / 视频 / 配音）</h3>
     <div class="set-row">
-      <div><b>${esc(preset.label)} <span class="mode-pill api">${e?.provider === 'custom' ? '自定义' : '智谱'}</span></b>
-        <div class="set-desc">${esc(e?.baseURL || '未配置地址')} · 图像 ${esc(e?.imageModel || '—')} / 视频 ${esc(e?.videoModel || '—')} · ${e?.apiKey ? '密钥已配置' : '<b style="color:#c05656">密钥未配置</b>'} · 配音 ${e?.voiceModel ? esc(e.voiceModel) : '未启用（可选阶段）'}${gap && e?.baseURL && e?.apiKey ? ` · <b style="color:#c05656">${esc(gap)}</b>` : ''}</div></div>
+      <div><b>${esc(preset.label)} ${pill}</b>
+        <div class="set-desc">${desc}</div></div>
       <button class="btn btn-o btn-sm" onclick="openRenderEngineModal()">${gap ? '去配置' : '配置'}</button>
     </div>`;
 }
@@ -4256,17 +4264,19 @@ function openRenderEngineModal() {
     <div class="modal-body">
       <div class="f-2col">
         <div class="f-row"><label>服务商预设</label>${ds('re-provider', [
+          { v: 'comfy', l: CM_RENDER_PRESETS.comfy.label },
           { v: 'zhipu', l: CM_RENDER_PRESETS.zhipu.label },
           { v: 'custom', l: CM_RENDER_PRESETS.custom.label },
         ], e.provider || 'zhipu', 'reProviderChanged()')}</div>
-        <div class="f-row"><label>API Key（仅保存在本机）</label><input type="password" id="re-key" value="${esc(e.apiKey || '')}" placeholder="sk-…" autocomplete="off"></div>
+        <div class="f-row" id="re-key-row"><label>API Key（仅保存在本机）</label><input type="password" id="re-key" value="${esc(e.apiKey || '')}" placeholder="sk-…" autocomplete="off"></div>
       </div>
-      <div class="f-row"><label>Base URL（API 根路径）</label><input type="text" id="re-baseurl" value="${esc(e.baseURL || '')}" placeholder="https://open.bigmodel.cn/api/paas/v4"></div>
-      <div class="f-2col">
+      <div class="f-row"><label id="re-baseurl-label">Base URL（API 根路径）</label><input type="text" id="re-baseurl" value="${esc(e.baseURL || '')}" placeholder="https://open.bigmodel.cn/api/paas/v4"></div>
+      <div class="f-2col" id="re-models-row">
         <div class="f-row"><label>图像模型</label><input type="text" id="re-imgmodel" value="${esc(e.imageModel || '')}" placeholder="cogview-4"></div>
         <div class="f-row"><label>视频模型</label><input type="text" id="re-vidmodel" value="${esc(e.videoModel || '')}" placeholder="cogvideox-3"></div>
       </div>
       <div class="f-row"><label>配音模型（可选 · 留空 = 跳过配音阶段）</label><input type="text" id="re-voicemodel" value="${esc(e.voiceModel || '')}" placeholder="例如 cogtts；留空不启用"></div>
+      <div class="set-banner" style="margin:2px 0 0" id="re-comfy-note" style="display:none"></div>
       <div class="set-banner" style="margin:2px 0 0">配置变更只影响之后启动的任务，进行中的任务继续使用启动时的快照。</div>
     </div>
     <div class="modal-foot">
@@ -4274,13 +4284,24 @@ function openRenderEngineModal() {
       <button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="reSave()">保存</button>
     </div>`);
+  reProviderChanged();   // 按当前服务商应用字段显隐/文案
 }
 /* 切换预设带入默认地址与模型（与主进程 setRenderEngine 换服务商语义一致） */
 function reProviderChanged() {
-  const p = CM_RENDER_PRESETS[$('#re-provider')?.value]; if (!p) return;
+  const pv = $('#re-provider')?.value;
+  const p = CM_RENDER_PRESETS[pv]; if (!p) return;
   const bu = $('#re-baseurl'); if (bu) bu.value = p.baseURL;
   const im = $('#re-imgmodel'); if (im && p.imageModel) im.value = p.imageModel;
   const vm = $('#re-vidmodel'); if (vm && p.videoModel) vm.value = p.videoModel;
+  /* 本地 ComfyUI：Key/模型名不需要（内嵌工作流），换文案并收起相关字段 */
+  const comfy = pv === 'comfy';
+  $('#re-key-row').style.display = comfy ? 'none' : '';
+  $('#re-models-row').style.display = comfy ? 'none' : '';
+  $('#re-baseurl-label').textContent = comfy ? 'ComfyUI 服务地址' : 'Base URL（API 根路径）';
+  if (bu) bu.placeholder = comfy ? 'http://127.0.0.1:8188' : 'https://open.bigmodel.cn/api/paas/v4';
+  const note = $('#re-comfy-note');
+  if (note) note.style.display = comfy ? '' : 'none';
+  if (note && comfy) note.textContent = '本地渲染：首帧 FLUX.1-schnell（GGUF）+ 镜头视频 Wan2.2-TI2V-5B 图生视频，工作流由 Reins 内嵌调度，全程零 API 消耗；需 ComfyUI 桌面版在线。';
 }
 function reCollect() {
   return {

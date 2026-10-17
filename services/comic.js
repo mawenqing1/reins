@@ -14,6 +14,7 @@
 
 /* ---------- 渲染引擎预置（图像/视频/语音能力，区别于 chat 的 PROVIDERS） ---------- */
 const RENDER_PROVIDERS = {
+  comfy:  { label: '本地 ComfyUI（FLUX 首帧 · Wan2.2 图生视频）', baseURL: 'http://127.0.0.1:8188', imageModel: 'flux1-schnell-Q4_K_S', videoModel: 'Wan2.2-TI2V-5B-Q4_K_M', voiceModel: '', local: true },
   zhipu:  { label: '智谱（CogView · CogVideoX）', baseURL: 'https://open.bigmodel.cn/api/paas/v4', imageModel: 'cogview-4', videoModel: 'cogvideox-3', voiceModel: '' },
   custom: { label: '自定义（兼容端点）', baseURL: '', imageModel: '', videoModel: '', voiceModel: '' },
 };
@@ -243,11 +244,128 @@ async function chatJson(writer, sys, user, { onDelta, signal, fetchImpl, maxToke
   catch (e) { throw new Error('编剧输出不是合法 JSON：' + raw.slice(0, 120)); }
 }
 
+/* ============ 渲染引擎客户端（本地 ComfyUI，provider === 'comfy'） ============
+   首帧：FLUX.1-schnell GGUF 文生图（4 步 · 数秒出图，零 API 消耗）
+   视频：Wan2.2-TI2V-5B 图生视频（Wan22ImageToVideoLatent 首帧经 VAE 进 latent，无需 clip_vision）
+   工作流内嵌为默认模板：节点 4 = 正向提示词占位，节点 30 = 首帧 LoadImage 占位；
+   提交 POST /prompt → 轮询 GET /history/{id} → /view 取产物；i2v 前先把首帧 /upload/image 回传 */
+const COMFY_WF_IMAGE = {
+  '1': { class_type: 'UnetLoaderGGUF', inputs: { unet_name: 'flux1-schnell-Q4_K_S.gguf' } },
+  '3': { class_type: 'DualCLIPLoader', inputs: { clip_name1: 'clip_l.safetensors', clip_name2: 't5xxl_fp8_e4m3fn_scaled.safetensors', type: 'flux' } },
+  '4': { class_type: 'CLIPTextEncode', inputs: { text: '__PROMPT__', clip: ['3', 0] } },
+  '5': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['3', 0] } },   // schnell 引导 1.0，负向留空
+  '6': { class_type: 'VAELoader', inputs: { vae_name: 'ae.safetensors' } },
+  '7': { class_type: 'EmptySD3LatentImage', inputs: { width: 1024, height: 576, batch_size: 1 } },
+  '8': { class_type: 'KSampler', inputs: { model: ['1', 0], positive: ['4', 0], negative: ['5', 0], latent_image: ['7', 0], seed: 0, control_after_generate: 'randomize', steps: 4, cfg: 1, sampler_name: 'euler', scheduler: 'simple', denoise: 1 } },
+  '9': { class_type: 'VAEDecode', inputs: { samples: ['8', 0], vae: ['6', 0] } },
+  '11': { class_type: 'SaveImage', inputs: { images: ['9', 0], filename_prefix: 'comic/firstframe' } },
+};
+const COMFY_WF_VIDEO = {
+  '1': { class_type: 'UnetLoaderGGUF', inputs: { unet_name: 'Wan2.2-TI2V-5B-Q4_K_M.gguf' } },
+  '2': { class_type: 'ModelSamplingSD3', inputs: { model: ['1', 0], shift: 5 } },
+  '3': { class_type: 'CLIPLoader', inputs: { clip_name: 'umt5_xxl_fp8_e4m3fn_scaled.safetensors', type: 'wan', device: 'default' } },
+  '4': { class_type: 'CLIPTextEncode', inputs: { text: '__PROMPT__', clip: ['3', 0] } },
+  '5': { class_type: 'CLIPTextEncode', inputs: { text: '模糊，低质量，画质差，jpeg压缩残留，变形，畸形肢体，多余手指，残缺，字幕，水印，文字，静止，画面呆滞，色调艳丽，过曝，整体发灰，最差质量', clip: ['3', 0] } },
+  '6': { class_type: 'VAELoader', inputs: { vae_name: 'wan2.2_vae.safetensors' } },
+  '7': { class_type: 'Wan22ImageToVideoLatent', inputs: { vae: ['6', 0], width: 848, height: 480, length: 17, batch_size: 1, start_image: ['30', 0] } },
+  '8': { class_type: 'KSampler', inputs: { model: ['2', 0], positive: ['4', 0], negative: ['5', 0], latent_image: ['7', 0], seed: 0, control_after_generate: 'randomize', steps: 20, cfg: 3.5, sampler_name: 'euler', scheduler: 'simple', denoise: 1 } },
+  '9': { class_type: 'VAEDecode', inputs: { samples: ['8', 0], vae: ['6', 0] } },
+  '10': { class_type: 'CreateVideo', inputs: { images: ['21', 0], fps: 24 } },
+  '11': { class_type: 'SaveVideo', inputs: { video: ['10', 0], filename_prefix: 'video/Comic_i2v', format: 'auto' } },
+  '20': { class_type: 'FrameInterpolationModelLoader', inputs: { model_name: 'rife_v4.26.safetensors' } },
+  '21': { class_type: 'FrameInterpolate', inputs: { interp_model: ['20', 0], images: ['9', 0], multiplier: 3 } },
+  '30': { class_type: 'LoadImage', inputs: { image: '__COMIC_FF__' } },
+};
+const comfyDim = (aspect, dims) => aspect === '9:16' ? dims[1] : aspect === '1:1' ? dims[2] : dims[0];
+
+async function comfySubmit(base, workflow, { signal, fetchImpl }) {
+  /* 不走 fetchRetry：非 2xx 时要读 body 拿节点校验详情（模型缺失/节点接线错可诊断），统一 throw 会丢 */
+  const doFetch = fetchImpl || defaultFetch;
+  const ctrl = signal ? null : null;
+  const resp = await doFetch(base + '/prompt', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: workflow, client_id: 'reins-comic' }),
+  });
+  const d = await resp.json().catch(() => null);
+  if (!resp.ok || !d || !d.prompt_id) {
+    const err = d && (d.error || d.node_errors) ? JSON.stringify(d.error || d.node_errors) : (d && d.error ? '' : 'HTTP ' + resp.status);
+    throw new Error('ComfyUI 提交失败：' + cleanStr(err || '未返回 prompt_id', 200));
+  }
+  return d.prompt_id;
+}
+/* 轮询直到完成；产物 = outputs 中首个含 filename 的文件对象（SaveImage→images / SaveVideo→gifs|videos 通吃） */
+async function comfyWait(base, promptId, { signal, fetchImpl, pollMs = 3000, pollTimeoutMs = 1200000 }) {
+  const deadline = Date.now() + pollTimeoutMs;
+  for (;;) {
+    if (signal && signal.aborted) throw new CancelError();
+    if (Date.now() > deadline) throw new Error('ComfyUI 执行超时（' + Math.round(pollTimeoutMs / 60000) + ' 分钟）');
+    await sleep(pollMs);
+    const resp = await fetchRetry(base + '/history/' + encodeURIComponent(promptId), {}, { signal, timeoutMs: 30000, retries: 3, fetchImpl });
+    const h = await resp.json().catch(() => null);
+    const rec = h && h[promptId];
+    if (!rec) continue;                                     // 还在排队（history 未出现）
+    if (rec.status && rec.status.completed) {
+      if (rec.status.status_str === 'error') throw new Error('ComfyUI 执行失败：' + cleanStr(JSON.stringify(rec.status.messages || ''), 200));
+      for (const out of Object.values(rec.outputs || {})) {
+        for (const v of Object.values(out || {})) {
+          if (Array.isArray(v)) {
+            const f = v.find(x => x && typeof x === 'object' && x.filename);
+            if (f) return f;
+          }
+        }
+      }
+      throw new Error('ComfyUI 已完成但产物里没有文件');
+    }
+  }
+}
+const comfyViewUrl = (base, f) => base + '/view?filename=' + encodeURIComponent(f.filename) + '&subfolder=' + encodeURIComponent(f.subfolder || '') + '&type=' + encodeURIComponent(f.type || 'output');
+/* 首帧图回传 input 目录（LoadImage 只认 input；图像阶段的产物在 output） */
+async function comfyUploadImage(base, bytes, { signal, fetchImpl }) {
+  const fd = new FormData();
+  fd.append('image', new Blob([bytes]), 'comic_firstframe.png');
+  fd.append('overwrite', 'true');
+  const resp = await fetchRetry(base + '/upload/image', { method: 'POST', body: fd }, { signal, timeoutMs: 60000, fetchImpl });
+  const d = await resp.json().catch(() => null);
+  if (!d || !d.name) throw new Error('ComfyUI 首帧上传失败');
+  return d.name;
+}
+
+async function comfyGenImage(render, prompt, { aspect, signal, fetchImpl, pollMs }) {
+  const base = String(render.baseURL).replace(/\/+$/, '');
+  const wf = JSON.parse(JSON.stringify(COMFY_WF_IMAGE));
+  const dim = comfyDim(aspect, [[1024, 576], [576, 1024], [896, 896]]);
+  wf['7'].inputs.width = dim[0]; wf['7'].inputs.height = dim[1];
+  wf['4'].inputs.text = String(prompt || '').slice(0, 2000);
+  const pid = await comfySubmit(base, wf, { signal, fetchImpl });
+  const f = await comfyWait(base, pid, { signal, fetchImpl, pollMs, pollTimeoutMs: 300000 });
+  return { url: comfyViewUrl(base, f) };
+}
+async function comfyGenVideo(render, { prompt, imageUrl, aspect }, { signal, fetchImpl, pollMs }) {
+  const base = String(render.baseURL).replace(/\/+$/, '');
+  const wf = JSON.parse(JSON.stringify(COMFY_WF_VIDEO));
+  const dim = comfyDim(aspect, [[848, 480], [480, 848], [608, 608]]);
+  wf['7'].inputs.width = dim[0]; wf['7'].inputs.height = dim[1];
+  wf['4'].inputs.text = String(prompt || '').slice(0, 2000);
+  if (imageUrl) {
+    /* 首帧是本地 /view URL：取回字节再上传回 input 目录，交给 LoadImage */
+    const imgResp = await fetchRetry(imageUrl, {}, { signal, timeoutMs: 60000, fetchImpl });
+    const bytes = Buffer.from(await imgResp.arrayBuffer());
+    wf['30'].inputs.image = await comfyUploadImage(base, bytes, { signal, fetchImpl });
+  } else {
+    wf['30'].inputs.image = 'comic_firstframe.png';       // 无首帧：沿用上次上传（兜底）
+  }
+  const pid = await comfySubmit(base, wf, { signal, fetchImpl });
+  const f = await comfyWait(base, pid, { signal, fetchImpl, pollMs, pollTimeoutMs: 20 * 60 * 1000 });
+  return { url: comfyViewUrl(base, f), coverUrl: imageUrl || '' };
+}
+
 /* ============ 渲染引擎客户端（智谱协议） ============ */
 /* 比例 → 生成尺寸（模型不支持的尺寸由服务端报错，4xx 不重试直接见错） */
 function sizeOf(aspect) { return aspect === '16:9' ? '1920x1080' : aspect === '1:1' ? '1024x1024' : '1080x1920'; }
 
-async function genImage(render, prompt, { aspect, signal, fetchImpl }) {
+async function genImage(render, prompt, opts) {
+  if (render.provider === 'comfy') return comfyGenImage(render, prompt, opts);
+  const { aspect, signal, fetchImpl } = opts;
   const base = String(render.baseURL).replace(/\/+$/, '');
   const resp = await fetchRetry(base + '/images/generations', {
     method: 'POST',
@@ -261,7 +379,10 @@ async function genImage(render, prompt, { aspect, signal, fetchImpl }) {
 }
 
 /* 异步视频任务：提交 → 轮询直到 SUCCESS/FAIL；默认 3s 一拍、10 分钟封顶 */
-async function genVideo(render, { prompt, imageUrl, aspect, duration }, { signal, fetchImpl, pollMs = 3000, pollTimeoutMs = 600000 }) {
+async function genVideo(render, params, opts) {
+  if (render.provider === 'comfy') return comfyGenVideo(render, params, opts);
+  const { signal, fetchImpl, pollMs = 3000, pollTimeoutMs = 600000 } = opts;
+  const { prompt, imageUrl, aspect, duration } = params;
   const base = String(render.baseURL).replace(/\/+$/, '');
   const body = { model: render.videoModel, prompt: String(prompt || '').slice(0, 2000) };
   if (imageUrl) body.image_url = imageUrl;                       // 有首帧走图生视频，一致性更好
@@ -698,4 +819,5 @@ module.exports = {
   runJob, cancelJob, jobSnapshot,
   /* 测试可见的内部谓词 */
   _predicates: { bibleDone, scriptDone, storyboardDone, shotImageDone, shotVideoDone, shotVoiceDone, assembleDone },
+  _internal: { genImage, genVideo, comfyGenImage, comfyGenVideo, comfySubmit, comfyWait, comfyUploadImage },
 };

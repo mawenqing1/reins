@@ -115,6 +115,26 @@ function create(deps = {}) {
     const e = cfg && typeof cfg === 'object' ? normalizeRenderEngine(cfg) : getRenderEngine();
     if (!e.baseURL) return { ok: false, message: '未配置渲染服务地址（baseURL）' };
     if (!/^https?:\/\//.test(e.baseURL)) return { ok: false, message: '地址需以 http:// 或 https:// 开头' };
+    /* 本地 ComfyUI：探活 /system_stats 即通（无需 Key，零消耗） */
+    if (e.provider === 'comfy') {
+      const doFetch = fetchImpl || pfetch;
+      try {
+        const resp = await doFetch(e.baseURL.replace(/\/+$/, '') + '/system_stats', { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) return { ok: false, message: 'ComfyUI HTTP ' + resp.status };
+        const d = await resp.json().catch(() => ({}));
+        const v = d && d.system && d.system.comfyui_version ? ' · v' + String(d.system.comfyui_version).slice(0, 12) : '';
+        /* 模型就绪检查：ComfyUI 实时扫描模型目录，缺失（下载中/未装）会点名，避免跑到首帧才失败 */
+        const need = { 'flux1-schnell（首帧）': 'flux1-schnell', 'Wan2.2-TI2V（视频）': 'Wan2.2-TI2V-5B' };
+        const missing = [];
+        try {
+          const oi = await doFetch(e.baseURL.replace(/\/+$/, '') + '/object_info/UnetLoaderGGUF', { signal: AbortSignal.timeout(8000) });
+          const list = String(JSON.stringify(await oi.json().catch(() => ({}))));
+          for (const [label, key] of Object.entries(need)) if (!list.includes(key)) missing.push(label);
+        } catch (err) { /* object_info 拿不到只影响就绪提示，不影响连通判定 */ }
+        const missMsg = missing.length ? '；未就绪：' + missing.join('、') + '（模型下载中或未安装）' : '；模型全部就绪';
+        return { ok: true, message: 'ComfyUI 在线' + v + missMsg };
+      } catch (err) { return { ok: false, message: '连不上 ComfyUI（' + (err.name === 'TimeoutError' ? '超时 8s' : err.message) + '）：请确认 ComfyUI 桌面版已启动' }; }
+    }
     if (!e.apiKey) return { ok: false, message: '未配置 API Key' };
     const doFetch = fetchImpl || pfetch;
     const ctrl = new AbortController();
@@ -163,6 +183,11 @@ function create(deps = {}) {
     const st = comic.STAGES.find(x => x.id === scope.stage);
     const target = st ? `「${st.label}」阶段` : '首帧 / 视频（及配音）渲染';
     const where = '设置 → 渲染引擎';
+    /* 本地 ComfyUI：无 Key、模型走内嵌工作流，只需服务地址在线 */
+    if (render.provider === 'comfy') {
+      if (!render.baseURL) return `本地 ComfyUI 未配置地址：${target}需要。请到「${where}」填写服务地址（默认 http://127.0.0.1:8188），并确保 ComfyUI 正在运行`;
+      return null;
+    }
     if (!render.baseURL && !render.apiKey)
       return `渲染引擎未配置：${target}需要图像 / 视频生成服务。请到「${where}」填写服务地址（Base URL，如 https://open.bigmodel.cn/api/paas/v4）与 API Key 后重试`;
     if (!render.baseURL)
