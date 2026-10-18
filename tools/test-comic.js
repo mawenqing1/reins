@@ -101,7 +101,8 @@ function makeFetch(behavior) {
 }
 
 const WRITER = { baseURL: 'http://mock.test/v1', apiKey: 'k-writer', model: 'glm-mock' };
-const RENDER = { baseURL: 'http://mock.test/v1', apiKey: 'k-render', imageModel: 'cogview-mock', videoModel: 'cogvideox-mock', voiceModel: 'tts-mock' };
+const RENDER = { provider: 'custom', baseURL: 'http://mock.test/v1', apiKey: 'k-render', imageModel: 'cogview-mock', videoModel: 'cogvideox-mock' };
+const VOICE = { preset: 'custom', baseURL: 'http://mock.test/v1', model: 'tts-mock', voice: 'zf_001' };
 const audioDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reins-comic-test-'));
 
 function collect(events) { return e => events.push(e); }
@@ -163,10 +164,10 @@ console.log('\n[2] 全流程 bible→…→assemble（含轮询/配音落盘/合
   const c = created.comic;
   const events = [];
   const fetchImpl = makeFetch({});
-  const start = comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER }, collect(events), { fetchImpl, pollMs: 1, audioDir, concurrency: 3 });
+  const start = comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER, voice: VOICE }, collect(events), { fetchImpl, pollMs: 1, audioDir, concurrency: 3 });
   ok(start.ok, 'runJob 预检通过并启动');
   ok(comic.jobSnapshot(c.id) && comic.jobSnapshot(c.id).running === true, 'jobSnapshot 运行中可见');
-  const dup = comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER }, () => { }, { fetchImpl });
+  const dup = comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER, voice: VOICE }, () => { }, { fetchImpl });
   ok(!dup.ok, '重复启动被拒绝');
 
   await waitJobSync(events);
@@ -186,7 +187,7 @@ console.log('\n[2] 全流程 bible→…→assemble（含轮询/配音落盘/合
   // 断点续跑：已完成的全流程再跑一遍，不应再触发任何 LLM/渲染调用
   const before = fetchImpl.calls.length;
   const events2 = [];
-  comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER }, collect(events2), { fetchImpl, pollMs: 1, audioDir });
+  comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER, voice: VOICE }, collect(events2), { fetchImpl, pollMs: 1, audioDir });
   await waitJobSync(events2);
   ok(saw(events2, 'done') && fetchImpl.calls.length === before, '幂等续跑：全部已完成，零额外请求');
 }
@@ -199,7 +200,7 @@ console.log('\n[3] 单镜头失败隔离');
   const c = created.comic;
   const events = [];
   const fetchImpl = makeFetch({ failShot2Video: true });
-  comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER }, collect(events), { fetchImpl, pollMs: 1, audioDir });
+  comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER, voice: VOICE }, collect(events), { fetchImpl, pollMs: 1, audioDir });
   await waitJobSync(events);
   const ep = c.episodes[0];
   ok(saw(events, 'done'), '失败不阻断：仍收到 done（summary 携带失败清单）');
@@ -211,7 +212,7 @@ console.log('\n[3] 单镜头失败隔离');
   // 单镜头重跑：只重跑镜头 2 的 video 阶段
   const events3 = [];
   const fetchImpl2 = makeFetch({});
-  comic.runJob({ comic: c, scope: { episodeId: ep.id, shotId: ep.shots[1].id, stage: 'video' } }, { writer: WRITER, render: RENDER }, collect(events3), { fetchImpl: fetchImpl2, pollMs: 1, audioDir });
+  comic.runJob({ comic: c, scope: { episodeId: ep.id, shotId: ep.shots[1].id, stage: 'video' } }, { writer: WRITER, render: RENDER, voice: VOICE }, collect(events3), { fetchImpl: fetchImpl2, pollMs: 1, audioDir });
   await waitJobSync(events3);
   ok(saw(events3, 'done') && ep.shots[1].videoUrl && !ep.shots[1].err, '单镜头重跑成功');
   const llmCalls = fetchImpl2.calls.filter(x => x.url.endsWith('/chat/completions')).length;
@@ -231,7 +232,7 @@ console.log('\n[4] 终止（cancel → paused）');
   const c = created.comic;
   const events = [];
   const fetchImpl = makeFetch({ pollCount: 100000 });   // 视频永远 PROCESSING，卡在轮询
-  comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER }, collect(events), { fetchImpl, pollMs: 5, audioDir });
+  comic.runJob({ comic: c, scope: {} }, { writer: WRITER, render: RENDER, voice: VOICE }, collect(events), { fetchImpl, pollMs: 5, audioDir });
   // 等视频阶段开始后取消
   await waitJob(events, evs => evs.some(e => e.stage === 'video' && e.type === 'stage' && e.state === 'start'));
   ok(comic.cancelJob(c.id) === true, 'cancelJob 命中运行中任务');
@@ -249,9 +250,9 @@ console.log('\n[5] 引擎缺失预检');
   const r = comic.runJob({ comic: created.comic, scope: {} }, { writer: WRITER }, collect(events));
   ok(!r.ok && r.error.includes('渲染引擎'), '缺 render 引擎被预检拦截');
   ok(saw(events, 'error'), '预检失败也发 error 事件（供 UI 提示）');
-  const r2 = comic.runJob({ comic: created.comic, scope: { stage: 'nope' } }, { writer: WRITER, render: RENDER }, () => { });
+  const r2 = comic.runJob({ comic: created.comic, scope: { stage: 'nope' } }, { writer: WRITER, render: RENDER, voice: VOICE }, () => { });
   ok(!r2.ok && r2.error.includes('未知阶段'), '非法 stage 拦截');
-  const r3 = comic.runJob({ comic: created.comic, scope: { shotId: 'shX', stage: 'video' } }, { writer: WRITER, render: RENDER }, () => { });
+  const r3 = comic.runJob({ comic: created.comic, scope: { shotId: 'shX', stage: 'video' } }, { writer: WRITER, render: RENDER, voice: VOICE }, () => { });
   ok(!r3.ok && r3.error.includes('剧集'), 'shotId 缺 episodeId 拦截');
   /* REINS-126 返工③：渲染引擎未配时逐字段点名（缺什么、影响哪个阶段、去哪配） */
   const r4 = comic.runJob({ comic: created.comic, scope: {} }, { writer: WRITER, render: { ...RENDER, baseURL: '' } }, () => { });

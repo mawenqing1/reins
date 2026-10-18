@@ -19,6 +19,35 @@ const RENDER_PROVIDERS = {
   custom: { label: '自定义（兼容端点）', baseURL: '', imageModel: '', videoModel: '', voiceModel: '' },
 };
 
+/* ---------- 配音引擎预置（独立于渲染引擎：任何说 OpenAI /audio/speech 协议的 TTS 都能接，本地免费） ---------- */
+/* 内置音色表对应 ~/reins-tts 的 Kokoro v1.1-zh 扩展音色包（zf_xxx 女 / zm_xxx 男 编号）；
+   标签按基频与语速实测：女声 180-226Hz、男声 109-205Hz */
+const KOKORO_ZH_VOICES = [
+  ['zf_003', '女声 · 清亮年轻'],
+  ['zf_001', '女声 · 干练利落'],
+  ['zf_017', '女声 · 成熟知性'],
+  ['zf_049', '女声 · 从容舒缓'],
+  ['zm_010', '男声 · 明亮青年'],
+  ['zm_009', '男声 · 沉稳青年'],
+  ['zm_029', '男声 · 低沉磁性'],
+  ['zm_020', '男声 · 少年感'],
+];
+const VOICE_ENGINE_PRESETS = {
+  kokoro: { label: '本地 TTS（Kokoro · 中文音色，零消耗）', baseURL: 'http://127.0.0.1:8884/v1', apiKey: '', model: 'kokoro', voice: 'zf_001', voices: '' },
+  custom: { label: '自定义（OpenAI 兼容 /audio/speech）', baseURL: '', apiKey: '', model: '', voice: '', voices: '' },
+};
+/* 音色表：配置里voices（"id=描述,…"）优先；留空回落 Kokoro 中文内置表；custom 且未填则无表（不注入提示词） */
+function parseVoiceTable(voice) {
+  const raw = String((voice && voice.voices) || '').trim();
+  if (raw) {
+    const rows = raw.split(/[,，\n]/).map(x => x.split('=')).filter(p => p[0] && p[0].trim())
+      .map(p => [p[0].trim(), (p[1] || '').trim()]);
+    if (rows.length) return rows;
+  }
+  if (voice && voice.preset === 'kokoro') return KOKORO_ZH_VOICES;
+  return null;
+}
+
 /* ---------- 流水线阶段定义（顺序即依赖顺序） ---------- */
 const STAGES = [
   { id: 'bible',      label: '设定', per: 'project',  kind: 'llm' },
@@ -107,7 +136,7 @@ function normalizeBible(b) {
   return { logline: cleanStr(b.logline, 200), style: cleanStr(b.style, 120), characters: chars, scenes };
 }
 
-/* 镜头：{ id, index, desc, dialogue, camera, duration,
+/* 镜头：{ id, index, desc, who, dialogue, camera, duration,
           imagePrompt, motionPrompt, imageUrl, videoUrl, coverUrl, audioUrl, err, updatedAt } */
 function normalizeShot(s, i) {
   const url = v => typeof v === 'string' ? v.slice(0, 2000) : '';
@@ -115,6 +144,7 @@ function normalizeShot(s, i) {
     id: String(s && s.id || newId('sh')),
     index: clampInt(s && s.index, 1, 999, i + 1),
     desc: cleanStr(s && s.desc, 400),
+    who: cleanStr(s && s.who, 24),
     dialogue: String((s && s.dialogue) || '').trim().slice(0, 300),
     camera: cleanStr(s && s.camera, 40),
     duration: clampInt(s && s.duration, 2, 10, 5),
@@ -424,13 +454,18 @@ async function genVideo(render, params, opts) {
   }
 }
 
-/* 配音：POST /audio/speech 返回音频二进制，落盘到 opts.audioDir（未配置则该阶段自动跳过） */
-async function genVoice(render, text, destPath, { signal, fetchImpl }) {
-  const base = String(render.baseURL).replace(/\/+$/, '');
+/* 配音：走独立配音引擎（OpenAI 兼容 /audio/speech，本地 TTS 或云端均可），落盘到 opts.audioDir。
+   voiceId 为该镜头角色对应的音色 id（来自设定 characters[].voice），缺省回落引擎默认音色 */
+async function genVoice(voice, text, destPath, { signal, fetchImpl, voiceId } = {}) {
+  if (!voice || !voice.baseURL || !voice.model) throw new Error('未配置配音引擎（服务地址与模型名）');
+  const base = String(voice.baseURL).replace(/\/+$/, '');
+  const vid = String(voiceId || voice.voice || '').trim();
+  const headers = { 'Content-Type': 'application/json' };
+  if (voice.apiKey) headers.Authorization = 'Bearer ' + voice.apiKey;   // 本地 TTS 通常免鉴权
   const resp = await fetchRetry(base + '/audio/speech', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + render.apiKey },
-    body: JSON.stringify({ model: render.voiceModel, input: String(text).slice(0, 500) }),
+    headers,
+    body: JSON.stringify({ model: voice.model, input: String(text).slice(0, 500), ...(vid ? { voice: vid } : {}) }),
   }, { signal, timeoutMs: 120000, fetchImpl });
   const buf = Buffer.from(await resp.arrayBuffer());
   if (!buf.length) throw new Error('配音返回空音频');
@@ -441,27 +476,31 @@ async function genVoice(render, text, destPath, { signal, fetchImpl }) {
 }
 
 /* ============ 阶段实现 ============ */
-function biblePrompt(c) {
+function biblePrompt(c, voiceTable) {
   const sys = [
     '你是漫剧制片助手。根据题材与要求产出世界观与角色设定，供后续每镜头生成使用。',
     '只输出一个 JSON 对象，不要任何其他文字、不要代码块标记。格式：',
     '{"logline":"一句话故事","style":"画面风格关键词（中文逗号分隔）","characters":[{"name":"角色名","role":"主角/配角/反派","look":"外貌发型服装关键词，用于保持每镜头形象一致","voice":"音色描述"}],"scenes":[{"name":"场景名","look":"场景视觉关键词"}]}',
     '角色 2-6 个、场景 2-6 个；look 关键词面向图像生成模型，具体、可画。',
-  ].join('\n');
-  const user = [
+  ];
+  /* 配音引擎启用且带音色表：角色的 voice 从音色表挑 id，后续每镜头按说话角色选音色 */
+  if (voiceTable && voiceTable.length) {
+    sys.push('【配音音色】characters[].voice 不写描述，改为从下列音色 id 中为每个角色挑选最贴合的一个（只能用表内 id，原样填写）：'
+      + voiceTable.map(([id, desc]) => `${id}（${desc}）`).join('、'));
+  }
+  return { sys: sys.join('\n'), user: [
     `【漫剧】${c.title}`,
     c.theme ? `【题材/故事方向】\n${c.theme}` : '【题材/故事方向】（自由发挥，题材自定）',
     c.style ? `【画风偏好】${c.style}` : '',
     `【体量】${c.episodes.length} 集，每集约 ${c.shotsPer} 个镜头（竖屏短剧节奏）`,
-  ].filter(Boolean).join('\n\n');
-  return { sys, user };
+  ].filter(Boolean).join('\n\n') };
 }
 
 function scriptPrompt(c, ep) {
   const sys = [
     '你是漫剧编剧。为指定的一集写剧本并直接拆成镜头。只输出一个 JSON 对象，不要任何其他文字：',
-    '{"title":"本集标题","synopsis":"本集梗概（80字内）","shots":[{"desc":"画面描述（一个动作或事件）","dialogue":"台词（没有旁白台词用空字符串）","camera":"景别与运镜，如：近景/中景/推镜头","duration":5}]}',
-    `每集 ${Math.max(4, Math.min(16, c.shotsPer))} 个镜头上下可浮动；duration 为 3-10 的整数秒；剧情要有钩子与结尾悬念。`,
+    '{"title":"本集标题","synopsis":"本集梗概（80字内）","shots":[{"desc":"画面描述（一个动作或事件）","who":"本镜头台词的说话者角色名（旁白写 旁白，无台词写空字符串）","dialogue":"台词（没有旁白台词用空字符串）","camera":"景别与运镜，如：近景/中景/推镜头","duration":5}]}',
+    `每集 ${Math.max(4, Math.min(16, c.shotsPer))} 个镜头上下可浮动；duration 为 3-10 的整数秒；剧情要有钩子与结尾悬念；who 必须是设定里出现过的角色名或"旁白"。`,
   ].join('\n');
   const user = [
     '【世界观与角色设定】\n' + JSON.stringify(c.bible, null, 0),
@@ -583,6 +622,10 @@ function precheck(job, engines) {
       if (!r.baseURL) return { ok: false, error: `渲染引擎缺少服务地址（Base URL）：${target}需要，请到「设置 → 渲染引擎」填写 API 根路径` };
       if (!r.apiKey) return { ok: false, error: `渲染引擎缺少 API Key：${target}需要，请到「设置 → 渲染引擎」填写` };
     }
+    /* 配音独立引擎（可选阶段）：显式单跑配音时才强校验 */
+    const v = engines.voice || {};
+    if (scope.stage === 'voice' && !(v.baseURL && v.model))
+      return { ok: false, error: '配音引擎未配置：请到「设置 → 配音引擎」填写服务地址与模型名（本地 TTS 全程免费）；不配置时配音阶段自动跳过' };
   }
   if (scope.episodeId && !comic.episodes.some(e => e.id === scope.episodeId)) return { ok: false, error: '剧集不存在：' + scope.episodeId };
   if (scope.shotId) {
@@ -653,10 +696,23 @@ async function executeJob(ctx, comic, scope, engines, onEvent, opts) {
   };
 
   const writer = engines.writer, render = engines.render;
+  const voice = engines.voice || null;   // 配音引擎独立于渲染引擎（本地 TTS / 云端均可，可选）
   const fetchImpl = opts.fetchImpl;
   const pollMs = opts.pollMs || 3000;
   const concurrency = clampInt(opts.concurrency, 1, 4, 2);
-  const voiceEnabled = !!(render && render.voiceModel && opts.audioDir);
+  const voiceEnabled = !!(voice && voice.baseURL && voice.model && opts.audioDir);
+  const voiceTable = voiceEnabled ? parseVoiceTable(voice) : null;   // 音色表：注入设定提示词，角色选 id
+  /* 镜头说话者 → 音色 id：命中音色表用角色音色，否则回落引擎默认音色 */
+  const shotVoiceId = s => {
+    const who = String(s.who || '').trim();
+    if (!who || who === '旁白') return '';
+    const ch = (comic.bible && Array.isArray(comic.bible.characters) ? comic.bible.characters : [])
+      .find(x => x && who.includes(String(x.name || '').slice(0, 4)) || String(x && x.name || '').includes(who));
+    const v = ch ? String(ch.voice || '').trim() : '';
+    if (!v) return '';
+    if (!voiceTable || voiceTable.some(([id]) => id === v)) return v;
+    return /^[a-z][a-z0-9_-]{1,40}$/.test(v) ? v : '';   // 无表的自定义引擎：像 id 才透传，描述性文字不透传
+  };
 
   /* 进度：以“工作单元”计 —— bible 1 + 每集(script 1 + storyboard 1 + 镜头×(image+video+voice) + assemble 1) */
   const eps = scope.episodeId ? comic.episodes.filter(e => e.id === scope.episodeId) : comic.episodes;
@@ -680,7 +736,7 @@ async function executeJob(ctx, comic, scope, engines, onEvent, opts) {
     /* ---- 1. 设定（bible） ---- */
     if (need('bible') && (scope.stage === 'bible' || scope.force || !bibleDone(comic))) {
       emit({ stage: 'bible', type: 'stage', state: 'start' });
-      const p = biblePrompt(comic);
+      const p = biblePrompt(comic, voiceTable);
       const b = await guard(() => chatJson(writer, p.sys, p.user, {
         onDelta: d => emit({ stage: 'bible', type: 'delta', text: d }), signal: ctx.ac.signal, fetchImpl,
       }));
@@ -773,11 +829,11 @@ async function executeJob(ctx, comic, scope, engines, onEvent, opts) {
       if (voiceEnabled) ranShotStage = (await shotStage('voice', shotVoiceDone, async s => {
         if (!s.dialogue) return {};                                 // 无台词镜头无需配音
         const fs = require('fs'), path = require('path');
-        const f = path.join(opts.audioDir, comic.id, ep.id, `shot-${pad2(s.index)}.mp3`);
-        const { bytes } = await genVoice(render, s.dialogue, f, { signal: ctx.ac.signal, fetchImpl });
+        const f = path.join(opts.audioDir, comic.id, ep.id, `shot-${pad2(s.index)}.wav`);
+        const { bytes } = await genVoice(voice, s.dialogue, f, { signal: ctx.ac.signal, fetchImpl, voiceId: shotVoiceId(s) });
         return { audioUrl: f, audioBytes: bytes };
       })) || ranShotStage;
-      else if (need('voice') && !scope.stage && render && render.voiceModel && !opts.audioDir) {
+      else if (need('voice') && !scope.stage && voice && voice.baseURL && voice.model && !opts.audioDir) {
         emit({ stage: 'voice', episodeId: ep.id, type: 'note', text: '配音阶段跳过：未配置音频输出目录' });
       }
 
@@ -825,10 +881,10 @@ async function executeJob(ctx, comic, scope, engines, onEvent, opts) {
 }
 
 module.exports = {
-  RENDER_PROVIDERS, STAGES, STAGE_IDS,
+  RENDER_PROVIDERS, VOICE_ENGINE_PRESETS, KOKORO_ZH_VOICES, STAGES, STAGE_IDS,
   createComic, normalizeComic, normalizeEpisode, normalizeShot, buildPackage,
   runJob, cancelJob, jobSnapshot,
   /* 测试可见的内部谓词 */
   _predicates: { bibleDone, scriptDone, storyboardDone, shotImageDone, shotVideoDone, shotVoiceDone, assembleDone },
-  _internal: { genImage, genVideo, comfyGenImage, comfyGenVideo, comfySubmit, comfyWait, comfyUploadImage, precheck },
+  _internal: { genImage, genVideo, genVoice, comfyGenImage, comfyGenVideo, comfySubmit, comfyWait, comfyUploadImage, precheck, parseVoiceTable, biblePrompt, scriptPrompt },
 };

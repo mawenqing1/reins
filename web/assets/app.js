@@ -2679,6 +2679,7 @@ let curComicId = null;          // 详情页路由（隐藏视图 comic-detail�
 const cmExpand = {};            // episodeId -> 是否展开镜头网格
 const cmSeqSeen = {};           // comicId -> 已应用的最大事件序号（乱序事件丢弃）
 let comicRenderEngine = null;   // 渲染引擎配置快照（新建表单 / 设置页显示用）
+let comicVoiceEngine = null;    // 配音引擎配置快照（可选 · 独立配置）
 let cmLogBuf = [];              // 详情页运行日志行 [cls, text, key?]；key 行为流式缓冲
 let cmShotCtx = null;           // 镜头预览模态上下文（复制提示词用）
 let cmPackCtx = null;           // 合成包模态上下文（复制/下载用）
@@ -2891,7 +2892,7 @@ function openNewComicModal() {
         </div>
       </div>
       ${usable.length ? '' : `<div class="cm-hint">${ic('triangle-alert')} 暂无可用编剧 Agent，<a href="javascript:void 0" onclick="closeModal();switchView('agents')">去接入 →</a>（需 API 模型）</div>`}
-      <div class="set-banner" style="margin:2px 0 0">生成会消耗图像 / 视频 API 额度；配音为可选阶段，渲染引擎未配置配音模型时自动跳过。</div>
+      <div class="set-banner" style="margin:2px 0 0">图像 / 视频走上方渲染引擎（本地 ComfyUI 零消耗）；配音为可选阶段，在「设置 → 配音引擎」单独配置（本地 TTS 免费），未配置时自动跳过。</div>
     </div>
     <div class="modal-foot">
       <a class="lnk" style="margin-right:auto;font-size:12px;cursor:pointer" href="javascript:void 0" onclick="cmCreate(false)">仅创建草稿</a>
@@ -4160,7 +4161,7 @@ function createPrompt() {
 function viewSettings() {
   return `<div class="view-head"><h2>设置</h2><p>模型与密钥 · 客户端偏好 · 数据</p></div>
     <div style="max-width:720px">
-      <div class="panel" id="agents-cfg-panel" style="margin-bottom:14px"><h3 class="set-h" style="margin-top:0">模型与密钥</h3><div id="agents-cfg">载入中…</div><div id="re-cfg"></div></div>
+      <div class="panel" id="agents-cfg-panel" style="margin-bottom:14px"><h3 class="set-h" style="margin-top:0">模型与密钥</h3><div id="agents-cfg">载入中…</div><div id="re-cfg"></div><div id="vo-cfg"></div></div>
       <div id="set-panel" class="panel">载入中…</div>
     </div>`;
 }
@@ -4180,6 +4181,7 @@ function renderAgentsCfg() {
 async function hydrateSettings() {
   renderAgentsCfg();
   hydrateRenderEngineCfg();
+  hydrateVoiceEngineCfg();
   const box = document.getElementById('set-panel'); if (!box) return;
   let s = null;
   if (window.reins) { try { s = await window.reins.getSettings(); } catch (e) { } }
@@ -4286,8 +4288,8 @@ async function hydrateRenderEngineCfg() {
   const pill = isComfy ? '<span class="mode-pill" style="background:#e8f1ef;color:#0c6259">本地</span>' : e?.provider === 'custom' ? '<span class="mode-pill api">自定义</span>' : '<span class="mode-pill api">智谱</span>';
   const desc = isComfy
     ? `${esc(e?.baseURL || '未配置地址')} · 首帧 FLUX.1-schnell / 视频 Wan2.2 图生视频（内嵌工作流） · 零 API 消耗`
-    : `${esc(e?.baseURL || '未配置地址')} · 图像 ${esc(e?.imageModel || '—')} / 视频 ${esc(e?.videoModel || '—')} · ${e?.apiKey ? '密钥已配置' : '<b style="color:#c05656">密钥未配置</b>'} · 配音 ${e?.voiceModel ? esc(e.voiceModel) : '未启用（可选阶段）'}${gap && e?.baseURL && e?.apiKey ? ` · <b style="color:#c05656">${esc(gap)}</b>` : ''}`;
-  box.innerHTML = `<h3 class="set-h">渲染引擎（漫剧 · 图像 / 视频 / 配音）</h3>
+    : `${esc(e?.baseURL || '未配置地址')} · 图像 ${esc(e?.imageModel || '—')} / 视频 ${esc(e?.videoModel || '—')} · ${e?.apiKey ? '密钥已配置' : '<b style="color:#c05656">密钥未配置</b>'}${gap && e?.baseURL && e?.apiKey ? ` · <b style="color:#c05656">${esc(gap)}</b>` : ''}`;
+  box.innerHTML = `<h3 class="set-h">渲染引擎（漫剧 · 图像 / 视频）</h3>
     <div class="set-row">
       <div><b>${esc(preset.label)} ${pill}</b>
         <div class="set-desc">${desc}</div></div>
@@ -4295,8 +4297,8 @@ async function hydrateRenderEngineCfg() {
     </div>`;
 }
 function openRenderEngineModal() {
-  const e = comicRenderEngine || { provider: 'zhipu', baseURL: '', apiKey: '', imageModel: '', videoModel: '', voiceModel: '' };
-  openModal(`<div class="modal-head"><h3>渲染引擎</h3><span>漫剧 · 图像 / 视频 / 配音</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+  const e = comicRenderEngine || { provider: 'zhipu', baseURL: '', apiKey: '', imageModel: '', videoModel: '' };
+  openModal(`<div class="modal-head"><h3>渲染引擎</h3><span>漫剧 · 图像 / 视频</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-2col">
         <div class="f-row"><label>服务商预设</label>${ds('re-provider', [
@@ -4311,9 +4313,7 @@ function openRenderEngineModal() {
         <div class="f-row"><label>图像模型</label><input type="text" id="re-imgmodel" value="${esc(e.imageModel || '')}" placeholder="cogview-4"></div>
         <div class="f-row"><label>视频模型</label><input type="text" id="re-vidmodel" value="${esc(e.videoModel || '')}" placeholder="cogvideox-3"></div>
       </div>
-      <div class="f-row"><label>配音模型（可选 · 留空 = 跳过配音阶段）</label><input type="text" id="re-voicemodel" value="${esc(e.voiceModel || '')}" placeholder="例如 cogtts；留空不启用"></div>
-      <div class="set-banner" style="margin:2px 0 0" id="re-comfy-note" style="display:none"></div>
-      <div class="set-banner" style="margin:2px 0 0">配置变更只影响之后启动的任务，进行中的任务继续使用启动时的快照。</div>
+      <div class="set-banner" style="margin:2px 0 0">配音已独立为「配音引擎」单独配置（设置页下一项）；配置变更只影响之后启动的任务。</div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-o" onclick="reTest()">测试连接</button><span style="flex:1"></span>
@@ -4346,7 +4346,6 @@ function reCollect() {
     apiKey: $('#re-key')?.value.trim() || '',
     imageModel: $('#re-imgmodel')?.value.trim() || '',
     videoModel: $('#re-vidmodel')?.value.trim() || '',
-    voiceModel: $('#re-voicemodel')?.value.trim() || '',
   };
 }
 async function reSave() {
@@ -4362,6 +4361,92 @@ async function reTest() {
   toast('测试中', '正在探测渲染引擎端点（不产生消耗）…', '');
   const r = await window.reins.comicRenderTest(reCollect());
   toast(r && r.ok ? '连接成功' : '连接失败', (r && r.message) || '', r && r.ok ? '✓' : '⚠');
+}
+
+/* —— 配音引擎配置（可选阶段 · 独立于渲染引擎，存 settings.voiceEngine；本地 TTS 零消耗） —— */
+const CM_VOICE_PRESETS = {
+  kokoro: { label: '本地 TTS（Kokoro 中文音色 · 零消耗）', baseURL: 'http://127.0.0.1:8884/v1', model: 'kokoro', voice: 'zf_001' },
+  custom: { label: '自定义（OpenAI 兼容 /audio/speech）', baseURL: '', model: '', voice: '' },
+};
+const CM_VOICE_HINT = 'Kokoro 中文音色：zf_003 清亮年轻 · zf_001 干练利落 · zf_017 成熟知性 · zf_049 从容舒缓 · zm_010 明亮青年 · zm_009 沉稳青年 · zm_029 低沉磁性 · zm_020 少年感';
+async function hydrateVoiceEngineCfg() {
+  const box = document.getElementById('vo-cfg'); if (!box) return;
+  if (!window.reins) {
+    box.innerHTML = `<h3 class="set-h">配音引擎（可选）</h3><div class="set-row"><div><b>漫剧配音引擎</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`;
+    return;
+  }
+  let e = null;
+  try { e = await window.reins.comicVoiceGet(); } catch (err) { }
+  comicVoiceEngine = e;
+  const on = !!(e && e.baseURL && e.model);
+  const preset = CM_VOICE_PRESETS[e?.preset || 'kokoro'];
+  const pill = on ? (e.preset === 'kokoro' ? '<span class="mode-pill" style="background:#e8f1ef;color:#0c6259">本地</span>' : '<span class="mode-pill api">自定义</span>') : '';
+  const desc = on
+    ? `${esc(e.baseURL)} · 模型 ${esc(e.model)} · 默认音色 ${esc(e.voice || '—')} · 每镜头按说话角色自动换音色`
+    : '未配置（配音阶段自动跳过）。配置本地 TTS 后全程零 API 消耗。';
+  box.innerHTML = `<h3 class="set-h">配音引擎（漫剧 · 可选）</h3>
+    <div class="set-row">
+      <div><b>${on ? esc(preset.label) : '未启用'} ${pill}</b>
+        <div class="set-desc">${desc}</div></div>
+      <button class="btn btn-o btn-sm" onclick="openVoiceEngineModal()">${on ? '配置' : '去配置'}</button>
+    </div>`;
+}
+function openVoiceEngineModal() {
+  const e = comicVoiceEngine || { preset: 'kokoro', baseURL: CM_VOICE_PRESETS.kokoro.baseURL, apiKey: '', model: 'kokoro', voice: 'zf_001' };
+  openModal(`<div class="modal-head"><h3>配音引擎</h3><span>漫剧 · 可选阶段（独立于渲染引擎）</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body">
+      <div class="f-2col">
+        <div class="f-row"><label>预设</label>${ds('vo-preset', [
+          { v: 'kokoro', l: CM_VOICE_PRESETS.kokoro.label },
+          { v: 'custom', l: CM_VOICE_PRESETS.custom.label },
+        ], e.preset || 'kokoro', 'voPresetChanged()')}</div>
+        <div class="f-row"><label>API Key（可选 · 本地免鉴权）</label><input type="password" id="vo-key" value="${esc(e.apiKey || '')}" placeholder="本地 TTS 留空" autocomplete="off"></div>
+      </div>
+      <div class="f-row"><label>服务地址（/audio/speech 所在根路径）</label><input type="text" id="vo-baseurl" value="${esc(e.baseURL || '')}" placeholder="http://127.0.0.1:8884/v1"></div>
+      <div class="f-2col">
+        <div class="f-row"><label>模型名</label><input type="text" id="vo-model" value="${esc(e.model || '')}" placeholder="kokoro"></div>
+        <div class="f-row"><label>默认音色</label><input type="text" id="vo-voice" value="${esc(e.voice || '')}" placeholder="zf_001"></div>
+      </div>
+      <div class="cm-hint">${CM_VOICE_HINT}</div>
+      <div class="set-banner" style="margin:2px 0 0">本地预设需先启动 Reins 自带 TTS 服务（~/reins-tts）；设定阶段会让编剧为每个角色从音色表挑音色，配音按说话角色自动切换。配置变更只影响之后启动的任务。</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-o" onclick="voTest()">测试配音</button><span style="flex:1"></span>
+      <button class="btn btn-o" onclick="closeModal()">取消</button>
+      <button class="btn btn-p" onclick="voSave()">保存</button>
+    </div>`);
+}
+/* 切换预设带入默认值（与主进程 setVoiceEngine 换预设语义一致） */
+function voPresetChanged() {
+  const pv = $('#vo-preset')?.value;
+  const p = CM_VOICE_PRESETS[pv]; if (!p) return;
+  const bu = $('#vo-baseurl'), md = $('#vo-model'), vc = $('#vo-voice');
+  if (bu) bu.value = p.baseURL;
+  if (md) md.value = p.model;
+  if (vc) vc.value = p.voice;
+}
+function voCollect() {
+  return {
+    preset: $('#vo-preset')?.value || 'kokoro',
+    baseURL: $('#vo-baseurl')?.value.trim() || '',
+    apiKey: $('#vo-key')?.value.trim() || '',
+    model: $('#vo-model')?.value.trim() || '',
+    voice: $('#vo-voice')?.value.trim() || '',
+  };
+}
+async function voSave() {
+  if (!window.reins) return;
+  const r = await window.reins.comicVoiceSet(voCollect());
+  if (!r || !r.ok) { toast('保存失败', (r && r.error) || '未知错误', '⚠'); return; }
+  comicVoiceEngine = r.engine;
+  closeModal(); hydrateVoiceEngineCfg();
+  toast('已保存', r.engine.baseURL && r.engine.model ? '配音引擎已启用（新任务生效）' : '配音未启用（留空 = 跳过配音阶段）', '⚙');
+}
+async function voTest() {
+  if (!window.reins) { toast('浏览器模式', '请在客户端内测试', '⚠'); return; }
+  toast('测试中', '正在合成一句测试音频…', '');
+  const r = await window.reins.comicVoiceTest(voCollect());
+  toast(r && r.ok ? '配音服务在线' : '连接失败', (r && r.message) || '', r && r.ok ? '✓' : '⚠');
 }
 
 function exportData() {

@@ -49,10 +49,10 @@ function writeSettings(s) {
   fs.renameSync(tmp, f);
   settingsLastGood = { ...s };
 }
-/* 保留字段：renderEngine 的唯一写通道是 reins:comic:render:set（带服务商切换语义 + 回读校验）；
+/* 保留字段：renderEngine / voiceEngine 的唯一写通道是各自的 reins:comic:*:set（带预设切换语义 + 回读校验）；
    platform/version 是 settings:get 附加的只读信息。settings:set 收到这些键一律剔除，
    杜绝渲染层把读到的快照整包回传造成的交叉覆盖（返工修复①c） */
-const SETTINGS_RESERVED = new Set(['renderEngine', 'platform', 'version']);
+const SETTINGS_RESERVED = new Set(['renderEngine', 'voiceEngine', 'platform', 'version']);
 function applySettings(s) {
   // 关闭态不调用系统 API：未签名/未打包环境下注册登录项会被 macOS 拒绝并打印报错
   if (!s.launchAtLogin) return;
@@ -149,6 +149,10 @@ ipcMain.handle('reins:comic:adopt', (_e, c) => comicMgr.adopt(c));
 ipcMain.handle('reins:comic:render:get', () => comicMgr.getRenderEngine());
 ipcMain.handle('reins:comic:render:set', (_e, patch) => comicMgr.setRenderEngine(patch));
 ipcMain.handle('reins:comic:render:test', (_e, cfg) => comicMgr.testRenderEngine(cfg));
+/* 配音引擎（可选 · 独立配置）：本地 TTS / 云端 /audio/speech 兼容端点 */
+ipcMain.handle('reins:comic:voice:get', () => comicMgr.getVoiceEngine());
+ipcMain.handle('reins:comic:voice:set', (_e, patch) => comicMgr.setVoiceEngine(patch));
+ipcMain.handle('reins:comic:voice:test', (_e, cfg) => comicMgr.testVoiceEngine(cfg));
 ipcMain.handle('reins:comic:start', (e, payload) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (!win) return { ok: false, error: '窗口不可用' };

@@ -31,6 +31,10 @@ contextBridge.exposeInMainWorld('reins', {
   comicRenderGet: () => ipcRenderer.invoke('reins:comic:render:get'),
   comicRenderSet: (patch) => ipcRenderer.invoke('reins:comic:render:set', patch),
   comicRenderTest: (cfg) => ipcRenderer.invoke('reins:comic:render:test', cfg),
+  /* 配音引擎（可选 · 独立配置）：本地 TTS / 云端 /audio/speech 兼容端点 */
+  comicVoiceGet: () => ipcRenderer.invoke('reins:comic:voice:get'),
+  comicVoiceSet: (patch) => ipcRenderer.invoke('reins:comic:voice:set', patch),
+  comicVoiceTest: (cfg) => ipcRenderer.invoke('reins:comic:voice:test', cfg),
   comicStart: (payload) => ipcRenderer.invoke('reins:comic:start', payload),
   comicCancel: (comicId) => ipcRenderer.invoke('reins:comic:cancel', comicId),
   comicSnapshot: (comicId) => ipcRenderer.invoke('reins:comic:snapshot', comicId),

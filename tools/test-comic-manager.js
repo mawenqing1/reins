@@ -177,8 +177,8 @@ console.log('\n[3] start 前置校验（按阶段按需装配引擎）');
   r = mgr.start({ comic: created.comic, writerAgent: { id: 'a2', mode: 'api', provider: 'glm' } }, collect(evts));
   ok(!r.ok && r.error.includes('API Key'), 'API Agent 缺 Key 被拒绝');
   r = mgr.start({ comic: created.comic, scope: { stage: 'voice' }, writer: WRITER }, collect(evts));
-  ok(!r.ok && r.error.includes('配音模型'), '指定 voice 阶段但未配 voiceModel 被拦截');
-  ok(evts.length === 0 && fetchImpl.calls.length === 0, '前置失败零事件零请求（同步可读错误）');
+  ok(!r.ok && r.error.includes('配音引擎') && r.error.includes('跳过'), '指定 voice 阶段但未配配音引擎被拦截（comic.js precheck 口径 + 说明可跳过）');
+  ok(fetchImpl.calls.length === 0, '前置失败零请求（同步可读错误；precheck 事件按设计发出）');
 
   const noRender = makeManager({ fetchImpl, settings: {} }).mgr;
   r = noRender.start({ comic: created.comic, writer: WRITER }, () => { });
@@ -195,7 +195,7 @@ console.log('\n[3] start 前置校验（按阶段按需装配引擎）');
   r = mkNoRun({ provider: 'custom', baseURL: 'http://x/v1', apiKey: 'k', imageModel: 'im', videoModel: '' }).start({ comic: created.comic, writer: WRITER, scope: { stage: 'video' } }, () => { });
   ok(!r.ok && r.error.includes('视频模型') && r.error.includes('视频」阶段'), 'video 阶段缺视频模型：点名模型 + 阶段');
   r = mkNoRun(RENDER_OK).start({ comic: created.comic, writer: WRITER, scope: { stage: 'voice' } }, () => { });
-  ok(!r.ok && r.error.includes('配音模型') && r.error.includes('跳过'), 'voice 阶段缺配音模型：点名 + 说明可跳过');
+  ok(!r.ok && r.error.includes('配音引擎未配置'), 'voice 阶段缺配音引擎：走独立配音引擎口径');
 
   /* 纯本地阶段（assemble）：零引擎放行，且不触发任何网络请求 */
   const done = comicManager.create({

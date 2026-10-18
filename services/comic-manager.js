@@ -78,6 +78,73 @@ function create(deps = {}) {
   }
   function getRenderEngine() { return normalizeRenderEngine((readSettings() || {}).renderEngine); }
 
+  /* ===== 配音引擎（可选 · 独立于渲染引擎）：任何 OpenAI 兼容 /audio/speech 端点，
+     本地 TTS（Kokoro/Speaches 类）全程免费；未配置 → 配音阶段自动跳过 ===== */
+  function normalizeVoiceEngine(raw) {
+    const c = raw && typeof raw === 'object' ? raw : {};
+    const preset = comic.VOICE_ENGINE_PRESETS[c.preset] ? c.preset : 'custom';
+    const p = comic.VOICE_ENGINE_PRESETS[preset];
+    return {
+      preset,
+      baseURL: String(c.baseURL ?? p.baseURL ?? '').trim(),
+      apiKey: String(c.apiKey || '').trim(),
+      model: String(c.model ?? p.model ?? '').trim(),
+      voice: String(c.voice ?? p.voice ?? '').trim(),
+      voices: String(c.voices ?? p.voices ?? '').trim(),
+    };
+  }
+  function getVoiceEngine() {
+    const raw = (readSettings() || {}).voiceEngine;
+    if (!raw || typeof raw !== 'object') return null;   // 从未配置 → null（配音跳过），不落预置默认值
+    return normalizeVoiceEngine(raw);
+  }
+  function setVoiceEngine(patch) {
+    const p = patch && typeof patch === 'object' ? patch : {};
+    if (p.preset && !comic.VOICE_ENGINE_PRESETS[p.preset]) return { ok: false, error: '未知配音引擎预设：' + p.preset };
+    const s = readSettings() || {};
+    const cur = (s.voiceEngine && typeof s.voiceEngine === 'object') ? normalizeVoiceEngine(s.voiceEngine) : null;
+    // 切换预设先落到新预置默认，再应用显式字段（与 setRenderEngine 换服务商同语义）
+    const base = p.preset && (!cur || p.preset !== cur.preset) ? normalizeVoiceEngine({ preset: p.preset }) : (cur || normalizeVoiceEngine({ preset: 'speaches' }));
+    const next = normalizeVoiceEngine({
+      ...base,
+      preset: p.preset || base.preset,
+      baseURL: p.baseURL !== undefined ? p.baseURL : base.baseURL,
+      apiKey: p.apiKey !== undefined ? p.apiKey : base.apiKey,
+      model: p.model !== undefined ? p.model : base.model,
+      voice: p.voice !== undefined ? p.voice : base.voice,
+      voices: p.voices !== undefined ? p.voices : base.voices,
+    });
+    s.voiceEngine = next;
+    try { writeSettings(s); }
+    catch (e) { return { ok: false, error: '配置写入失败：' + (e && e.message) }; }
+    const back = normalizeVoiceEngine((readSettings() || {}).voiceEngine);
+    if (JSON.stringify(back) !== JSON.stringify(next)) {
+      return { ok: false, error: '配置未能写入 settings.json：请检查本机磁盘与 userData 目录权限后重试' };
+    }
+    return { ok: true, engine: next };
+  }
+  /* 配音连通测试：真发一句 6 字合成（本地零成本；云端消耗一次极小额度），返回音频字节数即通 */
+  async function testVoiceEngine(cfg) {
+    const e = cfg && typeof cfg === 'object' ? normalizeVoiceEngine(cfg) : getVoiceEngine();
+    if (!e || !e.baseURL) return { ok: false, message: '未配置配音服务地址' };
+    if (!e.model) return { ok: false, message: '未配置配音模型名' };
+    if (!/^https?:\/\//.test(e.baseURL)) return { ok: false, message: '地址需以 http:// 或 https:// 开头' };
+    const doFetch = fetchImpl || pfetch;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (e.apiKey) headers.Authorization = 'Bearer ' + e.apiKey;
+      const resp = await doFetch(e.baseURL.replace(/\/+$/, '') + '/audio/speech', {
+        method: 'POST', headers,
+        body: JSON.stringify({ model: e.model, input: '配音连通测试', ...(e.voice ? { voice: e.voice } : {}) }),
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!resp.ok) { const t = await resp.text().catch(() => ''); return { ok: false, message: 'HTTP ' + resp.status + (t ? ' ' + t.slice(0, 120) : '') }; }
+      const buf = Buffer.from(await resp.arrayBuffer());
+      if (!buf.length) return { ok: false, message: '返回空音频' };
+      return { ok: true, message: `配音服务在线 · 返回音频 ${(buf.length / 1024).toFixed(0)} KB` };
+    } catch (e2) { return { ok: false, message: '连接失败：' + ((e2 && e2.message) || e2) }; }
+  }
+
   function setRenderEngine(patch) {
     const p = patch && typeof patch === 'object' ? patch : {};
     if (p.provider && !comic.RENDER_PROVIDERS[p.provider]) return { ok: false, error: '未知渲染服务商：' + p.provider };
@@ -194,19 +261,18 @@ function create(deps = {}) {
       return `渲染引擎缺少服务地址（Base URL）：${target}需要。请到「${where}」填写 API 根路径（服务商兼容端点）`;
     if (!render.apiKey)
       return `渲染引擎缺少 API Key：${target}需要。请到「${where}」填写（仅保存在本机 settings.json）`;
-    /* 模型名按目标阶段点名；未指定阶段（全流程）需要图像 + 视频，配音可选不强制 */
+    /* 模型名按目标阶段点名；未指定阶段（全流程）需要图像 + 视频。
+       配音已独立成单独引擎（comic.js precheck 按独立配置给出可行动错误），此处不再校验 */
     if ((scope.stage === 'image' || !scope.stage) && !render.imageModel)
       return `渲染引擎缺少图像模型名（imageModel）：${st ? `「${st.label}」阶段` : '首帧生成'}需要。请到「${where}」填写（智谱预置为 cogview-4）`;
     if ((scope.stage === 'video' || !scope.stage) && !render.videoModel)
       return `渲染引擎缺少视频模型名（videoModel）：${st ? `「${st.label}」阶段` : '镜头视频生成'}需要。请到「${where}」填写（智谱预置为 cogvideox-3）`;
-    if (scope.stage === 'voice' && !render.voiceModel)
-      return `渲染引擎缺少配音模型（voiceModel）：「配音」为可选阶段，请到「${where}」填写模型名；留空则启动时自动跳过该阶段`;
     return null;
   }
   function resolveEngines(payload = {}) {
     const scope = payload.scope || {};
     const st = comic.STAGES.find(x => x.id === scope.stage);
-    let writer = null, render = null;
+    let writer = null, render = null, voice = null;
     if (!st || st.kind === 'llm') {
       const w = resolveWriter(payload.writer, payload.writerAgent);
       if (w.error) return { error: w.error };
@@ -216,8 +282,15 @@ function create(deps = {}) {
       render = payload.render && typeof payload.render === 'object' ? normalizeRenderEngine(payload.render) : getRenderEngine();
       const gap = renderConfigError(render, scope);   // 逐字段细查（返工修复③）
       if (gap) return { error: gap };
+      /* 配音独立引擎（可选阶段）：显式传入优先，否则读设置；从未配置返回 null → 阶段自动跳过。
+         迁移：旧配置把配音挂在渲染引擎 voiceModel 上——云端渲染引擎（zhipu/custom）自带
+         /audio/speech 可无缝沿用；comfy 本地渲染无此端点，不迁移，引导走新配音引擎 */
+      voice = payload.voice && typeof payload.voice === 'object' ? normalizeVoiceEngine(payload.voice) : getVoiceEngine();
+      if ((!voice || (!voice.baseURL && !voice.model)) && render.voiceModel && render.provider !== 'comfy' && render.baseURL) {
+        voice = normalizeVoiceEngine({ preset: 'custom', baseURL: render.baseURL, apiKey: render.apiKey, model: render.voiceModel });
+      }
     }
-    return { writer, render };
+    return { writer, render, voice };
   }
 
   /* ===== 任务生命周期 ===== */
@@ -265,7 +338,7 @@ function create(deps = {}) {
   const createComicWrap = input => comic.createComic(input);
   const normalize = raw => comic.normalizeComic(raw);
 
-  return { meta, create: createComicWrap, normalize, adopt, getRenderEngine, setRenderEngine, testRenderEngine, renderConfigError, resolveEngines, start, cancel, snapshot, rebuildPackage };
+  return { meta, create: createComicWrap, normalize, adopt, getRenderEngine, setRenderEngine, testRenderEngine, renderConfigError, getVoiceEngine, setVoiceEngine, testVoiceEngine, resolveEngines, start, cancel, snapshot, rebuildPackage };
 }
 
 module.exports = { create };
