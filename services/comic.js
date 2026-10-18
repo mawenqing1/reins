@@ -280,8 +280,11 @@ async function chatJson(writer, sys, user, { onDelta, signal, fetchImpl, maxToke
    工作流内嵌为默认模板：节点 4 = 正向提示词占位，节点 30 = 首帧 LoadImage 占位；
    提交 POST /prompt → 轮询 GET /history/{id} → /view 取产物；i2v 前先把首帧 /upload/image 回传 */
 const COMFY_WF_IMAGE = {
-  '1': { class_type: 'UnetLoaderGGUF', inputs: { unet_name: 'flux1-schnell-Q4_K_S.gguf' } },
-  '3': { class_type: 'DualCLIPLoader', inputs: { clip_name1: 'clip_l.safetensors', clip_name2: 't5xxl_fp8_e4m3fn_scaled.safetensors', type: 'flux' } },
+  /* 16G 内存适配（2026-10-18 实测）：fp8 t5(4.9G)+Q4_K_S unet(6.6G) 同驻 11.5G 必然 swap 抖动
+     （单步采样 200-450 秒）；改 t5 Q4_K_M GGUF(2.9G) + unet Q3_K_S(4.7G)，峰值 ~7.6G 可驻留。
+     DualCLIPLoaderGGUF：clip_l 走 safetensors（246M 小件无谓量化），t5 走 GGUF */
+  '1': { class_type: 'UnetLoaderGGUF', inputs: { unet_name: '__UNET__' } },   // 提交时按 render.imageModel 注入
+  '3': { class_type: 'DualCLIPLoaderGGUF', inputs: { clip_name1: 'clip_l.safetensors', clip_name2: 't5-v1_1-xxl-encoder-Q4_K_M.gguf', type: 'flux' } },
   '4': { class_type: 'CLIPTextEncode', inputs: { text: '__PROMPT__', clip: ['3', 0] } },
   '5': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['3', 0] } },   // schnell 引导 1.0，负向留空
   '6': { class_type: 'VAELoader', inputs: { vae_name: 'ae.safetensors' } },
@@ -291,9 +294,9 @@ const COMFY_WF_IMAGE = {
   '11': { class_type: 'SaveImage', inputs: { images: ['9', 0], filename_prefix: 'comic/firstframe' } },
 };
 const COMFY_WF_VIDEO = {
-  '1': { class_type: 'UnetLoaderGGUF', inputs: { unet_name: 'Wan2.2-TI2V-5B-Q4_K_M.gguf' } },
+  '1': { class_type: 'UnetLoaderGGUF', inputs: { unet_name: '__UNET__' } },   // 提交时按 render.videoModel 注入
   '2': { class_type: 'ModelSamplingSD3', inputs: { model: ['1', 0], shift: 5 } },
-  '3': { class_type: 'CLIPLoader', inputs: { clip_name: 'umt5_xxl_fp8_e4m3fn_scaled.safetensors', type: 'wan', device: 'default' } },
+  '3': { class_type: 'CLIPLoaderGGUF', inputs: { clip_name: 'umt5-xxl-encoder-Q4_K_M.gguf', type: 'wan', device: 'default' } },
   '4': { class_type: 'CLIPTextEncode', inputs: { text: '__PROMPT__', clip: ['3', 0] } },
   '5': { class_type: 'CLIPTextEncode', inputs: { text: '模糊，低质量，画质差，jpeg压缩残留，变形，畸形肢体，多余手指，残缺，字幕，水印，文字，静止，画面呆滞，色调艳丽，过曝，整体发灰，最差质量', clip: ['3', 0] } },
   '6': { class_type: 'VAELoader', inputs: { vae_name: 'wan2.2_vae.safetensors' } },
@@ -387,6 +390,7 @@ async function comfyGenImage(render, prompt, { aspect, signal, fetchImpl, pollMs
   const dim = comfyDim(aspect, [[1024, 576], [576, 1024], [896, 896]]);
   wf['7'].inputs.width = dim[0]; wf['7'].inputs.height = dim[1];
   wf['4'].inputs.text = String(prompt || '').slice(0, 2000);
+  if (render.imageModel) wf['1'].inputs.unet_name = render.imageModel + '.gguf';   // 量化档位配置驱动（Q4_K_S/Q3_K_S…）
   const pid = await comfySubmit(base, wf, { signal, fetchImpl });
   const f = await comfyWait(base, pid, { signal, fetchImpl, pollMs, pollTimeoutMs: 10 * 60 * 1000 });
   return { url: comfyViewUrl(base, f) };
@@ -397,6 +401,7 @@ async function comfyGenVideo(render, { prompt, imageUrl, aspect }, { signal, fet
   const dim = comfyDim(aspect, [[848, 480], [480, 848], [608, 608]]);
   wf['7'].inputs.width = dim[0]; wf['7'].inputs.height = dim[1];
   wf['4'].inputs.text = String(prompt || '').slice(0, 2000);
+  if (render.videoModel) wf['1'].inputs.unet_name = render.videoModel + '.gguf';   // 量化档位配置驱动
   if (imageUrl) {
     /* 首帧是本地 /view URL：取回字节再上传回 input 目录，交给 LoadImage */
     const imgResp = await fetchRetry(imageUrl, {}, { signal, timeoutMs: 60000, fetchImpl });

@@ -197,6 +197,11 @@ function create(deps = {}) {
           const oi = await doFetch(e.baseURL.replace(/\/+$/, '') + '/object_info/UnetLoaderGGUF', { signal: AbortSignal.timeout(8000) });
           const list = String(JSON.stringify(await oi.json().catch(() => ({}))));
           for (const [label, key] of Object.entries(need)) if (!list.includes(key)) missing.push(label);
+          /* 首帧文本编码器：t5 GGUF（16G 内存适配件，缺了 DualCLIPLoaderGGUF 起不来） */
+          try {
+            const oi2 = await doFetch(e.baseURL.replace(/\/+$/, '') + '/object_info/DualCLIPLoaderGGUF', { signal: AbortSignal.timeout(8000) });
+            if (!String(JSON.stringify(await oi2.json().catch(() => ({})))).includes('t5-v1_1-xxl-encoder')) missing.push('t5 GGUF（首帧文本编码器）');
+          } catch (err2) { }
         } catch (err) { /* object_info 拿不到只影响就绪提示，不影响连通判定 */ }
         const missMsg = missing.length ? '；未就绪：' + missing.join('、') + '（模型下载中或未安装）' : '；模型全部就绪';
         return { ok: true, message: 'ComfyUI 在线' + v + missMsg };

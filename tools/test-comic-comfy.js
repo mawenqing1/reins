@@ -68,7 +68,8 @@ async function main() {
     const wf = f.capturedWorkflow();
     ok(wf['4'].inputs.text.includes('霓虹') && wf['4'].inputs.text.includes('__') === false, '提示词注入正向节点（占位已替换）');
     ok(wf['7'].inputs.width === 1024 && wf['7'].inputs.height === 576, '16:9 → 1024×576');
-    ok(wf['1'].inputs.unet_name === 'flux1-schnell-Q4_K_S.gguf' && wf['8'].inputs.steps === 4, 'FLUX schnell 4 步工作流');
+    ok(wf['1'].inputs.unet_name === 'flux1-schnell-Q4_K_S.gguf' && wf['8'].inputs.steps === 4, 'FLUX schnell 4 步工作流（unet 按配置注入）');
+    ok(wf['3'].class_type === 'DualCLIPLoaderGGUF' && wf['3'].inputs.clip_name2 === 't5-v1_1-xxl-encoder-Q4_K_M.gguf', 't5 走 GGUF 量化（DualCLIPLoaderGGUF 混搭 clip_l.safetensors）');
   }
   {
     const f = makeComfyFetch();
@@ -111,7 +112,7 @@ async function main() {
 
   console.log('\n[3] 提交失败与排队轮询');
   {
-    const f = makeComfyFetch({ submitError: { error: { type: 'value_error', message: 'UnetLoaderGGUF.gguf_name not in list: flux1-schnell-Q4_K_S.gguf' } } });
+    const f = makeComfyFetch({ submitError: { error: { type: 'value_error', message: 'UnetLoaderGGUF.gguf_name not in list: flux1-schnell-Q3_K_S.gguf' } } });
     let threw = '';
     try { await comic._internal.comfyGenImage(render, 'p', { aspect: '16:9', signal: null, fetchImpl: f, pollMs: 1 }); } catch (e) { threw = e.message; }
     ok(threw.includes('ComfyUI 提交失败') && threw.includes('flux1-schnell'), '节点校验错误透传（模型缺失可诊断）');
