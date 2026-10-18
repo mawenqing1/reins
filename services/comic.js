@@ -325,21 +325,34 @@ async function comfySubmit(base, workflow, { signal, fetchImpl }) {
 }
 /* 轮询直到完成；产物 = outputs 中首个含 filename 的文件对象（SaveImage→images / SaveVideo→gifs|videos 通吃） */
 async function comfyWait(base, promptId, { signal, fetchImpl, pollMs = 3000, pollTimeoutMs = 1200000 }) {
-  /* 放弃等待（超时/取消/出错）时，把自己从 ComfyUI 队列里摘掉（只删自己的排队项，
-     不 interrupt——共享服务上正在执行的可能不是我们的任务） */
+  /* 活动感知等待：只要我们的任务还在 ComfyUI 队列里（排队或执行中），就把截止时间往后推——
+     冷启动加载 FLUX/Wan 模型实测 15 分钟起（16G 内存 GGUF 换入换出更久），固定超时必然误杀；
+     截止时间只对「队列里消失且 history 无记录」（服务重启/被清队列）生效。
+     pollTimeoutMs 语义随之变为「无活动超时」；另有 hardCapMs 绝对上限防 GPU 卡死无限等 */
+  const hardCapMs = Math.max(pollTimeoutMs, 3600000);   // 绝对上限 1 小时
   const giveUp = async err => {
     try { await (fetchImpl || defaultFetch)(base + '/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delete: [promptId] }) }); } catch (e) { }
     throw err;
   };
-  const deadline = Date.now() + pollTimeoutMs;
+  const submittedAt = Date.now();
+  let deadline = Date.now() + pollTimeoutMs;
   for (;;) {
     if (signal && signal.aborted) throw await giveUp(new CancelError());
-    if (Date.now() > deadline) throw await giveUp(new Error('ComfyUI 执行超时（' + Math.round(pollTimeoutMs / 60000) + ' 分钟）'));
+    if (Date.now() > deadline) throw await giveUp(new Error('ComfyUI 队列消失（' + Math.round(pollTimeoutMs / 60000) + ' 分钟内无进度，可能服务重启或队列被清）'));
+    if (Date.now() - submittedAt > hardCapMs) throw await giveUp(new Error('ComfyUI 执行超绝对上限（' + Math.round(hardCapMs / 60000) + ' 分钟），请检查 GPU/显存状态'));
     await sleep(pollMs);
     const resp = await fetchRetry(base + '/history/' + encodeURIComponent(promptId), {}, { signal, timeoutMs: 30000, retries: 3, fetchImpl });
     const h = await resp.json().catch(() => null);
     const rec = h && h[promptId];
-    if (!rec) continue;                                     // 还在排队（history 未出现）
+    if (!rec) {
+      /* history 无记录：任务要么还在排队/执行（/queue 可见 → 活着，续期），要么彻底丢了 */
+      const qr = await fetchRetry(base + '/queue', {}, { signal, timeoutMs: 30000, retries: 3, fetchImpl });
+      const q = await qr.json().catch(() => null);
+      const alive = q && [...(q.queue_running || []), ...(q.queue_pending || [])]
+        .some(item => Array.isArray(item) && String(item[1]) === String(promptId));
+      if (alive) deadline = Math.min(submittedAt + hardCapMs, Date.now() + pollTimeoutMs);   // 还在干活，续期
+      continue;
+    }
     if (rec.status && rec.status.completed) {
       if (rec.status.status_str === 'error') throw new Error('ComfyUI 执行失败：' + cleanStr(JSON.stringify(rec.status.messages || ''), 200));
       for (const out of Object.values(rec.outputs || {})) {
@@ -352,6 +365,8 @@ async function comfyWait(base, promptId, { signal, fetchImpl, pollMs = 3000, pol
       }
       throw await giveUp(new Error('ComfyUI 已完成但产物里没有文件'));
     }
+    /* completed=false 但已有 history 记录：执行中，同样续期 */
+    deadline = Math.min(submittedAt + hardCapMs, Date.now() + pollTimeoutMs);
   }
 }
 const comfyViewUrl = (base, f) => base + '/view?filename=' + encodeURIComponent(f.filename) + '&subfolder=' + encodeURIComponent(f.subfolder || '') + '&type=' + encodeURIComponent(f.type || 'output');

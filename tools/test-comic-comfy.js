@@ -21,7 +21,7 @@ function ok(cond, name) {
 const BASE = 'http://127.0.0.1:8188';
 async function main() {
   /* 简版 mock fetch：按方法+URL 前缀路由，可编排 /history 前几拍为空（排队） */
-  function makeComfyFetch({ histPolls = 0, outputs = { '11': { images: [{ filename: 'ff_0001.png', subfolder: 'comic', type: 'output' }] } }, submitError = null, uploaded = [] } = {}) {
+  function makeComfyFetch({ histPolls = 0, outputs = { '11': { images: [{ filename: 'ff_0001.png', subfolder: 'comic', type: 'output' }] } }, submitError = null, uploaded = [], queueAlivePolls = 0 } = {}) {
     const calls = [];
     let polls = 0;
     const json = (obj) => ({ ok: true, json: async () => obj });
@@ -40,6 +40,13 @@ async function main() {
       if (u.startsWith(BASE + '/upload/image')) {
         uploaded.push(init.body);
         return json({ name: 'comic_firstframe_0.png', subfolder: '', type: 'input' });
+      }
+      if (u.startsWith(BASE + '/queue')) {
+        /* 活动感知等待探活：前 queueAlivePolls 次返回我们的任务在执行，之后空队列 */
+        fetchImpl.qCalls = (fetchImpl.qCalls || 0) + 1;
+        return json(fetchImpl.qCalls <= queueAlivePolls
+          ? { queue_running: [['n1', 'pid-1']], queue_pending: [] }
+          : { queue_running: [], queue_pending: [] });
       }
       if (u.startsWith(BASE + '/view')) {
         return { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer };
@@ -84,6 +91,22 @@ async function main() {
     ok(wf['30'].inputs.image === 'comic_firstframe_0.png', 'LoadImage 注入上传后的首帧文件名');
     ok(wf['4'].inputs.text === '镜头缓慢推近', '运镜提示词注入');
     ok(wf['7'].class_type === 'Wan22ImageToVideoLatent' && wf['7'].inputs.start_image[0] === '30', 'Wan2.2 i2v：首帧经 VAE 进 latent');
+  }
+
+  console.log('\n[2.5] comfyWait 活动感知：在队列就续期 / 队列消失才报错（冷加载 15 分钟不再误杀）');
+  {
+    /* 完成点在固定超时之后（120ms > 60ms），但任务一直在队列里 → 每次探活续期，最终成功 */
+    const f = makeComfyFetch({ histPolls: 8, queueAlivePolls: 8 });
+    const r = await comic._internal.comfyWait(BASE, 'pid-1', { signal: null, fetchImpl: f, pollMs: 15, pollTimeoutMs: 60 });
+    ok(r && r.filename === 'ff_0001.png', '队列存活期间持续续期（超固定时限仍等到产物）');
+  }
+  {
+    /* history 永不出现且队列里也没有 → 无活动超时点名「队列消失」 */
+    const f = makeComfyFetch({ histPolls: 9999, queueAlivePolls: 0 });
+    let msg = '';
+    try { await comic._internal.comfyWait(BASE, 'pid-1', { signal: null, fetchImpl: f, pollMs: 20, pollTimeoutMs: 100 }); }
+    catch (e) { msg = e.message; }
+    ok(/队列消失/.test(msg), '队列+history 双缺失 → 快速失败并点名原因');
   }
 
   console.log('\n[3] 提交失败与排队轮询');
