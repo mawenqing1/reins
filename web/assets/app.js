@@ -3735,6 +3735,14 @@ function normalizeState(st) {
     org.badge = typeof org.badge === 'string' && org.badge ? org.badge : org.name[0];
     if (!Array.isArray(org.agents)) org.agents = seedAgents();
     for (const a of org.agents) if (a.mode === 'cli' && a.runtime !== 'cloud') a.runtime = 'local';
+    /* qoder 族默认模板升级（一次性迁移）：无头 -p 默认权限档拒写文件（PM/文档阶段产物落不了盘），
+       官方默认模板追加 accept_edits。只替换与旧默认完全一致的模板——用户自定义过参数的不碰 */
+    for (const a of org.agents) {
+      if (a.mode === 'cli' && ['qoder', 'qoder-cn'].includes(a.cliId) && a.cliTemplate
+        && a.cliTemplate === (a.cliCommand || '') + ' -p {prompt}' && !/--permission-mode/.test(a.cliTemplate)) {
+        a.cliTemplate += ' --permission-mode accept_edits';
+      }
+    }
     if (!Array.isArray(org.spaces) || !org.spaces.length) {
       org.spaces = [{ id: 'sp' + now(), name: '默认空间', badge: '空', sprint: '', members: [{ name: '我', role: 'owner' }],
         tasks: [], prompts: [], autos: seedAutos(), chart: [0, 0, 0, 0, 0, 0, 0], integ: {},

@@ -560,7 +560,10 @@ function discoverAppRuntimes() {
     id: cn ? 'qodercn-cli' : 'qoder-cli',
     label: cn ? 'Qoder CN（本机 CLI）' : 'Qoder（本机 CLI）',
     cliId: cn ? 'qoder-cn' : 'qoder', detected: true,
-    cliCommand: binPath, cliTemplate: `${binPath} -p {prompt}`, note,
+    /* accept_edits：无头 -p 模式下默认权限档会拒掉全部文件写入（需交互确认），
+       PM/文档阶段的产物因此落不了盘只能走正文兜底；编辑类写入放行——执行本身在
+       隔离 worktree（独立分支，验收后才应用回仓库），风险已被工作区隔离兜住 */
+    cliCommand: binPath, cliTemplate: `${binPath} -p {prompt} --permission-mode accept_edits`, note,
   });
   const qIntlShim = path.join(home, '.local/bin/qodercli');
   const qIntlVer = newest(path.join(home, '.qoder/bin/qodercli'), f => /^qodercli-[\d.]+$/.test(f));
