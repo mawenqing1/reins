@@ -346,6 +346,7 @@ a { color: var(--accent); text-decoration: none; }
 
 .assignee {
   margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-dim);
+  svg.lic { width: 12px; height: 12px; flex: none; }
   &.agent {
     color: @brand-text; background: var(--accent-soft);
     border: 1px solid @brand-border; border-radius: 6px; padding: 1.5px 7px; font-weight: 600;
@@ -360,6 +361,7 @@ a { color: var(--accent); text-decoration: none; }
 
 .pr-chip {
   display: inline-flex; align-items: center; gap: 4px;
+  svg.lic { width: 11px; height: 11px; flex: none; }
   font-family: @mono; font-size: 10px;
   color: #3d8a5f; background: @st-done-bg; border-radius: 5px; padding: 1.5px 7px; margin-top: 8px;
 }
@@ -987,6 +989,8 @@ svg.brand-ico { color: var(--ink-dim); } // 内联品牌 SVG：currentColor，�
 
 // —— 内联线性图标（Lucide 子集，见 web/assets/icons.js）：currentColor 随文变色，尺寸按上下文 ——
 svg.lic { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
+.agent-meta svg.lic, .done-box svg.lic, .set-desc svg.lic, .sec-warn svg.lic, .pp-gate svg.lic { width: 12px; height: 12px; vertical-align: -2px; }
+.pw-stage svg.lic, .dff-badge svg.lic { width: 11px; height: 11px; vertical-align: -2px; }
 
 // —— 自绘下拉（替换原生 select，见 app.js 的 ds()）——
 .ds { position: relative; flex: 1; min-width: 0; }
@@ -1255,7 +1259,8 @@ label.pipe-toggle {
 .pp-plan { font-size: 12.5px; color: var(--ink-dim); padding: 4px 0; }
 .pp-stage {
   display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px;
-  .pp-ic { width: 18px; text-align: center; font-size: 12px; color: var(--ink-faint); flex: none; }
+  .pp-ic { width: 18px; text-align: center; font-size: 12px; color: var(--ink-faint); flex: none; display: inline-flex; align-items: center; justify-content: center;
+    svg.lic { width: 13px; height: 13px; } }
   .pp-main {
     b { display: block; font-size: 12.5px; font-weight: 600; }
     span { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 1px; }

@@ -53,7 +53,20 @@ window.ICONS = {
   "workflow": "<rect width=\"8\" height=\"8\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M7 11v4a2 2 0 0 0 2 2h4\" /> <rect width=\"8\" height=\"8\" x=\"13\" y=\"13\" rx=\"2\" />",
   "x": "<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />",
   "zap": "<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />",
-  "power": "<path d=\"M12 2v10\" /> <path d=\"M18.4 6.6a9 9 0 1 1-12.77.04\" />"
+  "power": "<path d=\"M12 2v10\" /> <path d=\"M18.4 6.6a9 9 0 1 1-12.77.04\" />",
+  "compass": "<path d=\"M16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76\" /> <circle cx=\"12\" cy=\"12\" r=\"10\" />",
+  "scale": "<path d=\"m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z\" /> <path d=\"m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z\" /> <path d=\"M7 21h10\" /> <path d=\"M12 3v18\" /> <path d=\"M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2\" />",
+  "pause": "<rect x=\"14\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" /> <rect x=\"6\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" />",
+  "star": "<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" />",
+  "hexagon": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\" />",
+  "diamond": "<path d=\"M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z\" />",
+  "square": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />",
+  "circle": "<circle cx=\"12\" cy=\"12\" r=\"10\" />",
+  "folder": "<path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\" />",
+  "scroll-text": "<path d=\"M15 12h-5\" /> <path d=\"M15 8h-5\" /> <path d=\"M19 17V5a2 2 0 0 0-2-2H4\" /> <path d=\"M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3\" />",
+  "user": "<path d=\"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2\" /> <circle cx=\"12\" cy=\"7\" r=\"4\" />",
+  "link": "<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\" /> <path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\" />",
+  "lock": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\" /> <path d=\"M7 11V7a5 5 0 0 1 10 0v4\" />"
 };
 window.ic = (name, cls) => {
   const b = window.ICONS[name];
@@ -61,7 +74,7 @@ window.ic = (name, cls) => {
   return "<svg class=\"lic" + (cls ? " " + cls : "") + "\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" + b + "</svg>";
 };
 /* 历史数据里存的字符图标（时间线/动态/toast 参数）渲染时映射为对应 SVG，未映射的原样显示 */
-window.ICON_CHAR = { "➕":"circle-plus", "✓":"check", "✕":"x", "⚠":"triangle-alert", "☁":"cloud", "🗑":"trash-2", "🌿":"git-branch", "📝":"clipboard-list", "🚀":"rocket", "🔀":"arrow-right-left", "▶":"play", "◆":"bot", "✳":"bot", "✦":"sparkles", "☰":"list", "▤":"chart-column", "▧":"layout-dashboard", "⇩":"package", "▣":"server", "✎":"pencil", "⟳":"refresh-cw", "⇄":"arrow-right-left", "↩":"undo-2", "‖":"power", "⚙":"settings", "👏":"sparkles", "🤖":"bot", "📈":"chart-column", "🧾":"clipboard-list", "✨":"sparkles", "🎬":"clapperboard" };
+window.ICON_CHAR = { "➕":"circle-plus", "✓":"check", "✕":"x", "⚠":"triangle-alert", "☁":"cloud", "🗑":"trash-2", "🌿":"git-branch", "📝":"clipboard-list", "🚀":"rocket", "🔀":"arrow-right-left", "▶":"play", "◆":"bot", "✳":"bot", "✦":"sparkles", "☰":"list", "▤":"chart-column", "▧":"layout-dashboard", "⇩":"package", "▣":"server", "✎":"pencil", "⟳":"refresh-cw", "⇄":"arrow-right-left", "↩":"undo-2", "‖":"power", "⚙":"settings", "👏":"sparkles", "🤖":"bot", "📈":"chart-column", "🧾":"clipboard-list", "✨":"sparkles", "🎬":"clapperboard", "⏸":"pause", "⏰":"clock", "✅":"circle-check", "✗":"x", "🧭":"compass", "⚖":"scale", "■":"square", "▸":"chevron-right", "📂":"folder", "⬢":"hexagon", "⬡":"hexagon", "◈":"diamond", "☆":"star", "📜":"scroll-text", "👤":"user", "📦":"package", "🔗":"link", "🔒":"lock" };
 window.gic = (ch, cls) => {
   if (ch && window.ICON_CHAR[ch]) return window.ic(window.ICON_CHAR[ch], cls);
   if (!ch) return "";

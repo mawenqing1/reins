@@ -469,12 +469,12 @@ function cardHTML(t) {
   const running = runs[t.id];
   const pct = running ? runPct(t.id) : 0;
   const assignee = t.pipeline?.on
-    ? `<span class="assignee agent">🧭 项目经理</span>`
+    ? `<span class="assignee agent">${ic('compass')} 项目经理</span>`
     : t.assignee
     ? (t.assignee.kind === 'agent'
-      ? `<span class="assignee agent">◆ ${esc(t.assignee.name)}</span>`
+      ? `<span class="assignee agent">${ic('bot')} ${esc(t.assignee.name)}</span>`
       : t.assignee.kind === 'role'
-        ? `<span class="assignee agent">☆ ${esc(t.assignee.name)}</span>`
+        ? `<span class="assignee agent">${ic('star')} ${esc(t.assignee.name)}</span>`
         : `<span class="assignee human"><span class="av">${esc(t.assignee.name[0])}</span>${esc(t.assignee.name)}</span>`)
     : `<span class="assignee" style="color:var(--ink-faint)">未指派</span>`;
   return `<div class="tcard" draggable="true" data-task="${t.id}" onclick="openTask('${t.id}')">
@@ -482,8 +482,8 @@ function cardHTML(t) {
     <div class="t">${esc(t.title)}</div>
     <div class="row"><span class="ttag ${t.type}">${TYPE_LABEL[t.type] || t.type}</span>${assignee}</div>
     ${t.pipeline?.on ? pipeCardLine(t) : ''}
-    ${t.status === 'review' && t.pr ? `<div class="pr-chip">⇄ ${esc(t.pr)} · 待验收</div>` : ''}
-    ${t.status === 'done' && t.pr ? `<div class="pr-chip" style="background:#e3f3ea;color:#3d8a5f">✓ ${esc(t.pr)} · 已归档</div>` : ''}
+    ${t.status === 'review' && t.pr ? `<div class="pr-chip">${ic('arrow-right-left')} ${esc(t.pr)} · 待验收</div>` : ''}
+    ${t.status === 'done' && t.pr ? `<div class="pr-chip" style="background:#e3f3ea;color:#3d8a5f">${ic('check')} ${esc(t.pr)} · 已归档</div>` : ''}
     ${running ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}
     ${t.status === 'doing' && ['agent', 'role'].includes(t.assignee?.kind) && !running ? '<div class="bar"><i style="width:6%"></i></div>' : ''}
   </div>`;
@@ -491,11 +491,11 @@ function cardHTML(t) {
 /* 卡片上的流水线进度行：阶段点 + 当前阶段名（返工轮次超 1 时标注） */
 function pipeCardLine(t) {
   const p = t.pipeline;
-  if (!p || !p.stages?.length) return `<div class="pipe-line"><span class="pl-badge">🧭</span><span class="pl-txt">${PIPE_STATE[p.status] || '流水线'}</span></div>`;
+  if (!p || !p.stages?.length) return `<div class="pipe-line"><span class="pl-badge">${ic('compass')}</span><span class="pl-txt">${PIPE_STATE[p.status] || '流水线'}</span></div>`;
   const dots = p.stages.map(s => `<i class="pdot ${s.state}"></i>`).join('');
   const cur = p.stages[p.cur];
   const label = p.status === 'running' && cur ? (cur.rework ? '返工 · ' : '') + cur.name : PIPE_STATE[p.status] || '';
-  return `<div class="pipe-line"><span class="pl-badge">🧭</span><span class="pdots">${dots}</span><span class="pl-txt">${esc(label)}${p.round > 1 ? ` · R${p.round - 1}` : ''}</span></div>`;
+  return `<div class="pipe-line"><span class="pl-badge">${ic('compass')}</span><span class="pdots">${dots}</span><span class="pl-txt">${esc(label)}${p.round > 1 ? ` · R${p.round - 1}` : ''}</span></div>`;
 }
 
 /* 拖拽（事件委托） */
@@ -550,7 +550,7 @@ function viewList() {
       <td><span class="ttag ${t.type}">${TYPE_LABEL[t.type] || t.type}</span></td>
       <td><span class="pri ${t.pri}">${t.pri}</span></td>
       <td><span class="st ${t.status}"><span class="dot"></span>${STATUS_LABEL[t.status]}</span></td>
-      <td>${t.assignee ? (t.assignee.kind === 'agent' ? '◆ ' + esc(t.assignee.name) : t.assignee.kind === 'role' ? '☆ ' + esc(t.assignee.name) : esc(t.assignee.name)) : '<span style="color:var(--ink-faint)">未指派</span>'}</td>
+      <td>${t.assignee ? (t.assignee.kind === 'agent' ? ic('bot') + ' ' + esc(t.assignee.name) : t.assignee.kind === 'role' ? ic('star') + ' ' + esc(t.assignee.name) : esc(t.assignee.name)) : '<span style="color:var(--ink-faint)">未指派</span>'}</td>
       <td>${t.pr ? `<span style="font-family:var(--mono);font-size:11px;color:${t.status === 'done' ? 'var(--done)' : 'var(--review)'}">${esc(t.pr)}</span>` : '—'}</td>
     </tr>`).join('')}</tbody></table>`;
 }
@@ -571,7 +571,7 @@ function viewAgents() {
         <div class="agent-av">${brandOf(a)}</div>
         <div style="flex:1">
           <h3>${esc(a.name)} ${modeBadge}</h3>
-          <div class="agent-meta">${a.mode === 'api' ? esc(providerLabel(a.provider)) + ' · ' + esc(a.model || '—') + (keyOf(a) ? '' : a.__keyLocked ? ' · <b style="color:#c05656">密钥已加密但本机解锁失败</b>' : ' · <b style="color:#c05656">未配置密钥</b>') : a.mode === 'cli' ? (a.runtime === 'cloud' ? '☁ 云端执行 · ' : '本机命令 <b style="font-weight:600">') + (a.runtime === 'cloud' ? esc(a.cliCommand || '—') : '') + (a.runtime === 'cloud' ? '' : '</b>' + (a.detected ? ' · ✓ 已检测到' : '')) : '本地模拟 · 无需配置'}</div>
+          <div class="agent-meta">${a.mode === 'api' ? esc(providerLabel(a.provider)) + ' · ' + esc(a.model || '—') + (keyOf(a) ? '' : a.__keyLocked ? ' · <b style="color:#c05656">密钥已加密但本机解锁失败</b>' : ' · <b style="color:#c05656">未配置密钥</b>') : a.mode === 'cli' ? (a.runtime === 'cloud' ? ic('cloud') + ' 云端执行 · ' : '本机命令 <b style="font-weight:600">') + (a.runtime === 'cloud' ? esc(a.cliCommand || '—') : '') + (a.runtime === 'cloud' ? '' : '</b>' + (a.detected ? ' · ' + ic('check') + ' 已检测到' : '')) : '本地模拟 · 无需配置'}</div>
         </div>
         <span class="status-pill ${a.status}">${a.status === 'working' ? '<span class="pulse"></span>执行中' : a.status === 'idle' ? '待命' : '离线'}</span>
       </div>
@@ -607,7 +607,7 @@ function viewRoles() {
   const rows = roles.map(r => {
     const a = roleAgent(r);
     return `<div class="set-row">
-      <div><b>${esc(r.glyph || '☆')} ${esc(r.name)} <span class="mode-pill sim">角色</span></b>
+      <div><b>${gic(r.glyph || '☆')} ${esc(r.name)} <span class="mode-pill sim">角色</span></b>
         <div class="set-desc">${a ? '使用 <b>' + esc(a.name) + '</b>' + (r.cliModel && cliCanModel(a) ? ' · 模型 ' + esc(r.cliModel) : '') : '<b style="color:#c05656">未绑定 Agent</b>'} · ${esc(String(r.prompt || '').slice(0, 60))}…</div></div>
       <div style="display:flex;gap:8px;flex-shrink:0">
         <button class="btn btn-o btn-sm" onclick="openRoleModal('${r.id}')">配置</button>
@@ -934,7 +934,7 @@ function viewInteg() {
         </div>
         <div class="integ-desc">将任务分诊（类型、优先级、经办人）交给决策模型：输入任务与候选名单，输出带概率的结构化建议，适合批量分诊。不配置时继续用 API 模型分诊。</div>
         ${window.reins ? `
-        <div class="f-row"><label>API Key（console.typesafe.ai 创建）</label>${secretLocked(cfg.jevKey) ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">⚠ 该密钥已加密但本机解锁失败（系统钥匙串变更？）：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="jev-key" value="${esc(secretOf(cfg.jevKey))}" placeholder="${secretLocked(cfg.jevKey) ? '重新填写以覆盖…' : 'sk-…'}"></div>
+        <div class="f-row"><label>API Key（console.typesafe.ai 创建）</label>${secretLocked(cfg.jevKey) ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">' + ic('triangle-alert') + ' 该密钥已加密但本机解锁失败（系统钥匙串变更？）：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="jev-key" value="${esc(secretOf(cfg.jevKey))}" placeholder="${secretLocked(cfg.jevKey) ? '重新填写以覆盖…' : 'sk-…'}"></div>
         <div class="f-row"><label>接入地址（兼容 systemone 协议即可）</label><input type="text" id="jev-url" value="${esc(cfg.jevUrl || 'https://api.typesafe.ai/v1/systemone')}" placeholder="https://api.typesafe.ai/v1/systemone"></div>
         <div class="f-2col">
           <div class="f-row"><label>模型</label><input type="text" id="jev-model" value="${esc(cfg.jevModel || 'jev-latest')}" placeholder="jev-latest"></div>
@@ -1083,12 +1083,12 @@ function renderPipelinePanel(t) {
   if (!p || !p.on) return '';
   const modeTag = p.mode === 'auto' ? ' · 项目经理 AI 拆分' : p.mode === 'std' ? ' · 标准研发流水线' : '';
   let body = '';
-  if (p.status === 'planning' && !p.stages) body = `<div class="pp-plan">🧭 项目经理正在拆解流程，指定各阶段负责成员 …</div>`;
+  if (p.status === 'planning' && !p.stages) body = `<div class="pp-plan">${ic('compass')} 项目经理正在拆解流程，指定各阶段负责成员 …</div>`;
   if (p.stages?.length) {
     body = p.stages.map((s, i) => {
       const role = pipeRoleByKey(s.roleKey);
       const cur = (i === p.cur && ['running', 'planning', 'paused'].includes(p.status)) || ['running', 'rework'].includes(s.state);
-      const icon = s.state === 'done' ? '✓' : s.state === 'rework' ? '↩' : s.state === 'failed' ? '✕' : cur ? '▶' : '○';
+      const icon = s.state === 'done' ? ic('check') : s.state === 'rework' ? ic('undo-2') : s.state === 'failed' ? ic('x') : cur ? ic('play') : ic('circle');
       return `<div class="pp-stage ${s.state === 'done' ? 'done' : s.state === 'failed' ? 'failed' : cur ? 'cur' : 'todo'}">
         <span class="pp-ic">${icon}</span>
         <div class="pp-main"><b>${esc(s.name)}</b><span>${esc(role ? role.name : s.roleKey)}${s.state === 'failed' ? ' · 失败（可从断点重试）' : ''}${s.rework ? ' · 返工' : ''}${s.runs > 1 ? ' · 第 ' + s.runs + ' 次执行' : ''}${s.final ? ' · 终段' : ''}</span></div>
@@ -1100,16 +1100,16 @@ function renderPipelinePanel(t) {
   const gantt = parWaves ? `<div class="pp-gantt">${parWaves.map((w, wi) => `
     <div class="pp-wave"><span class="pw-idx">W${wi + 1}</span><div class="pw-stages">${w.map(i => {
       const s = p.stages[i]; if (!s) return '';
-      const icn = s.state === 'done' ? '✓' : s.state === 'failed' ? '✕' : ['running', 'rework'].includes(s.state) ? '▶' : '○';
+      const icn = s.state === 'done' ? ic('check') : s.state === 'failed' ? ic('x') : ['running', 'rework'].includes(s.state) ? ic('play') : ic('circle');
       const depNames = (s.dependsOn || []).map(id => (p.stages.find(x => x.id === id) || {}).name || id).join('、');
       return `<span class="pw-stage ${s.state}" title="${esc(depNames ? '依赖：' + depNames : '无依赖（并行根）')}">${icn} ${esc(s.name)}</span>`;
     }).join('')}</div></div>`).join('')}<div class="pw-hint">同波次阶段并行执行 · 波次间按依赖衔接</div></div>` : '';
   /* 并行阶段的独立运行终端（每阶段一个日志盒；串行流水线沿用抽屉主执行盒） */
   const boxes = p.stages ? p.stages.filter(s => runs[t.id + '#' + s.id]).map(s => runBoxHTML(t.id + '#' + s.id, s.name + (s.rework ? ' · 返工' : ''), (pipeRoleByKey(s.roleKey) || {}).name || s.roleKey)) : [];
-  const cancelBtn = boxes.length ? `<div class="run-actions"><button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">■ 终止执行</button></div>` : '';
-  const gateHTML = p.gate ? `<div class="pp-gate ${p.gate.action === 'pass' ? 'pass' : 'rework'}">⚖ 第 ${p.gate.round} 轮裁决 · ${p.gate.action === 'pass' ? '通过' : '打回 ' + (p.gate.targets || []).join('/')}（${esc(p.gate.engine || '')}）— ${esc(p.gate.reason || '')}${p.gate.evidence ? `<div class="pp-evid">依据：${esc(String(p.gate.evidence).slice(0, 200))}</div>` : ''}</div>` : '';
+  const cancelBtn = boxes.length ? `<div class="run-actions"><button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">${ic('square')} 终止执行</button></div>` : '';
+  const gateHTML = p.gate ? `<div class="pp-gate ${p.gate.action === 'pass' ? 'pass' : 'rework'}">${ic('scale')} 第 ${p.gate.round} 轮裁决 · ${p.gate.action === 'pass' ? '通过' : '打回 ' + (p.gate.targets || []).join('/')}（${esc(p.gate.engine || '')}）— ${esc(p.gate.reason || '')}${p.gate.evidence ? `<div class="pp-evid">依据：${esc(String(p.gate.evidence).slice(0, 200))}</div>` : ''}</div>` : '';
   const btn = p.status === 'idle' || p.status === 'paused'
-    ? `<button class="btn btn-p btn-sm" onclick="startPipeline('${t.id}')">▶ ${p.status === 'paused' ? '从断点继续' : '启动流水线'}</button>` : '';
+    ? `<button class="btn btn-p btn-sm" onclick="startPipeline('${t.id}')">${ic('play')} ${p.status === 'paused' ? '从断点继续' : '启动流水线'}</button>` : '';
   return `<div class="d-sec"><h4>流水线 · ${PIPE_STATE[p.status] || p.status}${modeTag}${p.round > 1 ? ` · 已返工 ${p.round - 1} 轮（上限 ${p.maxRework}）` : ''}</h4>
     <div class="pp-body">${body || '<div class="pp-plan">尚未启动：启动后项目经理将拆解流程并分配成员。</div>'}${gateHTML}</div>
     ${gantt}${boxes.join('')}${cancelBtn}
@@ -1132,14 +1132,14 @@ function renderDrawer(id) {
     execHTML = `<div class="d-sec"><h4>${r.mode === 'api' ? '真实执行 · 流式输出' : 'Agent 执行 · 实时输出'} · ${pct ? pct + '%' : '运行中'}</h4>
       ${runBoxHTML(id, t.assignee?.name || 'Agent', r.mode === 'api' ? (r.model || '') : 'workspaces/' + t.key)}
       <div class="run-actions">
-        <button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">■ 终止执行</button>
+        <button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">${ic('square')} 终止执行</button>
       </div></div>`;
   } else if (t.status === 'todo' && ['agent', 'role'].includes(t.assignee?.kind)) {
     const a = t.assignee.kind === 'role' ? (resolveRoleAgent(t) || {}).agent : agentById(t.assignee.id);
     const canModel = cliCanModel(a);
     execHTML = `<div class="d-sec"><h4>Agent 执行</h4>
       <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-p" onclick="startRun('${t.id}',{byUser:true});renderDrawer('${t.id}')">▶ 指派并启动</button>
+        <button class="btn btn-p" onclick="startRun('${t.id}',{byUser:true});renderDrawer('${t.id}')">${ic('play')} 指派并启动</button>
         ${canModel ? `<label style="font-size:12.5px;color:var(--ink-dim);display:flex;align-items:center;gap:7px">执行模型
           ${ds('run-model', [{ v: '', l: a.cliModel ? a.cliModel + '（Agent 默认）' : '默认模型' }, ...modelOptsSync(a).map(m => ({ v: m, l: m }))], t.runModel || '', `byId('${t.id}').runModel=this.value;save()`, 'inline')}</label>` : ''}
       </div>
@@ -1156,14 +1156,14 @@ function renderDrawer(id) {
         : `<p>执行已完成，请核对改动后验收</p>`}
         ${renderDiffPanel(t)}
         <div style="display:flex;gap:9px;margin-top:12px">
-          <button class="btn btn-p btn-sm" onclick="mergeTask('${t.id}')">✓ 通过并归档</button>
-          <button class="btn btn-o btn-sm" onclick="rejectTask('${t.id}')">✗ 打回重做</button>
-          ${t.delivery?.items?.some(i => i.kind === 'log') ? `<button class="btn btn-o btn-sm" title="本次执行的完整过程日志（session.log）" onclick="viewSessionLog('${t.id}')">📜 过程日志</button>` : ''}
+          <button class="btn btn-p btn-sm" onclick="mergeTask('${t.id}')">${ic('check')} 通过并归档</button>
+          <button class="btn btn-o btn-sm" onclick="rejectTask('${t.id}')">${ic('x')} 打回重做</button>
+          ${t.delivery?.items?.some(i => i.kind === 'log') ? `<button class="btn btn-o btn-sm" title="本次执行的完整过程日志（session.log）" onclick="viewSessionLog('${t.id}')">${ic('scroll-text')} 过程日志</button>` : ''}
         </div>
       </div>
       ${t.thread?.length ? `<div class="thread-note">该任务已执行 ${t.thread.filter(m => m.role === 'assistant').length} 轮${t.acpSessionId ? '，打回重跑将恢复原会话（上下文延续）' : '，打回时 Agent 会结合此前的交付与反馈继续修改'}。</div>` : ''}</div>`;
   } else if (t.status === 'done' && t.pr) {
-    execHTML = `<div class="d-sec"><h4>结果</h4><div class="done-box">✓ 已归档 <span class="pr">${esc(t.pr)}</span> · 完成于 ${t.doneAt ? fmtRel(t.doneAt) : '—'}</div>
+    execHTML = `<div class="d-sec"><h4>结果</h4><div class="done-box">${ic('check')} 已归档 <span class="pr">${esc(t.pr)}</span> · 完成于 ${t.doneAt ? fmtRel(t.doneAt) : '—'}</div>
       ${t.result ? `<div class="result-box" style="margin-top:10px">${mdToHtml(t.result)}</div>` : ''}${renderDiffPanel(t, true)}</div>`;
   }
 
@@ -1184,7 +1184,7 @@ function renderDrawer(id) {
           ${ds('d-pri', ['P0', 'P1', 'P2'].map(p => ({ v: p, l: p })), t.pri, `byId('${t.id}').pri=this.value;save();refreshViews();renderDrawer('${t.id}')`)}
           <label>经办人</label>
           ${t.pipeline?.on
-            ? `<div style="min-height:36px;display:flex;align-items:center;font-size:12.5px;color:var(--ink-dim)">🧭 项目经理统筹 · 各阶段成员自动分配</div>`
+            ? `<div style="min-height:36px;display:flex;align-items:center;font-size:12.5px;color:var(--ink-dim)">${ic('compass')} 项目经理统筹 · 各阶段成员自动分配</div>`
             : ds('d-assignee', assigneeOpts, t.assignee?.kind === 'human' ? 'm:' + t.assignee.name : t.assignee?.kind === 'role' ? 'r:' + t.assignee.id : t.assignee?.kind === 'agent' ? 'a:' + t.assignee.id : '', `updateAssignee('${t.id}',this.value)`)}
           <label>附加提示词</label>
           ${ds('d-prompt', promptOpts, t.attachPrompt || '', `byId('${t.id}').attachPrompt=this.value||null;save();toast('已附加','执行时将随任务一并发送','✎')`)}
@@ -2434,7 +2434,7 @@ function viewDeliveries() {
         <button class="btn btn-o btn-sm" onclick="previewDelivery('${t.id}')">预览</button>
         ${t.result ? `<button class="btn btn-o btn-sm" onclick="copyDelivery('${t.id}')">复制</button>
         <button class="btn btn-p btn-sm" onclick="downloadDelivery('${t.id}')">下载 .md</button>` : ''}
-        ${t.delivery?.dir ? `<button class="btn btn-o btn-sm" title="在访达中打开交付目录（report.md / changes.patch）" onclick="revealDeliveryDir('${t.id}')">📂 产物</button>` : ''}
+        ${t.delivery?.dir ? `<button class="btn btn-o btn-sm" title="在访达中打开交付目录（report.md / changes.patch）" onclick="revealDeliveryDir('${t.id}')">${ic('folder')} 产物</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -2446,11 +2446,11 @@ function previewDelivery(id) {
     <div class="modal-body">
       <div class="result-box" style="max-height:44vh;overflow:auto">${mdToHtml(t.result || '（该交付无文本产出）')}</div>
       ${t.delivery?.items?.length ? `<div style="font-size:12px;color:var(--ink-dim);margin:10px 0 4px">交付产物：${t.delivery.items.map(i => esc(i.name || i.file)).join(' · ')}
-        ${t.delivery.items.some(i => i.kind === 'log') ? `　<button class="btn btn-o btn-sm" onclick="closeModal();viewSessionLog('${t.id}')">📜 过程日志</button>` : ''}</div>` : ''}
+        ${t.delivery.items.some(i => i.kind === 'log') ? `　<button class="btn btn-o btn-sm" onclick="closeModal();viewSessionLog('${t.id}')">${ic('scroll-text')} 过程日志</button>` : ''}</div>` : ''}
       <div style="max-height:34vh;overflow:auto">${renderDiffPanel(t, true)}</div>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
-      ${t.delivery?.dir && window.reins ? `<button class="btn btn-o" onclick="revealDeliveryDir('${t.id}')">📂 产物目录</button>` : ''}
+      ${t.delivery?.dir && window.reins ? `<button class="btn btn-o" onclick="revealDeliveryDir('${t.id}')">${ic('folder')} 产物目录</button>` : ''}
       ${t.result ? `<button class="btn btn-p" onclick="downloadDelivery('${t.id}')">下载 .md</button>` : ''}</div>`);
 }
 function revealDeliveryDir(id) {
@@ -2470,7 +2470,7 @@ async function viewSessionLog(id) {
       <pre style="max-height:52vh;overflow:auto;font-family:var(--mono);font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-all;background:var(--ink-0,#f6f4f0);border:1px solid var(--line,#e4e0d8);border-radius:8px;padding:12px">${esc(r.text)}</pre>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">关闭</button>
-      <button class="btn btn-o" onclick="revealDeliveryDir('${t.id}')">📂 产物目录</button>
+      <button class="btn btn-o" onclick="revealDeliveryDir('${t.id}')">${ic('folder')} 产物目录</button>
       <button class="btn btn-p" onclick="navigator.clipboard.writeText(window.__sessLog).then(()=>toast('已复制','过程日志已复制到剪贴板','⧉'))">复制全文</button></div>`);
   window.__sessLog = r.text;
 }
@@ -2503,7 +2503,7 @@ function gitRemoteBlock(t) {
   return `<div class="d-sec"><h4>远程交付</h4>
     <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-o btn-sm" onclick="gitPushTask('${t.id}')">⇧ 推送 ${esc(branch)}</button>
-      <button class="btn btn-o btn-sm" onclick="gitPRTask('${t.id}')">⇄ 创建 PR</button>
+      <button class="btn btn-o btn-sm" onclick="gitPRTask('${t.id}')">${ic('arrow-right-left')} 创建 PR</button>
       ${t.prUrl ? `<a class="pr-link" href="${esc(t.prUrl)}" target="_blank" rel="noopener">PR #${esc(String(t.prNo ?? ''))} ↗</a>` : ''}
     </div>
     <div class="git-log" id="git-log"></div>
@@ -2575,7 +2575,7 @@ function renderDiffPanel(t, readOnly) {
   const d = t.delivery && t.delivery.diff;
   if (!d || !d.files || !d.files.length) return '';
   const total = d.files.reduce((s, f) => ({ a: s.a + f.add, d: s.d + f.del }), { a: 0, d: 0 });
-  const badge = t.delivery.diffState === 'applied' ? '<span class="dff-badge ok">✓ 已应用到仓库</span>'
+  const badge = t.delivery.diffState === 'applied' ? '<span class="dff-badge ok">' + ic('check') + ' 已应用到仓库</span>'
     : t.delivery.diffState === 'discarded' ? '<span class="dff-badge no">已放弃</span>'
     : '<span class="dff-badge warn">未确认写入生效</span>';
   const filesHtml = d.files.map(f => `
@@ -2585,8 +2585,8 @@ function renderDiffPanel(t, readOnly) {
     </div>${renderDiffLines(t, f)}`).join('');
   const acts = (readOnly || t.delivery.diffState !== 'pending') ? '' : `
     <div style="display:flex;gap:9px;margin-top:10px">
-      <button class="btn btn-p btn-sm" onclick="applyDiff('${t.id}')">✓ 确认应用到仓库</button>
-      <button class="btn btn-o btn-sm btn-danger-o" onclick="discardDiff('${t.id}')">✗ 放弃变更</button>
+      <button class="btn btn-p btn-sm" onclick="applyDiff('${t.id}')">${ic('check')} 确认应用到仓库</button>
+      <button class="btn btn-o btn-sm btn-danger-o" onclick="discardDiff('${t.id}')">${ic('x')} 放弃变更</button>
     </div>`;
   return `<div class="dff-panel">
     <div class="dff-head"><b>代码变更</b><span>${d.files.length} 个文件 · <span class="dff-stat">+${total.a}</span> <span class="dff-stat del">−${total.d}</span></span>${badge}</div>
@@ -2846,7 +2846,7 @@ function openNewTaskModal() {
         <label class="pipe-toggle" id="nt-pipe-wrap">
           <input type="checkbox" id="nt-pipe" onchange="ntSyncPipe()">
           <span class="pt-main">
-            <b>🧭 流水线模式 · 虚拟团队自动流转</b>
+            <b>${ic('compass')} 流水线模式 · 虚拟团队自动流转</b>
             <span>项目经理拆解流程并裁决返工，产品 → 前后端 → 测试接力执行，测试通过后汇总交付</span>
           </span>
         </label>
@@ -2949,7 +2949,7 @@ function openAgentConfig(agentId) {
         <div class="f-row"><label>模型</label><input type="text" id="ac-model" value="${esc(a.model || '')}" placeholder="例如 glm-4.7"></div>
       </div>
       <div class="f-row"><label>Base URL</label><input type="text" id="ac-baseurl" value="${esc(a.baseURL || '')}" placeholder="选服务商后自动填入"></div>
-      <div class="f-row"><label>API Key（仅保存在本机）</label>${a.__keyLocked ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">⚠ 该密钥已加密但本机解锁失败（系统钥匙串变更？）：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="ac-key" value="${esc(typeof a.apiKey === 'string' ? a.apiKey : '')}" placeholder="${a.__keyLocked ? '重新填写以覆盖…' : 'sk-…'}" autocomplete="off"></div>`;
+      <div class="f-row"><label>API Key（仅保存在本机）</label>${a.__keyLocked ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">' + ic('triangle-alert') + ' 该密钥已加密但本机解锁失败（系统钥匙串变更？）：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="ac-key" value="${esc(typeof a.apiKey === 'string' ? a.apiKey : '')}" placeholder="${a.__keyLocked ? '重新填写以覆盖…' : 'sk-…'}" autocomplete="off"></div>`;
   openModal(`<div class="modal-head"><h3>Agent 配置</h3><span>${esc(a.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-2col">
@@ -3277,7 +3277,7 @@ function settingsHTML(s, live) {
         <div class="f-row"><label>GitHub Token</label><input type="password" id="gt-github" value="${esc(secretOf(s.gitTokens?.github))}" placeholder="ghp_…（可选）" autocomplete="off"></div>
         <div class="f-row"><label>Gitee Token</label><input type="password" id="gt-gitee" value="${esc(secretOf(s.gitTokens?.gitee))}" placeholder="（可选）" autocomplete="off"></div>
       </div>
-      ${secretLocked(s.gitTokens?.github) || secretLocked(s.gitTokens?.gitee) ? '<div class="set-desc" style="margin:6px 0 0;color:#c05656">⚠ 有令牌已加密但本机解锁失败：留空保存可保留密文，重新填写则覆盖。</div>' : ''}
+      ${secretLocked(s.gitTokens?.github) || secretLocked(s.gitTokens?.gitee) ? '<div class="set-desc" style="margin:6px 0 0;color:#c05656">' + ic('triangle-alert') + ' 有令牌已加密但本机解锁失败：留空保存可保留密文，重新填写则覆盖。</div>' : ''}
       <div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="gitTokensSave()">保存令牌</button></div>
     </div>` : `<div class="set-row"><div><b>Git 远程</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`}
     <h3 class="set-h">云端节点</h3>
@@ -3290,7 +3290,7 @@ function settingsHTML(s, live) {
       <div class="set-desc" style="margin-bottom:8px">部署 reins-node/server.js 到你的服务器后，CLI 型 Agent 可选择云端执行，输出实时回传。</div>
       <div class="f-2col">
         <div class="f-row"><label>节点地址</label><input type="text" id="cn-url" value="${esc(s.cloudUrl || '')}" placeholder="https://node.example.com:8787"></div>
-        <div class="f-row"><label>访问令牌（--token）</label>${secretLocked(s.cloudToken) ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">⚠ 令牌已加密但本机解锁失败：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="cn-token" value="${esc(secretOf(s.cloudToken))}" placeholder="与服务器启动参数一致" autocomplete="off"></div>
+        <div class="f-row"><label>访问令牌（--token）</label>${secretLocked(s.cloudToken) ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">' + ic('triangle-alert') + ' 令牌已加密但本机解锁失败：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="cn-token" value="${esc(secretOf(s.cloudToken))}" placeholder="与服务器启动参数一致" autocomplete="off"></div>
       </div>
       <div style="display:flex;gap:9px;margin-top:8px">
         <button class="btn btn-p btn-sm" onclick="cloudSave()">保存</button>
@@ -3524,7 +3524,7 @@ async function hydrateSec() {
   const counts = `<div class="set-desc" style="margin-top:6px">密钥盘点：已加密 ${c.sealed || 0} 个 · 明文 ${c.plaintext || 0} 个${c.locked ? ` · <b style="color:#c05656">解锁失败 ${c.locked} 个（系统钥匙串变更？重配一次 Key 即恢复）</b>` : ''} · 存储策略：${st.policy === 'plain' ? '明文（用户选择）' : '自动（可用即加密）'}</div>`;
   let extra = '';
   if (st.warning) {
-    extra = `<div class="sec-warn"><b>⚠ 安全警示</b><div>系统加密不可用，且磁盘上存在明文密钥。可在本机配置对应钥匙串服务后重启，或明确选择明文存储（风险自担）。</div>
+    extra = `<div class="sec-warn"><b>${ic('triangle-alert')} 安全警示</b><div>系统加密不可用，且磁盘上存在明文密钥。可在本机配置对应钥匙串服务后重启，或明确选择明文存储（风险自担）。</div>
       <div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="confirmSecPlain()">我已知晓风险，使用明文存储</button></div></div>`;
   } else if (st.policy === 'plain' && st.available) {
     extra = `<div class="set-desc" style="margin-top:6px">当前策略为明文存储；<span class="lnk" onclick="secRestoreAuto()">恢复自动加密</span>（下次保存/重启时明文密钥自动迁移）。</div>`;

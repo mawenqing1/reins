@@ -62,7 +62,7 @@ async function run() {
   ok(SRC.includes("return !d || d.state === 'done';"), 'pipeDepsDone 仍只认 done（failed 阻塞下游）');
 
   /* 6. R-5 渲染：阶段清单与甘特图失败图标 / 配色类 / 行内标注 / 构建产物样式 */
-  ok(SRC.split("s.state === 'failed' ? '✕'").length === 3, '阶段清单与甘特图均渲染 ✕ 失败图标');
+  ok(SRC.split("s.state === 'failed' ? ic('x')").length === 3, '阶段清单与甘特图均渲染失败图标（ic x）');
   ok(SRC.includes("s.state === 'failed' ? 'failed' :"), '阶段清单 failed 配色类');
   ok(SRC.includes(' · 失败（可从断点重试）'), '失败阶段行内标注');
   ok(CSS.includes('.pp-stage.failed') && CSS.includes('.pw-stage.failed'), 'app.css 含失败配色（已重构建）');

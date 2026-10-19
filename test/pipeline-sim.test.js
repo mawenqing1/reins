@@ -27,6 +27,9 @@ function bootApp() {
     setTimeout: fn => { timers.push(fn); return timers.length; },   // sim 节拍由测试手动驱动
     clearTimeout: noop,
     setInterval: () => 0, clearInterval: noop,
+    /* 图标桩（icons.js 是独立 <script>，沙箱不装载）：占位标记保住「图标位有内容」的断言语义 */
+    ic: name => '[ic:' + name + ']',
+    gic: ch => String(ch),
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'assets', 'app.js'), 'utf8'), ctx, { filename: 'app.js' });
@@ -123,7 +126,7 @@ async function run() {
     ok(st.s1 === 'failed' && st.ps === 'paused' && st.ts === 'todo' && !st.run, 'R-5：失败阶段置 failed，流水线暂停、实例清理');
     const html = app.ev(`renderPipelinePanel(byId('tk1'))`);
     ok(html.includes('pp-stage failed') && html.includes('pw-stage failed'), '阶段清单与甘特图渲染 failed 配色类');
-    ok(html.includes('✕') && html.includes('失败（可从断点重试）'), '失败图标与行内标注');
+    ok(html.includes("[ic:x]") && html.includes('失败（可从断点重试）'), '失败图标与行内标注');
     /* 断点续跑：failed 回 pending 原地重试 */
     app.ev(`startPipeline('tk1')`);
     const rt = app.ev(`({ s1: byId('tk1').pipeline.stages[0].state, ps: byId('tk1').pipeline.status, run: !!runs['tk1#s1'] })`);
