@@ -308,7 +308,17 @@ function save() {
 }
 const byId = id => S().tasks.find(t => t.id === id);
 const agentById = id => O().agents.find(a => a.id === id);
-const agentUsable = a => a && (a.mode === 'sim' || a.mode === 'cli' ? a.status !== 'offline' : !!(a.apiKey && a.status !== 'offline'));
+/* 密钥取值：safeStorage 解锁失败的 Key 在状态档里保留为密文对象（__keyLocked 标记）——
+   对界面与执行一律视同"未配置"：既不把 [object Object] 当 Bearer 发出去，
+   也不让表单回显/保存把密文副本覆盖成字符串（重配一次 Key 即恢复） */
+const keyOf = a => (a && typeof a.apiKey === 'string' && a.apiKey) || '';
+const agentUsable = a => a && (a.mode === 'sim' || a.mode === 'cli' ? a.status !== 'offline' : !!(keyOf(a) && a.status !== 'offline'));
+/* 设置档密钥（cloudToken / jevKey / gitTokens 成员）取值：解锁失败时同样是密文对象，
+   keyOf 同语义——视同未配置（表单回显空值、真值判定跳过），防 [object Object] 回显进输入框或当 Bearer 发出 */
+const secretOf = v => (typeof v === 'string' && v) || '';
+const secretLocked = v => !!v && typeof v === 'object';
+/* 密钥输入框收集：留空且现值是密文对象 → 原样带回（不抹密文副本），重填或明文清空才覆盖 */
+const secretPick = (v, cur) => (typeof v === 'string' ? v.trim() : '') || (secretLocked(cur) ? cur : '');
 
 /* ============ 时间 ============ */
 function fmtRel(ts) {
@@ -561,7 +571,7 @@ function viewAgents() {
         <div class="agent-av">${brandOf(a)}</div>
         <div style="flex:1">
           <h3>${esc(a.name)} ${modeBadge}</h3>
-          <div class="agent-meta">${a.mode === 'api' ? esc(providerLabel(a.provider)) + ' · ' + esc(a.model || '—') + (a.apiKey ? '' : ' · <b style="color:#c05656">未配置密钥</b>') : a.mode === 'cli' ? (a.runtime === 'cloud' ? '☁ 云端执行 · ' : '本机命令 <b style="font-weight:600">') + (a.runtime === 'cloud' ? esc(a.cliCommand || '—') : '') + (a.runtime === 'cloud' ? '' : '</b>' + (a.detected ? ' · ✓ 已检测到' : '')) : '本地模拟 · 无需配置'}</div>
+          <div class="agent-meta">${a.mode === 'api' ? esc(providerLabel(a.provider)) + ' · ' + esc(a.model || '—') + (keyOf(a) ? '' : a.__keyLocked ? ' · <b style="color:#c05656">密钥已加密但本机解锁失败</b>' : ' · <b style="color:#c05656">未配置密钥</b>') : a.mode === 'cli' ? (a.runtime === 'cloud' ? '☁ 云端执行 · ' : '本机命令 <b style="font-weight:600">') + (a.runtime === 'cloud' ? esc(a.cliCommand || '—') : '') + (a.runtime === 'cloud' ? '' : '</b>' + (a.detected ? ' · ✓ 已检测到' : '')) : '本地模拟 · 无需配置'}</div>
         </div>
         <span class="status-pill ${a.status}">${a.status === 'working' ? '<span class="pulse"></span>执行中' : a.status === 'idle' ? '待命' : '离线'}</span>
       </div>
@@ -693,7 +703,7 @@ function confirmDeleteRole(id) {
 function toggleAgent(id) {
   const a = agentById(id);
   if (a.status === 'working') { toast('无法离线', a.name + ' 正在执行任务，请先等待完成或终止', '⚠'); return; }
-  if (a.mode === 'api' && !a.apiKey && a.status === 'offline') { toast('缺少密钥', '请先在配置中填写 API Key', ''); openAgentConfig(id); return; }
+  if (a.mode === 'api' && !keyOf(a) && a.status === 'offline') { toast('缺少密钥', '请先在配置中填写 API Key', ''); openAgentConfig(id); return; }
   a.status = a.status === 'offline' ? 'idle' : 'offline';
   toast(a.name, a.status === 'offline' ? '已离线' : '已上线', a.status === 'offline' ? '■' : '▶');
   addActivity('✳', a.name + (a.status === 'offline' ? ' 已离线' : ' 已上线'));
@@ -920,11 +930,11 @@ function viewInteg() {
         <div class="integ-brand">
           <div class="lg" style="background:#6f6ac2">${ic('chart-column')}</div>
           <div><h3>Jev 决策引擎</h3><span>TypeSafe AI · 结构化分诊判断</span></div>
-          <span class="status-pill ${cfg.jevKey ? 'idle' : 'offline'}" style="margin-left:auto">${cfg.jevKey ? '已配置' : '未配置'}</span>
+          <span class="status-pill ${secretOf(cfg.jevKey) ? 'idle' : 'offline'}" style="margin-left:auto">${secretOf(cfg.jevKey) ? '已配置' : secretLocked(cfg.jevKey) ? '已加密 · 本机解锁失败' : '未配置'}</span>
         </div>
         <div class="integ-desc">将任务分诊（类型、优先级、经办人）交给决策模型：输入任务与候选名单，输出带概率的结构化建议，适合批量分诊。不配置时继续用 API 模型分诊。</div>
         ${window.reins ? `
-        <div class="f-row"><label>API Key（console.typesafe.ai 创建）</label><input type="password" id="jev-key" value="${esc(cfg.jevKey || '')}" placeholder="sk-…"></div>
+        <div class="f-row"><label>API Key（console.typesafe.ai 创建）</label>${secretLocked(cfg.jevKey) ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">⚠ 该密钥已加密但本机解锁失败（系统钥匙串变更？）：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="jev-key" value="${esc(secretOf(cfg.jevKey))}" placeholder="${secretLocked(cfg.jevKey) ? '重新填写以覆盖…' : 'sk-…'}"></div>
         <div class="f-row"><label>接入地址（兼容 systemone 协议即可）</label><input type="text" id="jev-url" value="${esc(cfg.jevUrl || 'https://api.typesafe.ai/v1/systemone')}" placeholder="https://api.typesafe.ai/v1/systemone"></div>
         <div class="f-2col">
           <div class="f-row"><label>模型</label><input type="text" id="jev-model" value="${esc(cfg.jevModel || 'jev-latest')}" placeholder="jev-latest"></div>
@@ -984,8 +994,9 @@ function jevSave() {
   const model = $('#jev-model').value.trim() || 'jev-latest';
   const engine = $('#jev-engine').value;
   if (!/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
-  /* settings:set 契约收口（返工①）：同 whSave，成功提示移入回调、失败如实报出 */
-  window.reins.setSettings({ jevKey: key, jevUrl: url, jevModel: model, triageEngine: engine }).then(r => {
+  /* settings:set 契约收口（返工①）：同 whSave，成功提示移入回调、失败如实报出。
+     jevKey 留空且现值是未解锁密文时原样带回，不把密文副本抹成空串（同 Agent 表单语义） */
+  window.reins.setSettings({ jevKey: secretPick(key, hookCfg.jevKey), jevUrl: url, jevModel: model, triageEngine: engine }).then(r => {
     const s = settingsApplied(r);
     if (!s) return;
     hookCfg = { ...hookCfg, ...s };
@@ -1054,7 +1065,19 @@ function openTask(id) {
 function closeDrawer() { drawerTaskId = null; document.body.classList.remove('drawer-open'); }
 function drawerOpenOn(id) { return drawerTaskId === id && document.body.classList.contains('drawer-open'); }
 
-/* 抽屉里的流水线面板：阶段清单（含产出预览）+ 裁决记录 + 启动/续跑按钮 */
+/* 运行终端盒：单任务执行与并行流水线阶段共用（阶段实例的 DOM id 带阶段后缀，事件分流定位） */
+function runBoxHTML(runKey, title, sub) {
+  const r = runs[runKey]; if (!r) return '';
+  const pct = runPct(runKey);
+  const suf = r.stageId ? '-' + r.stageId : '';
+  return `<div class="run-box">
+    <div class="run-head"><span class="agent-name">${esc(title)}</span><span>${esc(sub || '')}</span><span class="pct" id="run-pct${suf}">${pct}%</span></div>
+    <div class="run-bar"><i id="run-bar${suf}" style="width:${pct}%"></i></div>
+    <div class="term-scroll" id="drawer-log${suf}">${r.log.map(([c, x]) => `<div class="ln ${c}">${esc(x)}</div>`).join('')}<div class="ln stream" id="drawer-stream${suf}">${esc(r.stream || '')}</div></div>
+  </div>`;
+}
+
+/* 抽屉里的流水线面板：并行波次甘特 + 阶段清单（含产出预览）+ 裁决记录 + 启动/续跑按钮 */
 function renderPipelinePanel(t) {
   const p = t.pipeline;
   if (!p || !p.on) return '';
@@ -1065,19 +1088,32 @@ function renderPipelinePanel(t) {
     body = p.stages.map((s, i) => {
       const role = pipeRoleByKey(s.roleKey);
       const cur = (i === p.cur && ['running', 'planning', 'paused'].includes(p.status)) || ['running', 'rework'].includes(s.state);
-      const icon = s.state === 'done' ? '✓' : s.state === 'rework' ? '↩' : cur ? '▶' : '○';
-      return `<div class="pp-stage ${s.state === 'done' ? 'done' : cur ? 'cur' : 'todo'}">
+      const icon = s.state === 'done' ? '✓' : s.state === 'rework' ? '↩' : s.state === 'failed' ? '✕' : cur ? '▶' : '○';
+      return `<div class="pp-stage ${s.state === 'done' ? 'done' : s.state === 'failed' ? 'failed' : cur ? 'cur' : 'todo'}">
         <span class="pp-ic">${icon}</span>
-        <div class="pp-main"><b>${esc(s.name)}</b><span>${esc(role ? role.name : s.roleKey)}${s.rework ? ' · 返工' : ''}${s.runs > 1 ? ' · 第 ' + s.runs + ' 次执行' : ''}${s.final ? ' · 终段' : ''}</span></div>
+        <div class="pp-main"><b>${esc(s.name)}</b><span>${esc(role ? role.name : s.roleKey)}${s.state === 'failed' ? ' · 失败（可从断点重试）' : ''}${s.rework ? ' · 返工' : ''}${s.runs > 1 ? ' · 第 ' + s.runs + ' 次执行' : ''}${s.final ? ' · 终段' : ''}</span></div>
       </div>${s.result ? `<details class="pp-res"><summary>阶段产出</summary><div class="result-box" style="margin:0">${mdToHtml(String(s.result).slice(0, 6000))}</div></details>` : ''}`;
     }).join('');
   }
+  /* 并行波次甘特（简化版）：同波次阶段左右并列、波次间上下衔接，状态着色与阶段清单一致 */
+  const parWaves = p.waves && p.waves.some(w => w.length > 1) ? p.waves : null;
+  const gantt = parWaves ? `<div class="pp-gantt">${parWaves.map((w, wi) => `
+    <div class="pp-wave"><span class="pw-idx">W${wi + 1}</span><div class="pw-stages">${w.map(i => {
+      const s = p.stages[i]; if (!s) return '';
+      const icn = s.state === 'done' ? '✓' : s.state === 'failed' ? '✕' : ['running', 'rework'].includes(s.state) ? '▶' : '○';
+      const depNames = (s.dependsOn || []).map(id => (p.stages.find(x => x.id === id) || {}).name || id).join('、');
+      return `<span class="pw-stage ${s.state}" title="${esc(depNames ? '依赖：' + depNames : '无依赖（并行根）')}">${icn} ${esc(s.name)}</span>`;
+    }).join('')}</div></div>`).join('')}<div class="pw-hint">同波次阶段并行执行 · 波次间按依赖衔接</div></div>` : '';
+  /* 并行阶段的独立运行终端（每阶段一个日志盒；串行流水线沿用抽屉主执行盒） */
+  const boxes = p.stages ? p.stages.filter(s => runs[t.id + '#' + s.id]).map(s => runBoxHTML(t.id + '#' + s.id, s.name + (s.rework ? ' · 返工' : ''), (pipeRoleByKey(s.roleKey) || {}).name || s.roleKey)) : [];
+  const cancelBtn = boxes.length ? `<div class="run-actions"><button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">■ 终止执行</button></div>` : '';
   const gateHTML = p.gate ? `<div class="pp-gate ${p.gate.action === 'pass' ? 'pass' : 'rework'}">⚖ 第 ${p.gate.round} 轮裁决 · ${p.gate.action === 'pass' ? '通过' : '打回 ' + (p.gate.targets || []).join('/')}（${esc(p.gate.engine || '')}）— ${esc(p.gate.reason || '')}${p.gate.evidence ? `<div class="pp-evid">依据：${esc(String(p.gate.evidence).slice(0, 200))}</div>` : ''}</div>` : '';
   const btn = p.status === 'idle' || p.status === 'paused'
     ? `<button class="btn btn-p btn-sm" onclick="startPipeline('${t.id}')">▶ ${p.status === 'paused' ? '从断点继续' : '启动流水线'}</button>` : '';
   return `<div class="d-sec"><h4>流水线 · ${PIPE_STATE[p.status] || p.status}${modeTag}${p.round > 1 ? ` · 已返工 ${p.round - 1} 轮（上限 ${p.maxRework}）` : ''}</h4>
     <div class="pp-body">${body || '<div class="pp-plan">尚未启动：启动后项目经理将拆解流程并分配成员。</div>'}${gateHTML}</div>
-    ${btn ? `<div style="display:flex;gap:9px;align-items:center;margin-top:9px">${btn}<span style="font-size:11px;color:var(--ink-faint)">拆流程 → 阶段接力 → 测试裁决 → 返工循环 → 汇总交付</span></div>` : ''}
+    ${gantt}${boxes.join('')}${cancelBtn}
+    ${btn ? `<div style="display:flex;gap:9px;align-items:center;margin-top:9px">${btn}<span style="font-size:11px;color:var(--ink-faint)">拆流程 → 阶段接力（无依赖并行）→ 测试裁决 → 返工循环 → 汇总交付</span></div>` : ''}
   </div>`;
 }
 
@@ -1094,11 +1130,7 @@ function renderDrawer(id) {
   let execHTML = '';
   if (r) {
     execHTML = `<div class="d-sec"><h4>${r.mode === 'api' ? '真实执行 · 流式输出' : 'Agent 执行 · 实时输出'} · ${pct ? pct + '%' : '运行中'}</h4>
-      <div class="run-box">
-        <div class="run-head"><span class="agent-name">${esc(t.assignee?.name || 'Agent')}</span><span>${r.mode === 'api' ? esc(r.model || '') : 'workspaces/' + t.key}</span><span class="pct" id="run-pct">${pct}%</span></div>
-        <div class="run-bar"><i id="run-bar" style="width:${pct}%"></i></div>
-        <div class="term-scroll" id="drawer-log">${r.log.map(([c, x]) => `<div class="ln ${c}">${esc(x)}</div>`).join('')}<div class="ln stream" id="drawer-stream">${esc(r.stream || '')}</div></div>
-      </div>
+      ${runBoxHTML(id, t.assignee?.name || 'Agent', r.mode === 'api' ? (r.model || '') : 'workspaces/' + t.key)}
       <div class="run-actions">
         <button class="btn btn-o btn-sm" onclick="cancelRun('${t.id}')">■ 终止执行</button>
       </div></div>`;
@@ -1178,6 +1210,7 @@ function renderDrawer(id) {
         <div class="wt-chip"><span>${esc(t.worktree)}</span><button class="btn btn-o btn-sm" onclick="revealWt('${t.id}')">在访达中显示</button></div>
         ${(t.changes && t.changes.length) ? `<div class="chg-list">${t.changes.map(c => `<span class="chg-file"><i>${esc(c.flag || 'M')}</i>${esc(c.file)}</span>`).join('')}</div>` : ''}
         <div style="font-size:12px;color:var(--ink-faint);margin-top:7px">改动位于分支 reins/${t.key}，验收通过后合并回主分支。</div></div>` : ''}
+      ${gitRemoteBlock(t)}
       ${(t.history && t.history.length) ? `<div class="d-sec"><h4>动态 · ${t.history.length}</h4>
         <ul class="tl">${t.history.slice().reverse().map(h => `<li><span class="fic">${gic(h.icon)}</span><div><div>${esc(h.text)}</div><div class="ft">${fmtRel(h.at)}</div></div></li>`).join('')}</ul>
       </div>` : ''}
@@ -1187,7 +1220,7 @@ function renderDrawer(id) {
       </div>
       <div class="d-sec d-del"><button class="btn btn-o btn-sm btn-danger-o" onclick="confirmDeleteTask('${t.id}')">删除任务</button><span>永久删除，含执行记录、评论与交付物</span></div>
     </div>`;
-  const dl = $('#drawer-log'); if (dl) dl.scrollTop = dl.scrollHeight;
+  document.querySelectorAll('.drawer .term-scroll').forEach(el => { el.scrollTop = el.scrollHeight; });
   if (t.status === 'todo' && ['agent', 'role'].includes(t.assignee?.kind)) {
     const ha = t.assignee.kind === 'role' ? (resolveRoleAgent(t) || {}).agent : agentById(t.assignee.id);
     if (cliCanModel(ha)) hydrateModelSelect('run-model', ha, t.runModel);
@@ -1279,12 +1312,16 @@ function runPct(taskId) {
 /* ---- 真实 API 引擎（主进程流式调用，事件回推） ---- */
 function startApiRun(taskId, agent, opts) {
   const t = byId(taskId);
-  const r = runs[taskId] = { mode: 'api', log: [], stream: '', model: agent.model, usage: null, done: false };
+  /* 并行阶段各持独立 run 实例（键 taskId#阶段id）：事件按 stageNo 分流，日志互不覆盖 */
+  const st = opts.stage || null;
+  const runKey = st && st.id ? taskId + '#' + st.id : taskId;
+  if (runs[runKey]) return;
+  const r = runs[runKey] = { mode: 'api', log: [], stream: '', model: agent.model, usage: null, done: false, stageId: st ? st.id : null, stageNo: st ? st.no : undefined };
   r.log.push(['act', `▸ 装配任务上下文（${t.key} · ${TYPE_LABEL[t.type] || t.type}）`]);
   /* 流水线阶段上下文优先（编排器注入）；否则走任务卡附加的团队提示词 */
   const extra = opts.extraPrompt || (t.attachPrompt ? (S().prompts.find(p => p.id === t.attachPrompt)?.content || '') : '');
   if (extra) r.log.push(['ok', opts.extraPrompt
-    ? `✓ 已注入流水线阶段上下文（${t.pipeline?.stages?.[t.pipeline.cur]?.name || '当前阶段'}，含前序产出）`
+    ? `✓ 已注入流水线阶段上下文（${(st && st.name) || t.pipeline?.stages?.[t.pipeline.cur]?.name || '当前阶段'}，含前序产出）`
     : `✓ 已附加团队提示词「${S().prompts.find(p => p.id === t.attachPrompt)?.title}」`]);
   if (opts.roleName) r.log.push(['ok', `☆ 角色执行：${esc(opts.roleName)}（专属提示词与模型已注入）`]);
   if (t.thread?.length) r.log.push(['', `↻ 带此前 ${t.thread.filter(m => m.role === 'assistant').length} 轮交付继续修改`]);
@@ -1299,19 +1336,29 @@ function startApiRun(taskId, agent, opts) {
     ? (agent.cliCommand || 'CLI') + (effAgent.cliModel ? ' · ' + effAgent.cliModel : ' · 默认模型')
     : providerLabel(agent.provider) + ' · ' + agent.model;
   th(t, '▶', '开始执行 · ' + execLabel);
-  window.reins.runStart({ task: t, agent: effAgent, extraPrompt: extra, repoRoot: agent.mode === 'cli' ? (t.repoRoot || S().repoRoot || '') : '', runtime: agent.mode === 'cli' && agent.runtime === 'cloud' ? 'cloud' : 'local' });
-  updateRunUI(taskId);
+  /* stage：并行阶段唯一键（取消 / 交付子目录编号 / 事件 stageNo 打标）。
+     任务级模型参数（创建时「高级选项」）挂在 t.modelParams 随任务对象透传，
+     由主进程按「任务级覆盖 > Agent > 全局默认」解析 */
+  window.reins.runStart({ task: t, agent: effAgent, extraPrompt: extra, repoRoot: agent.mode === 'cli' ? (t.repoRoot || S().repoRoot || '') : '', runtime: agent.mode === 'cli' && agent.runtime === 'cloud' ? 'cloud' : 'local', stage: st ? { key: st.id, no: st.no } : undefined });
+  updateRunUI(runKey);
 }
 
 function handleRunEvent(evt) {
   const { taskId } = evt;
-  const r = runs[taskId]; if (!r) return;
+  /* 并行阶段事件带 stageNo（主进程打标）：按编号路由到对应阶段的 run 实例（键 taskId#阶段id），
+     单任务 / 未打标事件仍按 taskId 直查 */
+  let runKey = taskId;
+  if (Number.isFinite(evt.stageNo)) {
+    runKey = Object.keys(runs).find(k => runs[k].stageNo === evt.stageNo && (k === taskId || k.startsWith(taskId + '#'))) || '';
+  }
+  const r = runs[runKey]; if (!r) return;
   const t = byId(taskId);
   if (evt.type === 'delta') {
     r.stream += evt.text;
-    const box = $('#drawer-stream');
-    if (box && drawerOpenOn(taskId)) { box.textContent = r.stream; const dl = $('#drawer-log'); if (dl) dl.scrollTop = dl.scrollHeight; }
-    document.querySelectorAll(`[data-task="${taskId}"] .bar i`).forEach(el => el.style.width = runPct(taskId) + '%');
+    const suf = r.stageId ? '-' + r.stageId : '';
+    const box = $('#drawer-stream' + suf);
+    if (box && drawerOpenOn(taskId)) { box.textContent = r.stream; const dl = $('#drawer-log' + suf); if (dl) dl.scrollTop = dl.scrollHeight; }
+    document.querySelectorAll(`[data-task="${taskId}"] .bar i`).forEach(el => el.style.width = runPct(runKey) + '%');
     return;
   }
   if (evt.type === 'usage') { r.usage = evt.usage; return; }
@@ -1319,13 +1366,19 @@ function handleRunEvent(evt) {
   if (evt.type === 'model') {
     r.model = evt.model;
     if (evt.final && t) th(t, '◆', '执行模型 ' + evt.model); // init 帧确认的真实模型入时间线，事后可查
-    updateRunUI(taskId); return;
+    updateRunUI(runKey); return;
   }
-  if (evt.type === 'note') { r.log.push(['', evt.text]); updateRunUI(taskId); return; }
+  /* 瞬态错误自动重试（429/5xx/超时）：流式输出区如实显示重试节奏；重试耗尽才走 error 事件 */
+  if (evt.type === 'retry') { r.log.push(['retry', evt.text || `↻ 重试中（第 ${evt.retryNo}/${evt.retries} 次）…`]); updateRunUI(runKey); return; }
+  if (evt.type === 'note') { r.log.push(['', evt.text]); updateRunUI(runKey); return; }
   if (evt.type === 'done') {
-    /* 流水线阶段完成 → 交编排器推进（裁决/返工/下一阶段），不走单任务验收路径 */
+    /* 流水线阶段完成 → 交编排器推进（裁决/返工/下一波次），不走单任务验收路径；
+       并行阶段按 stageNo 定位完成的是哪一个 */
     const t0 = byId(taskId);
-    if (t0 && t0.pipeline && t0.pipeline.on && t0.pipeline.status === 'running') return pipelineStageDone(taskId, evt);
+    if (t0 && t0.pipeline && t0.pipeline.on && t0.pipeline.status === 'running') {
+      const st = Number.isFinite(evt.stageNo) ? t0.pipeline.stages.find(s => s.no === evt.stageNo) : t0.pipeline.stages[t0.pipeline.cur];
+      return pipelineStageDone(taskId, evt, st);
+    }
     // stream 里已经有完整执行过程（工具调用日志），只在为空时才用交付文本补位，别把过程日志冲掉
     r.done = true; if (!r.stream) r.stream = evt.result || '';
     const t2 = byId(taskId); const a = effAgentOf(t2);
@@ -1367,24 +1420,36 @@ function handleRunEvent(evt) {
     /* ACP 超时但引擎已有完整产出（partial）：流水线按完成推进——成果在 worktree，
        下一阶段（测试）会实际检验；比反复超时卡死强。时间线留痕可查 */
     const t0 = byId(taskId);
+    const stg = Number.isFinite(evt.stageNo) && t0?.pipeline?.stages ? t0.pipeline.stages.find(s => s.no === evt.stageNo) : null;
     if (t0 && t0.pipeline?.on && t0.pipeline.status === 'running' && evt.partial && evt.partial.length > 400 && !pipeOutputSuspect(evt.partial)) {
       th(t0, '⚠', '阶段执行超时，但引擎已产出完整交付（按完成推进，测试阶段将实际检验）');
       r.log.push(['', '⚠ 超时收尾：产出完整，按完成推进']);
-      return pipelineStageDone(taskId, { result: evt.partial, worktree: evt.worktree || null, changes: evt.changes, usage: evt.usage });
+      return pipelineStageDone(taskId, { result: evt.partial, worktree: evt.worktree || null, changes: evt.changes, usage: evt.usage }, stg || t0.pipeline.stages[t0.pipeline.cur]);
     }
     r.log.push(['err', '✕ 调用失败：' + evt.message]);
     if (t) {
       if (t.pipeline?.on && t.pipeline.status === 'running') {
-        t.pipeline.status = 'paused';
-        const st = t.pipeline.stages[t.pipeline.cur];
-        if (st && ['running', 'rework'].includes(st.state)) st.state = 'pending';
-        th(t, '⏸', '流水线暂停 · ' + (st ? st.name : '') + ' 执行失败，可从断点继续');
+        const st = stg || t.pipeline.stages[t.pipeline.cur];
+        /* 失败独立状态（REINS-128）：与「从未启动」可区分（甘特图红标），断点续跑时回待运行原地重试 */
+        if (st && ['running', 'rework'].includes(st.state)) st.state = 'failed';
         /* 失败也留会话锚点（ACP 超时/出错）：断点续跑优先恢复原会话，省去重读代码的冷启动 */
         if (evt.acpSessionId) { t.acpSessionId = evt.acpSessionId; t.acpAgentId = (effAgentOf(t) || {}).id || null; }
+        /* 并行语义（REINS-128）：失败阶段不阻塞同波次其他在途阶段，只阻塞自己的下游依赖；
+           还有在途阶段时保持流水线运行，等它们收尾时 pipeStep 再统一判定是否暂停 */
+        if (st && t.pipeline.stages.some(s => s !== st && ['running', 'rework'].includes(s.state))) {
+          th(t, '⚠', st.name + ' 执行失败，其下游依赖阶段被阻塞；其他并行阶段继续');
+          delete runs[runKey];
+          toast('阶段执行失败', String(evt.message).slice(0, 60), '⚠');
+          save(); refreshViews();
+          if (drawerTaskId === taskId) renderDrawer(taskId);
+          return;
+        }
+        t.pipeline.status = 'paused';
+        th(t, '⏸', '流水线暂停 · ' + (st ? st.name : '') + ' 执行失败，可从断点继续');
       }
-      t.status = 'todo';
+      if (!(t.pipeline?.on && t.pipeline.status === 'running')) t.status = 'todo';
       const a = effAgentOf(t);
-      if (a) { a.status = 'idle'; a.taskId = null; }
+      if (a && !(t.pipeline?.on && t.pipeline.stages?.some(s => ['running', 'rework'].includes(s.state)))) { a.status = 'idle'; a.taskId = null; }
       // 失败也留过程日志（session.log 已落盘）：交付面板能打开排查，失败任务的线索不丢
       if (evt.delivery && !t.delivery) {
         t.delivery = evt.delivery;
@@ -1392,7 +1457,7 @@ function handleRunEvent(evt) {
       }
     }
     toast('执行失败', String(evt.message).slice(0, 60), '⚠');
-    delete runs[taskId];
+    delete runs[runKey];
     save(); refreshViews();
     if (drawerTaskId === taskId) renderDrawer(taskId);
     return;
@@ -1401,25 +1466,39 @@ function handleRunEvent(evt) {
     r.log.push(['err', '■ 已终止']);
     if (t) {
       if (t.pipeline?.on && t.pipeline.status === 'running') {
-        t.pipeline.status = 'paused';
-        const st = t.pipeline.stages[t.pipeline.cur];
+        const st = Number.isFinite(evt.stageNo) ? t.pipeline.stages.find(s => s.no === evt.stageNo) : t.pipeline.stages[t.pipeline.cur];
         if (st && ['running', 'rework'].includes(st.state)) st.state = 'pending';
-        th(t, '⏸', '流水线已终止 · 可从断点继续');
+        if (st && t.pipeline.stages.some(s => s !== st && ['running', 'rework'].includes(s.state))) th(t, '■', st.name + ' 已终止；其他并行阶段继续');
+        else { t.pipeline.status = 'paused'; th(t, '⏸', '流水线已终止 · 可从断点继续'); }
       }
-      t.status = 'todo';
+      if (!(t.pipeline?.on && t.pipeline.status === 'running')) t.status = 'todo';
       const a = effAgentOf(t);
-      if (a) { a.status = 'idle'; a.taskId = null; }
+      if (a && !(t.pipeline?.on && t.pipeline.stages?.some(s => ['running', 'rework'].includes(s.state)))) { a.status = 'idle'; a.taskId = null; }
     }
-    delete runs[taskId];
+    delete runs[runKey];
     save(); refreshViews();
     if (drawerTaskId === taskId) renderDrawer(taskId);
   }
 }
 
 function cancelRun(taskId) {
-  const r = runs[taskId]; if (!r) return;
-  if (r.mode === 'api') { window.reins?.runCancel(taskId); }
-  else { clearTimeout(r.timer); delete runs[taskId]; const t = byId(taskId); if (t) t.status = 'todo'; save(); refreshViews(); if (drawerTaskId === taskId) renderDrawer(taskId); }
+  const r = runs[taskId];
+  const stageKeys = Object.keys(runs).filter(k => k.startsWith(taskId + '#'));
+  if (!r && !stageKeys.length) return;
+  /* 真实引擎（含并行阶段实例）：主进程按 taskId 前缀一次全停（用户取消立即终止且不重试）；
+     演示引擎的阶段实例是渲染层定时器（主进程不持有），本地清停并按取消语义收尾 */
+  if ((r && r.mode === 'api') || stageKeys.some(k => runs[k].mode === 'api')) window.reins?.runCancel(taskId);
+  const simKeys = [taskId, ...stageKeys].filter(k => runs[k] && runs[k].mode === 'sim');
+  if (!simKeys.length) return;
+  const t = byId(taskId);
+  simKeys.forEach(k => { clearTimeout(runs[k].timer); delete runs[k]; });
+  if (t?.pipeline?.on && t.pipeline.status === 'running') {
+    t.pipeline.stages.forEach(s => { if (['running', 'rework'].includes(s.state)) s.state = 'pending'; });
+    t.pipeline.status = 'paused';
+    th(t, '⏸', '流水线已终止 · 可从断点继续');
+  }
+  if (t) t.status = 'todo';
+  save(); refreshViews(); if (drawerTaskId === taskId) renderDrawer(taskId);
 }
 function confirmDeleteTask(id) {
   const t = byId(id); if (!t) return;
@@ -1495,6 +1574,8 @@ function startRun(taskId, opts = {}) {
   const t = byId(taskId);
   /* 流水线任务：统一入口转给编排器（启动/断点续跑），运行中由 runs 守卫防重 */
   if (t?.pipeline?.on && !['running', 'planning', 'done'].includes(t.pipeline.status)) return startPipeline(taskId);
+  /* 流水线执行中只接受编排器派发的阶段调用（opts.pipeline），看板拖拽等单任务通路不再叠加启动 */
+  if (t?.pipeline?.on && ['running', 'planning'].includes(t.pipeline.status) && !opts.pipeline) return;
   if (!t.assignee || !['agent', 'role'].includes(t.assignee.kind)) { toast('无法启动', '请先将任务指派给一个 Agent 或角色', '⚠'); return; }
   /* 角色指派：解析为绑定的 Agent，注入角色提示词与角色级模型（任务级 runModel 在 startApiRun 再覆盖） */
   const rr = t.assignee.kind === 'role' ? resolveRoleAgent(t) : null;
@@ -1502,7 +1583,7 @@ function startRun(taskId, opts = {}) {
   const real = rr ? agentById(rr.role.agentId) : agentById(t.assignee.id);   // 状态记录用（真实 Agent）
   const a = rr ? rr.agent : real;                                            // 执行用（含角色提示词/模型）
   if (!real) { toast('Agent 不存在', '', '⚠'); return; }
-  if (real.status === 'offline' || (real.mode === 'api' && !real.apiKey)) {
+  if (real.status === 'offline' || (real.mode === 'api' && !keyOf(real))) {
     toast(real.mode === 'api' ? '缺少密钥' : 'Agent 离线', real.mode === 'api' ? '请在设置中配置 API Key' : '请先上线 ' + esc(real.name), '⚠');
     if (real.mode === 'api') openAgentConfig(real.id);
     return;
@@ -1512,7 +1593,8 @@ function startRun(taskId, opts = {}) {
     switchView('settings');
     return;
   }
-  if (runs[taskId]) return;
+  /* 单任务防重入；流水线阶段的并发实例有独立键（taskId#阶段id），在 startApiRun 内判重 */
+  if (runs[taskId] && !opts.stage) return;
   t.status = 'doing'; real.status = 'working'; real.taskId = taskId;
   const runLabel = (rr ? '☆ ' + rr.role.name + ' · ' : '') + real.name;
   th(t, '🚀', runLabel + ' 开始执行');
@@ -1523,31 +1605,36 @@ function startRun(taskId, opts = {}) {
   if ((a.mode === 'api' || a.mode === 'cli') && window.reins) {
     startApiRun(taskId, a, { ...opts, roleName: rr ? rr.role.name : '' });
   } else {
-    runs[taskId] = { mode: 'sim', steps: buildSteps(t), idx: 0, log: [], done: false };
-    stepRun(taskId);
+    /* 演示引擎：流水线阶段与真实引擎同构——独立阶段实例（键 taskId#阶段id），可并行接力 */
+    const st = opts.stage || null;
+    const runKey = st && st.id ? taskId + '#' + st.id : taskId;
+    if (runs[runKey]) return;
+    runs[runKey] = { mode: 'sim', steps: buildSteps(t), idx: 0, log: [], done: false, stageId: st ? st.id : null, stageNo: st ? st.no : undefined };
+    stepRun(runKey);
   }
   refreshViews();
   if (opts.openDrawer) openTask(taskId);
   else if (drawerTaskId === taskId) renderDrawer(taskId);
 }
-function stepRun(taskId) {
-  const r = runs[taskId]; if (!r) return;
-  if (r.idx >= r.steps.length) { finishRun(taskId); return; }
+function stepRun(runKey) {
+  const r = runs[runKey]; if (!r) return;
+  if (r.idx >= r.steps.length) { finishRun(runKey); return; }
   const [cls, text] = r.steps[r.idx];
   r.log.push([cls, text]);
-  const t = byId(taskId), a = t?.assignee ? agentById(t.assignee.id) : null;
+  const t = byId(String(runKey).split('#')[0]), a = t?.assignee ? agentById(t.assignee.id) : null;
   if (a) a.tokens += rnd(6, 24) * 1000;
   r.idx++;
-  updateRunUI(taskId);
-  r.timer = setTimeout(() => stepRun(taskId), rnd(500, 1050));
+  updateRunUI(runKey);
+  r.timer = setTimeout(() => stepRun(runKey), rnd(500, 1050));
 }
-function finishRun(taskId) {
-  const r = runs[taskId]; const t = byId(taskId);
+function finishRun(runKey) {
+  const r = runs[runKey]; const taskId = String(runKey).split('#')[0]; const t = byId(taskId);
   if (!r || !t) return;
-  /* 演示引擎跑流水线：同样交编排器推进（接入 API/CLI Agent 后为真实交付） */
+  /* 演示引擎跑流水线：同样交编排器推进；并行阶段按实例 stageNo 定位完成的是哪一个（与真实引擎事件分流同构） */
   if (t.pipeline?.on && t.pipeline.status === 'running') {
-    delete runs[taskId];
-    return pipelineStageDone(taskId, { result: '（演示引擎模拟产出，接入 API 或本机 CLI Agent 后为真实交付）', usage: null });
+    const st = Number.isFinite(r.stageNo) ? t.pipeline.stages.find(s => s.no === r.stageNo) : t.pipeline.stages[t.pipeline.cur];
+    delete runs[runKey];
+    return pipelineStageDone(taskId, { result: '（演示引擎模拟产出，接入 API 或本机 CLI Agent 后为真实交付）', usage: null }, st);
   }
   const a = effAgentOf(t);
   t.status = 'review'; t.pr = '交付 #' + (S().deliverSeq++);
@@ -1565,19 +1652,21 @@ function finishRun(taskId) {
   save(); refreshViews();
   if (drawerTaskId === taskId) renderDrawer(taskId);
 }
-function updateRunUI(taskId) {
-  const r = runs[taskId]; if (!r) return;
-  const pct = runPct(taskId);
+function updateRunUI(runKey) {
+  const r = runs[runKey]; if (!r) return;
+  const taskId = String(runKey).split('#')[0];
+  const pct = runPct(runKey);
+  const suf = r.stageId ? '-' + r.stageId : '';
   if (drawerOpenOn(taskId)) {
-    const dl = $('#drawer-log');
+    const dl = $('#drawer-log' + suf);
     if (dl) {
       const [cls, text] = r.log[r.log.length - 1] || ['', ''];
       const div = document.createElement('div'); div.className = 'ln ' + cls; div.textContent = text;
-      const stream = $('#drawer-stream');
+      const stream = $('#drawer-stream' + suf);
       stream ? dl.insertBefore(div, stream) : dl.appendChild(div);
       dl.scrollTop = dl.scrollHeight;
-      const pb = $('#run-bar'); if (pb) pb.style.width = pct + '%';
-      const pp = $('#run-pct'); if (pp) pp.textContent = pct + '%';
+      const pb = $('#run-bar' + suf); if (pb) pb.style.width = pct + '%';
+      const pp = $('#run-pct' + suf); if (pp) pp.textContent = pct + '%';
     }
   }
   document.querySelectorAll(`[data-task="${taskId}"] .bar i`).forEach(el => el.style.width = pct + '%');
@@ -1588,7 +1677,7 @@ function updateRunUI(taskId) {
    t.pipeline = {
      on, status: 'idle'|'planning'|'running'|'paused'|'done',
      mode: 'auto'|'std',                       // 项目经理 AI 拆分 / 标准研发流水线
-     stages: [{roleKey, name, goal, state: 'pending'|'running'|'rework'|'done', result, runs, rework?, final?}],
+     stages: [{roleKey, name, goal, state: 'pending'|'running'|'rework'|'done'|'failed', result, runs, rework?, final?}],
      cur, round, maxRework, stageNo,           // stageNo → 主进程交付子目录编号
      gate, reworkCtx                           // 最近一次裁决 / 打回上下文
    }
@@ -1630,8 +1719,8 @@ function ensurePipelineRoles(keys) {
 function pipelineJudgeAgent() {
   const mgr = pipeRoleByKey('pmgr');
   const a0 = mgr && agentById(mgr.agentId);
-  if (a0 && a0.mode === 'api' && a0.apiKey && a0.status !== 'offline') return a0;
-  return O().agents.find(a => a.mode === 'api' && a0 !== a && a.apiKey && a.status !== 'offline') || null;
+  if (a0 && a0.mode === 'api' && keyOf(a0) && a0.status !== 'offline') return a0;
+  return O().agents.find(a => a.mode === 'api' && a0 !== a && keyOf(a) && a.status !== 'offline') || null;
 }
 /* 任务的有效执行 Agent（role 指派时是角色绑定的 Agent）——顺带修复 role 任务收尾后 Agent 状态不复位 */
 function effAgentOf(t) {
@@ -1645,16 +1734,20 @@ function pipelineResetAgent(t, usedTokens) {
   if (a) { a.status = 'idle'; a.done = (a.done || 0) + 1; a.taskId = null; if (usedTokens) a.tokens = (a.tokens || 0) + usedTokens; }
 }
 
-/* 组装当前阶段上下文：任务卡由引擎注入，这里补阶段目标 + 前序产出 + 打回意见 */
+/* 组装当前阶段上下文：任务卡由引擎注入，这里补阶段目标 + 上游产出 + 打回意见 */
 /* 文档类阶段：产出直接写正文（系统落盘为报告传给下游），不依赖仓库写权限 */
 const PIPE_DOC_STAGES = ['pm', 'ui', 'doc', 'qa', 'pmgr'];
-function pipelineStageContext(t) {
-  const p = t.pipeline; const st = p.stages[p.cur];
+function pipelineStageContext(t, st) {
+  const p = t.pipeline;
   const parts = [];
-  parts.push(`【流水线阶段】${st.name}（${p.cur + 1}/${p.stages.length}${st.rework ? ' · 返工' : ''}）`);
+  parts.push(`【流水线阶段】${st.name}（${p.stages.indexOf(st) + 1}/${p.stages.length}${st.rework ? ' · 返工' : ''}）`);
   if (st.goal) parts.push(`【本阶段目标】${st.goal}`);
-  const prev = p.stages.slice(0, p.cur).filter(s => s.result);
-  if (prev.length) parts.push('【前序阶段产出（已完成，是你的输入；勿重复劳动）】\n' + prev.map(s => `—— ${s.name} ——\n${String(s.result).slice(0, 4000)}`).join('\n\n'));
+  /* 上游产出（REINS-128 上下文合并）：并行模式下只注入直接依赖阶段的产出，按完成时间升序拼接；
+     串行链（向后兼容）保持既有"全部前序产出"语义不变 */
+  const prevSrc = (st.dependsOn && st.dependsOn.length && !p.serialChain)
+    ? st.dependsOn.map(id => p.stages.find(x => x.id === id)).filter(s => s && s.result).sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0))
+    : p.stages.slice(0, p.stages.indexOf(st)).filter(s => s.result);
+  if (prevSrc.length) parts.push('【前序阶段产出（已完成，是你的输入；勿重复劳动）】\n' + prevSrc.map(s => `—— ${s.name} ——\n${String(s.result).slice(0, 4000)}`).join('\n\n'));
   if (p.reworkCtx) parts.push(`【测试打回 · 项目经理裁决】\n修改要求：${p.reworkCtx.feedback}\n\n测试报告：\n${String(p.reworkCtx.qaReport).slice(0, 3000)}`);
   if (st.final) parts.push('你是项目经理，做最终交付总结：按阶段汇总全流程（产品文档要点、开发改动、测试结论），给出验收建议与遗留风险。');
   else parts.push('【流水线约定】你是虚拟团队中本阶段的负责人，只产出本阶段交付物；你的产出会自动交给下一阶段。');
@@ -1669,12 +1762,19 @@ function pipelineStageContext(t) {
 async function startPipeline(taskId) {
   const t = byId(taskId); const p = t.pipeline;
   if (!p || p.status === 'planning' || p.status === 'running') return;
-  /* 断点续跑：已有阶段计划，从当前阶段继续 */
+  /* 断点续跑：已有阶段计划，直接按依赖图调度可运行阶段（失败阶段原地重试） */
   if (p.status === 'paused' && p.stages?.length) {
+    /* 旧档兼容：无阶段 id/依赖的存量流水线，补链式依赖保持串行接力 */
+    if (!p.stages.every(s => s.id)) {
+      p.serialChain = true;
+      p.stages.forEach((s, i) => { s.id = s.id || 's' + (i + 1); s.dependsOn = i ? [p.stages[i - 1].id] : []; });
+    }
+    p.stageNo = p.stageNo || 0;   // 旧档无编号字段也要补齐：否则阶段 no 为 NaN，主进程事件不打标、按 taskId 回查不到分流的 run 实例
+    p.stages.forEach(s => { if (s.state === 'failed') s.state = 'pending'; });   // 失败阶段断点续跑即原地重试
     p.status = 'running'; t.status = 'doing';
-    th(t, '▶', '流水线从断点继续 · ' + (p.stages[p.cur]?.name || ''));
+    th(t, '▶', '流水线从断点继续');
     save(); refreshViews();
-    runPipelineStage(taskId);
+    pipeStep(taskId);
     return;
   }
   /* 全新启动：角色就位 → 项目经理拆流程（AI 不可用退标准模板） */
@@ -1693,17 +1793,64 @@ async function startPipeline(taskId) {
     } else if (r && r.message) th(t, '⚠', 'AI 拆分不可用（' + r.message + '），改用标准研发流水线');
   } else th(t, '⚠', '无 API 引擎可做规划，改用标准研发流水线');
   if (!plan) { plan = PIPE_STD.map(s => ({ ...s })); p.mode = 'std'; }
+  /* 依赖编排（REINS-128）：主进程 normalizeDeps + planWaves 归一——阶段 id 稳定、dependsOn 清洗，
+     波次供甘特图与并行执行共用同一语义；浏览器演示模式无 IPC，本地补 id 即可（串行链由下方回退统一处理） */
+  let waves = null, hasCycle = false;
+  if (window.reins) {
+    const r = await window.reins.pipelineDeps({ stages: plan }).catch(() => null);
+    if (r && r.ok) { plan = r.stages; waves = r.waves; hasCycle = r.hasCycle; }
+    else plan = plan.map((s, i) => ({ ...s, id: s.id || 's' + (i + 1) }));
+  } else plan = plan.map((s, i) => ({ ...s, id: s.id || 's' + (i + 1) }));
+  /* 向后兼容：没有任何阶段显式声明 dependsOn → 本地改写为链式依赖（第 n 个依赖第 n-1 个），
+     执行与上下文注入均与既有串行接力完全一致 */
+  p.serialChain = !plan.some(s => s.depsExplicit);
+  if (p.serialChain) plan.forEach((s, i) => { s.dependsOn = i ? [plan[i - 1].id] : []; });
   p.stages = plan.map(s => ({ goal: '', ...s, state: 'pending', result: '', runs: 0 }));
+  p.waves = waves; p.hasCycle = hasCycle;
+  if (hasCycle) th(t, '⚠', '阶段依赖存在环，环上阶段将按原顺序执行（建议检查项目经理拆分）');
   p.status = 'running';
   addActivity('🧭', t.key + ' 流水线启动 · ' + p.stages.map(s => s.name).join(' → '));
   save(); refreshViews();
-  runPipelineStage(taskId);
+  pipeStep(taskId);
 }
 
-function runPipelineStage(taskId) {
+/* —— 依赖就绪判定与波次调度（REINS-128 并行阶段） —— */
+const pipeDepsDone = (p, s) => (s.dependsOn || []).every(id => {
+  const d = p.stages.find(x => x.id === id);
+  return !d || d.state === 'done';
+});
+/* 打回重跑集合：目标角色阶段 + 传递依赖它们的所有下游——并行流水线中无关兄弟分支的产出保留；
+   串行链（链式依赖）下即"目标及其后全部"，与既有整段清空行为一致 */
+const pipeReworkIds = (stages, targets) => { const ids = new Set(stages.filter(s => targets.includes(s.roleKey)).map(s => s.id)); let grew = true; while (grew) { grew = false; for (const s of stages) if (!ids.has(s.id) && (s.dependsOn || []).some(id => ids.has(id))) { ids.add(s.id); grew = true; } } return ids; };
+/* 调度一个"节拍"：派发所有依赖已就绪的待运行阶段（真实引擎与演示引擎均并行执行——
+   演示引擎的阶段实例独立成键 taskId#阶段id，与甘特图并行展示一致）；
+   无在途且无可派发时按完成度收尾——全完成进交付，剩余全被失败依赖阻塞则暂停待人工 */
+function pipeStep(taskId) {
+  const t = byId(taskId); const p = t && t.pipeline;
+  if (!p || !p.on || p.status !== 'running') return;
+  const active = p.stages.filter(s => ['running', 'rework'].includes(s.state));
+  const runnable = p.stages.map((s, i) => ({ s, i })).filter(x => x.s.state === 'pending' && pipeDepsDone(p, x.s));
+  if (!runnable.length) {
+    if (active.length) return;
+    if (p.stages.every(s => s.state === 'done')) return pipelineDeliver(taskId);
+    p.status = 'paused'; t.status = 'todo';
+    th(t, '⏸', '存在被失败阶段阻塞的下游阶段，流水线暂停：可从断点继续重试');
+    toast('流水线暂停', '部分阶段失败致下游阻塞；处理后可从断点继续', '⚠');
+    save(); refreshViews();
+    if (drawerTaskId === taskId) renderDrawer(taskId);
+    return;
+  }
+  for (const x of runnable) runPipelineStage(taskId, x.i);
+}
+
+function runPipelineStage(taskId, si) {
   const t = byId(taskId); const p = t.pipeline;
   if (!p || p.status !== 'running') return;
-  const st = p.stages[p.cur];
+  /* 不指定下标：调度第一个依赖就绪的待运行阶段（演示引擎串行路径 / 兜底） */
+  const idx = Number.isFinite(si) ? si : p.stages.findIndex(s => s.state === 'pending' && pipeDepsDone(p, s));
+  if (idx < 0 || !p.stages[idx]) return;
+  const st = p.stages[idx];
+  p.cur = idx;   // 兼容展示与旧路径（并行时仅指示最近派发的阶段）
   const role = pipeRoleByKey(st.roleKey);
   if (!role || !roleUsable(role)) {
     p.status = 'paused'; t.status = 'todo';
@@ -1712,20 +1859,23 @@ function runPipelineStage(taskId) {
     save(); refreshViews();
     return;
   }
+  if (!Number.isFinite(p.stageNo)) p.stageNo = 0;   // 兜底：中途保存等边缘档无编号字段时补齐，避免 no=NaN 打不通事件分流
+  st.no = ++p.stageNo;   // 并行阶段交付子目录编号 + 事件 stageNo 打标（并发下各自持有，不共用字段）
   st.state = st.rework ? 'rework' : 'running';
   const isNewAttempt = st.runs === 0 || st.rework;   // 断点续跑（runs>0 非返工）保留会话锚点续会话；新阶段/返工清掉开新会话
   st.runs++;
-  p.stageNo++; p.final = !!st.final;
+  p.final = !!st.final;
   t.assignee = { kind: 'role', id: role.id, name: role.name };
   if (isNewAttempt) delete t.acpSessionId;
   th(t, st.rework ? '↩' : '▶', (st.rework ? '返工 · ' : '') + st.name + '（' + role.name + '）开始执行');
   save(); refreshViews();
-  startRun(taskId, { pipeline: true, extraPrompt: pipelineStageContext(t) });
+  startRun(taskId, { pipeline: true, extraPrompt: pipelineStageContext(t, st), stage: st });
 }
 
-async function pipelineStageDone(taskId, evt) {
+async function pipelineStageDone(taskId, evt, st) {
   const t = byId(taskId); const p = t.pipeline;
-  const st = p.stages[p.cur];
+  if (!st) st = p.stages[p.cur];   // 兼容无 stageNo 的旧事件（演示引擎等）：回退当前阶段
+  delete runs[taskId + '#' + (st && st.id)];
   delete runs[taskId];
   const result = String(evt.result || '（无输出）');
   pipelineResetAgent(t, evt.usage?.total_tokens || 0);
@@ -1736,25 +1886,23 @@ async function pipelineStageDone(taskId, evt) {
     th(t, '⚠', st.name + ' 产出疑似权限求助（非交付物），自动带修正契约重跑');
     addActivity('⚠', t.key + ' ' + st.name + ' 阶段产出异常，自动重跑');
     save(); refreshViews();
-    return runPipelineStage(taskId);
+    return runPipelineStage(taskId, p.stages.indexOf(st));
   }
   if (st && st.flagged && pipeOutputSuspect(result)) {
-    p.status = 'paused'; t.status = 'todo'; st.state = 'pending';
+    p.status = 'paused'; t.status = 'todo'; st.state = 'failed';
     th(t, '⏸', st.name + ' 两轮产出均为求助文本，流水线暂停：建议在角色页为该阶段换绑 Agent，或处理后从断点继续');
     toast('流水线暂停', st.name + ' 阶段无法产出有效交付（引擎疑似权限受限），建议换绑 Agent', '⚠');
     save(); refreshViews();
     if (drawerTaskId === taskId) renderDrawer(taskId);
     return;
   }
-  if (st) { st.state = 'done'; st.result = result; }
+  if (st) { st.state = 'done'; st.result = result; st.completedAt = now(); }
   th(t, '✓', (st ? st.name : '阶段') + ' 完成');
   if (evt.worktree && !t.worktree) t.worktree = evt.worktree;
   if (st && st.final) return finishPipeline(taskId, evt);
-  if (st && st.roleKey === 'qa') return pipelineGate(taskId);
-  p.cur++;
+  if (st && st.roleKey === 'qa') return pipelineGate(taskId, st);
   save(); refreshViews();
-  if (p.stages[p.cur]) runPipelineStage(taskId);
-  else pipelineDeliver(taskId);
+  pipeStep(taskId);
 }
 
 /* 求助型产出识别：无头 CLI 无写权限时的典型卡壳（"请批准写入"类短文本），不算交付 */
@@ -1765,9 +1913,8 @@ function pipeOutputSuspect(text) {
 }
 
 /* QA 后的项目经理裁决：通过 → 交付总结；打回 → 目标阶段带意见返工 → 重测（上限轮数后挂起待人工） */
-async function pipelineGate(taskId) {
+async function pipelineGate(taskId, qa) {
   const t = byId(taskId); const p = t.pipeline;
-  const qa = p.stages[p.cur];
   th(t, '⚖', '项目经理裁决测试结果 …');
   let verdict = null;
   const judge = pipelineJudgeAgent();
@@ -1779,12 +1926,8 @@ async function pipelineGate(taskId) {
   p.gate = { ...verdict, round: p.round, engine: judge ? judge.name : '自动判定' };
   if (verdict.action === 'pass') {
     th(t, '⚖', '裁决通过 · ' + verdict.reason);
-    /* QA 通过≠全链完成：后继阶段（如技术文档）先走完，再进入交付 */
-    if (p.cur + 1 < p.stages.length && p.stages.slice(p.cur + 1).some(s => s.state !== 'done')) {
-      p.cur++;
-      save(); refreshViews();
-      return runPipelineStage(taskId);
-    }
+    /* QA 通过≠全链完成：后继阶段（如技术文档）先走完，再进入交付（并行模式下由依赖图派发） */
+    if (p.stages.some(s => s.state !== 'done')) { save(); refreshViews(); return pipeStep(taskId); }
     return pipelineDeliver(taskId);
   }
   if (p.round >= p.maxRework) {
@@ -1800,17 +1943,15 @@ async function pipelineGate(taskId) {
   p.round++;
   p.reworkCtx = { feedback: verdict.feedback || '按测试报告逐条修复', qaReport: String(qa.result || '').slice(0, 6000) };
   const tname = k => (ROLE_TEMPLATES.find(x => x.key === k) || {}).name || k;
-  for (let i = first; i < p.stages.length; i++) {
-    const hit = verdict.targets.includes(p.stages[i].roleKey);
-    p.stages[i].result = '';
-    p.stages[i].state = hit ? 'rework' : 'pending';
-    p.stages[i].rework = hit;
-  }
-  p.cur = first;
+  /* 精确清空（REINS-128）：只重跑目标 + 传递下游（其输入已变，产出必然过期）；
+     兄弟分支已完成产出不再被误清。下游非目标阶段按普通重跑（不带返工标记）处理 */
+  const reset = pipeReworkIds(p.stages, verdict.targets);
+  p.stages.forEach(s => { if (!reset.has(s.id)) return; s.result = ''; s.state = 'pending'; s.rework = verdict.targets.includes(s.roleKey); });
+  p.cur = p.stages.findIndex(s => reset.has(s.id));
   th(t, '↩', `测试未通过 · 项目经理打回 ${verdict.targets.map(tname).join('、')}：${verdict.reason}`);
   addActivity('↩', t.key + ' 测试打回（项目经理裁决）· ' + verdict.targets.map(tname).join('、'));
   save(); refreshViews();
-  runPipelineStage(taskId);
+  pipeStep(taskId);
 }
 
 /* 无 API 裁决引擎时的兜底：按测试报告关键词粗判，保证返工循环不断链 */
@@ -1832,9 +1973,11 @@ function pipelineDeliver(taskId) {
     th(t, '📦', '流水线完成（项目经理不可用，已直接聚合各阶段产出）');
     return finishPipeline(taskId, { result: t.result });
   }
-  /* 幂等：交付总结阶段已存在（如返工后二次交付）则复用，不重复追加 */
+  /* 幂等：交付总结阶段已存在（如返工后二次交付）则复用，不重复追加。
+     并行模式下显式依赖全部既有阶段——汇总必须等所有波次收尾（无依赖声明的追加会被当成并行根立即启动） */
   if (!p.stages.some(s => s.final)) {
-    p.stages.push({ roleKey: 'pmgr', name: '交付总结', goal: '汇总全流程产出，形成最终交付报告', state: 'pending', result: '', runs: 0, final: true });
+    p.stages.push({ roleKey: 'pmgr', name: '交付总结', goal: '汇总全流程产出，形成最终交付报告', state: 'pending', result: '', runs: 0, final: true,
+      id: 's' + (p.stages.length + 1), dependsOn: p.stages.map(s => s.id) });
   } else {
     const f = p.stages.find(s => s.final);
     f.state = 'pending'; f.result = '';
@@ -1842,7 +1985,7 @@ function pipelineDeliver(taskId) {
   p.cur = p.stages.findIndex(s => s.final);
   th(t, '📦', '进入交付 · 项目经理汇总全流程产出');
   save(); refreshViews();
-  runPipelineStage(taskId);
+  pipeStep(taskId);
 }
 
 /* 流水线收尾：对齐单任务 done 路径（review / 交付面板 / 累计 diff） */
@@ -2353,6 +2496,69 @@ function revealWt(id) {
   else toast('不可用', '浏览器预览模式下无法打开访达', '⚠');
 }
 
+/* —— Git 远程交付（REINS-128）：隔离工作区分支推送 + Pull Request 创建，交付闭环不再切终端 —— */
+function gitRemoteBlock(t) {
+  if (!window.reins || !t.worktree) return '';
+  const branch = 'reins/' + t.key;
+  return `<div class="d-sec"><h4>远程交付</h4>
+    <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-o btn-sm" onclick="gitPushTask('${t.id}')">⇧ 推送 ${esc(branch)}</button>
+      <button class="btn btn-o btn-sm" onclick="gitPRTask('${t.id}')">⇄ 创建 PR</button>
+      ${t.prUrl ? `<a class="pr-link" href="${esc(t.prUrl)}" target="_blank" rel="noopener">PR #${esc(String(t.prNo ?? ''))} ↗</a>` : ''}
+    </div>
+    <div class="git-log" id="git-log"></div>
+    <div style="font-size:12px;color:var(--ink-faint);margin-top:6px">推送隔离工作区的 <b>${esc(branch)}</b> 分支到 origin；PR 支持 GitHub / Gitee，令牌在「设置 → Git 远程」配置（需 repo 读写权限）。</div>
+  </div>`;
+}
+const gitLog = html => { const el = document.getElementById('git-log'); if (el) el.innerHTML = html; };
+async function gitPushTask(id) {
+  const t = byId(id); if (!t || !t.worktree || !window.reins) return;
+  gitLog('<span class="ln act">▸ 正在推送 reins/' + esc(t.key) + ' …</span>');
+  const r = await window.reins.gitPush({ cwd: t.worktree, branch: 'reins/' + t.key }).catch(e => ({ ok: false, message: e.message }));
+  gitLog(r.ok ? '<span class="ln ok">✓ ' + esc(r.message || '') + '</span>' : '<span class="ln err">✗ ' + esc(r.message || '') + '</span>');
+  if (r.ok) { th(t, '⇧', '分支 reins/' + t.key + ' 已推送到远程'); save(); if (drawerOpenOn(id)) renderDrawer(id); }
+  else toast('推送失败', String(r.message || '').slice(0, 60), '⚠');
+}
+async function gitPRTask(id) {
+  const t = byId(id); if (!t || !t.worktree || !window.reins) return;
+  gitLog('<span class="ln act">▸ 正在识别远程仓库…</span>');
+  const info = await window.reins.gitRemote(t.worktree).catch(e => ({ ok: false, message: e.message }));
+  if (!info.ok) { gitLog('<span class="ln err">✗ ' + esc(info.message || '') + '</span>'); toast('无法识别远程', String(info.message || '').slice(0, 60), '⚠'); return; }
+  if (!info.supported) { gitLog('<span class="ln err">✗ 仅支持 GitHub / Gitee 托管，当前 origin：' + esc(info.origin?.url || '') + '</span>'); toast('不支持的托管平台', '', '⚠'); return; }
+  const prov = info.origin.provider === 'gitee' ? 'Gitee' : 'GitHub';
+  openModal(`<div class="modal-head"><h3>创建 PR</h3><span>${prov} · ${esc(info.origin.slug)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body">
+      <div class="f-2col">
+        <div class="f-row"><label>源分支（head）</label><input type="text" id="pr-head" value="reins/${esc(t.key)}" readonly></div>
+        <div class="f-row"><label>目标分支（base）</label><input type="text" id="pr-base" value="${esc(info.defaultBranch || 'main')}"></div>
+      </div>
+      <div class="f-row"><label>标题</label><input type="text" id="pr-title" value="${esc(t.key + ' ' + t.title)}"></div>
+      <div class="f-row"><label>描述</label><textarea id="pr-body" style="min-height:90px" placeholder="变更说明（默认带入交付摘要）">${esc(String(t.result || '').slice(0, 2000))}</textarea></div>
+      <div class="set-desc">令牌从「设置 → Git 远程」读取；分支需先推送到远程（重复开 PR 会自动找回既有链接）。</div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
+      <button class="btn btn-p" onclick="prCreate('${t.id}')">创建 PR</button></div>`);
+}
+async function prCreate(id) {
+  const t = byId(id); if (!t || !window.reins) return;
+  const p = {
+    cwd: t.worktree,
+    head: $('#pr-head')?.value.trim(),
+    base: $('#pr-base')?.value.trim() || 'main',
+    title: $('#pr-title')?.value.trim() || (t.key + ' ' + t.title),
+    body: $('#pr-body')?.value || '',
+  };
+  if (!p.head) { toast('缺少源分支', '', '⚠'); return; }
+  const btn = document.querySelector('.modal-foot .btn-p'); if (btn) { btn.disabled = true; btn.textContent = '创建中…'; }
+  const r = await window.reins.gitCreatePR(p).catch(e => ({ ok: false, message: e.message }));
+  if (btn) { btn.disabled = false; btn.textContent = '创建 PR'; }
+  if (!r.ok) { toast('PR 创建失败', String(r.message || '').slice(0, 80), '⚠'); return; }
+  if (r.url) { t.prUrl = r.url; t.prNo = r.number; }
+  th(t, '⇄', 'PR 已创建' + (r.url ? '：' + r.url : '（该分支已有打开的 PR）'));
+  save(); closeModal(); renderDrawer(id);
+  toast(r.exists ? 'PR 已存在' : 'PR 已创建', r.url ? r.url.slice(0, 60) : '该分支已有打开的 PR', '⇄');
+}
+
 /* —— 拟议变更审查（借鉴 HiFox 确认墙）：按文件 diff 展示，验收人显式"确认应用 / 放弃" —— */
 const diffExpanded = new Set();
 function renderDiffLines(t, f) {
@@ -2476,7 +2682,7 @@ function openShortcutHelp() {
 let triSuggestions = {};
 function triageAgent() {
   // 分诊是分析动作：只要 API 型 Agent 配了密钥即可用，不受执行状态位（offline/busy）限制
-  return (O().agents || []).find(a => a.mode === 'api' && a.apiKey) || null;
+  return (O().agents || []).find(a => a.mode === 'api' && keyOf(a)) || null;
 }
 function heuristicTriage(t) {
   const s = (t.title + ' ' + (t.desc || '')).toLowerCase();
@@ -2505,7 +2711,7 @@ async function runTriage(t) {
   };
   /* 引擎链：Jev 决策模型（结构化判断+概率，百毫秒级）→ API 模型 → 本地规则，逐级降级并如实标注 */
   let jevFail = '';
-  if (window.reins && hookCfg.jevKey && (hookCfg.triageEngine || 'auto') !== 'llm') {
+  if (window.reins && secretOf(hookCfg.jevKey) && (hookCfg.triageEngine || 'auto') !== 'llm') {
     try {
       const r = await window.reins.jevTriage({ task: t, roster });
       if (r && r.ok) {
@@ -2647,6 +2853,15 @@ function openNewTaskModal() {
       </div>
       <div class="f-row" id="nt-model-row" style="display:none"><label>执行模型</label>${ds('nt-model', [{ v: '', l: '默认模型' }], '')}</div>
       ${(S().repos || []).length || S().repoRoot ? `<div class="f-row"><label>代码仓库（CLI 任务在其隔离工作区执行）</label>${ds('nt-repo', repoOpts(''), '')}</div>` : ''}
+      <details class="adv-opts">
+        <summary>高级选项 · 模型参数（可选，仅 API 引擎生效）</summary>
+        <div class="f-2col" style="margin-top:10px">
+          <div class="f-row"><label>temperature（0–2）</label><input type="number" id="nt-mp-temp" min="0" max="2" step="0.1" placeholder="${esc(String(hookCfg.modelParams?.temperature ?? 0.6))}"></div>
+          <div class="f-row"><label>max_tokens（1–200000）</label><input type="number" id="nt-mp-max" min="1" step="256" placeholder="${esc(String(hookCfg.modelParams?.maxTokens ?? 4096))}"></div>
+          <div class="f-row"><label>top_p（0.01–1）</label><input type="number" id="nt-mp-topp" min="0.01" max="1" step="0.05" placeholder="${esc(String(hookCfg.modelParams?.topP ?? 1))}"></div>
+        </div>
+        <div class="set-desc">留空使用全局默认（设置 → 执行引擎）；仅本次任务生效，执行失败/坏值自动回退默认。</div>
+      </details>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="createTask()">创建任务</button></div>`);
@@ -2684,6 +2899,13 @@ function createTask() {
     desc: $('#nt-desc').value.trim(), status: 'todo', assignee: null, tags: [], pr: null,
     result: null, thread: [], attachPrompt: null, comments: [], repoRoot: $('#nt-repo')?.value || '',
     runModel: $('#nt-model')?.value || '',
+    /* 高级选项（REINS-128）：任务级模型参数临时覆盖，随任务对象透传主进程解析；
+       留空的项不入对象（交给全局默认层兜底） */
+    modelParams: (() => {
+      const g = k => { const v = String($('#nt-mp-' + k)?.value ?? '').trim(); return (v !== '' && Number.isFinite(Number(v))) ? Number(v) : null; };
+      const mp = { temperature: g('temp'), maxTokens: g('max'), topP: g('topp') };
+      return Object.values(mp).some(v => v !== null) ? mp : null;
+    })(),
     createdAt: now(), doneAt: null,
   };
   if (pipe) {
@@ -2727,7 +2949,7 @@ function openAgentConfig(agentId) {
         <div class="f-row"><label>模型</label><input type="text" id="ac-model" value="${esc(a.model || '')}" placeholder="例如 glm-4.7"></div>
       </div>
       <div class="f-row"><label>Base URL</label><input type="text" id="ac-baseurl" value="${esc(a.baseURL || '')}" placeholder="选服务商后自动填入"></div>
-      <div class="f-row"><label>API Key（仅保存在本机）</label><input type="password" id="ac-key" value="${esc(a.apiKey || '')}" placeholder="sk-…" autocomplete="off"></div>`;
+      <div class="f-row"><label>API Key（仅保存在本机）</label>${a.__keyLocked ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">⚠ 该密钥已加密但本机解锁失败（系统钥匙串变更？）：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="ac-key" value="${esc(typeof a.apiKey === 'string' ? a.apiKey : '')}" placeholder="${a.__keyLocked ? '重新填写以覆盖…' : 'sk-…'}" autocomplete="off"></div>`;
   openModal(`<div class="modal-head"><h3>Agent 配置</h3><span>${esc(a.name)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-2col">
@@ -2808,7 +3030,9 @@ function acCollect(id) {
     a.provider = $('#ac-provider')?.value || a.provider;
     a.baseURL = $('#ac-baseurl')?.value.trim() || '';
     a.model = $('#ac-model')?.value.trim() || '';
-    a.apiKey = $('#ac-key')?.value.trim() || '';
+    /* 空值不抹掉未解锁的密文副本（解锁失败时 apiKey 是密文对象）：用户重填才覆盖 */
+    const keyVal = $('#ac-key')?.value.trim() || '';
+    if (keyVal || typeof a.apiKey !== 'object') a.apiKey = keyVal;
   }
   return a;
 }
@@ -2850,7 +3074,7 @@ function acTest(id) {
 }
 function acSave(id) {
   const a = acCollect(id);
-  if (a.mode === 'api' && a.apiKey && a.status === 'offline') a.status = 'idle';
+  if (a.mode === 'api' && keyOf(a) && a.status === 'offline') a.status = 'idle';
   if (a.mode === 'cli' && a.status === 'offline' && a.detected) a.status = 'idle';
   save(); closeModal(); refreshViews();
   toast('已保存', a.name + '（' + (a.mode === 'api' ? '真实 API' : a.mode === 'cli' ? '本机 CLI' : '演示') + '）', '');
@@ -2991,10 +3215,10 @@ function viewSettings() {
 function renderAgentsCfg() {
   const box = document.getElementById('agents-cfg'); if (!box) return;
   box.innerHTML = O().agents.map(a => {
-    const ok = a.mode === 'sim' || !!a.apiKey;
+    const ok = a.mode === 'sim' || !!keyOf(a);
     return `<div class="set-row">
       <div><b>${brandOf(a)} ${esc(a.name)} ${a.mode === 'api' ? '<span class="mode-pill api">真实 API</span>' : '<span class="mode-pill sim">演示</span>'}</b>
-        <div class="set-desc">${a.mode === 'api' ? esc(providerLabel(a.provider)) + ' · ' + esc(a.model || '—') + ' · ' + (a.apiKey ? '密钥已配置' : '<b style="color:#c05656">密钥未配置</b>') : '本地模拟执行，无需密钥'}</div></div>
+        <div class="set-desc">${a.mode === 'api' ? esc(providerLabel(a.provider)) + ' · ' + esc(a.model || '—') + ' · ' + (keyOf(a) ? '密钥已配置' : a.__keyLocked ? '<b style="color:#c05656">密钥已加密但本机解锁失败（重配一次即恢复）</b>' : '<b style="color:#c05656">密钥未配置</b>') : '本地模拟执行，无需密钥'}</div></div>
       <div style="display:flex;gap:8px;flex-shrink:0">
         ${a.mode === 'api' ? `<button class="btn btn-o btn-sm" onclick="openAgentConfig('${a.id}')">${ok ? '配置' : '去配置'}</button>` : ''}
       </div>
@@ -3012,6 +3236,8 @@ async function hydrateSettings() {
     return;
   }
   box.innerHTML = settingsHTML(s, true);
+  hydrateSchedules();
+  hydrateSec();
 }
 function settingsHTML(s, live) {
   const row = (id, label, desc, on) => `<div class="set-row"><div><b>${label}</b><div class="set-desc">${desc}</div></div>
@@ -3019,6 +3245,41 @@ function settingsHTML(s, live) {
   return `<h3 class="set-h" style="margin-top:0">客户端</h3>
     ${row('launchAtLogin', '开机自动启动', '登录系统后自动运行 Reins，以隐藏窗口启动并驻留', s.launchAtLogin)}
     ${row('keepInTray', '关闭窗口时驻留菜单栏', '保持本机节点在线，Agent 可继续接收并执行任务', s.keepInTray)}
+    <h3 class="set-h">执行引擎 · API</h3>
+    ${window.reins ? `
+    <div class="set-row" style="display:block">
+      <div class="f-2col">
+        <div class="f-row"><label>无响应超时（秒，默认 120）</label><input type="number" id="se-timeout" min="5" step="5" value="${Math.round((s.apiTimeoutMs || 120000) / 1000)}"></div>
+        <div class="f-row"><label>瞬态错误自动重试上限（0–10，默认 3）</label><input type="number" id="se-retries" min="0" max="10" value="${s.apiRetries ?? 3}"></div>
+      </div>
+      <div class="set-desc" style="margin:8px 0 4px">全局默认模型参数（OpenAI 兼容载荷）；任务创建时可在「高级选项」临时覆盖。</div>
+      <div class="f-2col">
+        <div class="f-row"><label>temperature（0–2）</label><input type="number" id="se-temp" min="0" max="2" step="0.1" value="${esc(String(s.modelParams?.temperature ?? 0.6))}"></div>
+        <div class="f-row"><label>max_tokens（1–200000）</label><input type="number" id="se-maxtok" min="1" step="256" value="${esc(String(s.modelParams?.maxTokens ?? 4096))}"></div>
+        <div class="f-row"><label>top_p（0.01–1）</label><input type="number" id="se-topp" min="0.01" max="1" step="0.05" value="${esc(String(s.modelParams?.topP ?? 1))}"></div>
+      </div>
+      <div class="set-desc" style="margin:6px 0 0">429 / 5xx / 网络超时按 1s→2s→4s→8s 指数退避自动重试（429 优先遵循 Retry-After），重试节奏在任务流式输出区可见；仅作用于 API 通路，CLI / ACP / 云端不受影响。</div>
+      <div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="engineSave()">保存执行策略</button></div>
+    </div>` : `<div class="set-row"><div><b>执行引擎</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`}
+    <h3 class="set-h">自动化调度</h3>
+    <div class="set-row" style="display:block">
+      <div class="set-desc" style="margin-bottom:8px">按计划自动生成站报 / 周报并写入<b>当前空间</b>看板；应用重启自动恢复，休眠唤醒后 5 分钟窗口内补执行。</div>
+      <div id="sched-box">${window.reins ? '载入中…' : '<span class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</span>'}</div>
+      ${window.reins ? '<button class="btn btn-o btn-sm" style="margin-top:8px" onclick="openSchedModal(\'\')">＋ 新增调度</button>' : ''}
+    </div>
+    <h3 class="set-h">安全存储</h3>
+    <div class="set-row" style="display:block"><div id="sec-box">${window.reins ? '载入中…' : '<span class="set-desc">浏览器预览模式下不可用，请在桌面客户端中查看。</span>'}</div></div>
+    <h3 class="set-h">Git 远程</h3>
+    ${window.reins ? `
+    <div class="set-row" style="display:block">
+      <div class="set-desc">推送任务分支与创建 PR（GitHub / Gitee）用的访问令牌（PAT，需 repo 读写权限），仅保存在本机。</div>
+      <div class="f-2col" style="margin-top:8px">
+        <div class="f-row"><label>GitHub Token</label><input type="password" id="gt-github" value="${esc(secretOf(s.gitTokens?.github))}" placeholder="ghp_…（可选）" autocomplete="off"></div>
+        <div class="f-row"><label>Gitee Token</label><input type="password" id="gt-gitee" value="${esc(secretOf(s.gitTokens?.gitee))}" placeholder="（可选）" autocomplete="off"></div>
+      </div>
+      ${secretLocked(s.gitTokens?.github) || secretLocked(s.gitTokens?.gitee) ? '<div class="set-desc" style="margin:6px 0 0;color:#c05656">⚠ 有令牌已加密但本机解锁失败：留空保存可保留密文，重新填写则覆盖。</div>' : ''}
+      <div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="gitTokensSave()">保存令牌</button></div>
+    </div>` : `<div class="set-row"><div><b>Git 远程</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`}
     <h3 class="set-h">云端节点</h3>
     ${window.reins ? `
     <div class="set-row" style="display:block">
@@ -3029,7 +3290,7 @@ function settingsHTML(s, live) {
       <div class="set-desc" style="margin-bottom:8px">部署 reins-node/server.js 到你的服务器后，CLI 型 Agent 可选择云端执行，输出实时回传。</div>
       <div class="f-2col">
         <div class="f-row"><label>节点地址</label><input type="text" id="cn-url" value="${esc(s.cloudUrl || '')}" placeholder="https://node.example.com:8787"></div>
-        <div class="f-row"><label>访问令牌（--token）</label><input type="password" id="cn-token" value="${esc(s.cloudToken || '')}" placeholder="与服务器启动参数一致" autocomplete="off"></div>
+        <div class="f-row"><label>访问令牌（--token）</label>${secretLocked(s.cloudToken) ? '<div class="set-desc" style="margin:0 0 6px;color:#c05656">⚠ 令牌已加密但本机解锁失败：留空保存可保留密文，重新填写则覆盖。</div>' : ''}<input type="password" id="cn-token" value="${esc(secretOf(s.cloudToken))}" placeholder="与服务器启动参数一致" autocomplete="off"></div>
       </div>
       <div style="display:flex;gap:9px;margin-top:8px">
         <button class="btn btn-p btn-sm" onclick="cloudSave()">保存</button>
@@ -3058,7 +3319,8 @@ function settingsApplied(r) {
 }
 function cloudSave() {
   const url = $('#cn-url').value.trim();
-  const token = $('#cn-token').value.trim();
+  /* 留空且现值是未解锁密文 → 原样带回（同 Agent 表单语义），重填或明文清空才覆盖 */
+  const token = secretPick($('#cn-token').value, hookCfg.cloudToken);
   if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
   window.reins.setSettings({ cloudUrl: url, cloudToken: token }).then(r => {
     const s2 = settingsApplied(r);
@@ -3086,6 +3348,224 @@ async function setClient(key, val) {
   toast('设置已保存',
     key === 'launchAtLogin' ? (val ? '将在系统登录后自动启动' : '已取消开机自启') : (val ? '关闭窗口时将驻留菜单栏' : '关闭窗口即退出客户端'),
     '⚙');
+}
+
+/* —— 执行引擎策略（REINS-128）：API 超时 / 重试上限 / 全局默认模型参数 —— */
+function engineSave() {
+  if (!window.reins) { toast('浏览器模式', '该设置仅在桌面客户端内生效', '⚠'); return; }
+  const sec = Math.max(5, Number($('#se-timeout')?.value) || 120);
+  const retries = Math.min(10, Math.max(0, Number($('#se-retries')?.value) || 0));
+  const mp = {
+    temperature: Number($('#se-temp')?.value),
+    maxTokens: Math.round(Number($('#se-maxtok')?.value)),
+    topP: Number($('#se-topp')?.value),
+  };
+  window.reins.setSettings({ apiTimeoutMs: sec * 1000, apiRetries: retries, modelParams: mp }).then(r => {
+    const s2 = settingsApplied(r);
+    if (!s2) return;
+    hookCfg = { ...hookCfg, ...s2 };
+    toast('执行策略已保存', `超时 ${Math.round((s2.apiTimeoutMs || 0) / 1000)}s · 重试 ${s2.apiRetries} 次 · temperature ${s2.modelParams?.temperature ?? '—'}`, '⚙');
+  }).catch(() => toast('保存失败', '主进程不可达', '⚠'));
+}
+
+/* —— 自动化调度（REINS-128）：主进程时间轮的看板管理（新增/编辑/暂停/删除/立即运行） —— */
+let schedCache = [];
+const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
+function schedFreqLabel(sc) {
+  if (!sc) return '';
+  if (sc.freq === 'cron') return 'cron ' + (sc.cron || '');
+  if (sc.freq === 'weekly') return '每周' + (WEEK_CN[sc.weekday ?? 1] || '一') + ' ' + (sc.time || '');
+  return '每日 ' + (sc.time || '');
+}
+function fmtNextRun(ts) {
+  if (!Number.isFinite(ts) || !ts) return '—';
+  const d = new Date(ts);
+  const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  return (d.toDateString() === new Date().toDateString() ? '今天 ' : (d.getMonth() + 1) + '月' + d.getDate() + '日 ') + hm;
+}
+async function hydrateSchedules() {
+  const box = document.getElementById('sched-box'); if (!box || !window.reins) return;
+  try { schedCache = (await window.reins.scheduleList()) || []; } catch (e) { schedCache = []; }
+  box.innerHTML = schedCache.length ? schedCache.map(sc => {
+    const off = sc.enabled === false;
+    return `
+    <div class="sched-row${off ? ' off' : ''}">
+      <div class="sr-main">
+        <b>${esc(sc.name)} <span class="sr-tag">${sc.kind === 'weekly' ? '周报' : '站报'}</span>${off ? '<span class="sr-tag">已暂停</span>' : ''}</b>
+        <div class="set-desc">${esc(schedFreqLabel(sc))} · ${off ? '<b style="color:var(--ink-dim)">暂停中（不触发）</b>' : '下次 ' + esc(fmtNextRun(sc.nextRun))}${!off && sc.webhook ? ' · 推送 Webhook' : ''}${!off && sc.lastRun ? ' · 上次运行 ' + fmtRel(sc.lastRun) : ''}</div>
+      </div>
+      <button class="btn btn-o btn-sm" onclick="schedRunNow('${sc.id}')">立即运行</button>
+      <button class="btn btn-o btn-sm" onclick="openSchedModal('${sc.id}')">编辑</button>
+      <button class="btn btn-o btn-sm btn-danger-o" onclick="schedRemove('${sc.id}')">删除</button>
+      <label class="switch" title="${off ? '启用' : '暂停（期间不触发）'}"><input type="checkbox" ${off ? '' : 'checked'} onchange="schedToggle('${sc.id}',this.checked)"><i></i></label>
+    </div>`;
+  }).join('') : '<div class="set-desc">还没有调度任务：新增后站报 / 周报将按计划自动生成。</div>';
+}
+async function schedToggle(id, on) {
+  const r = await window.reins.scheduleToggle(id, on).catch(() => null);
+  if (!r || !r.ok) { toast('操作失败', (r && r.errors && r.errors[0]) || '', '⚠'); hydrateSchedules(); return; }
+  toast(on ? '已启用' : '已暂停', (r.schedule && r.schedule.name) || '', on ? '⏰' : '‖');
+  hydrateSchedules();
+}
+async function schedRunNow(id) {
+  const r = await window.reins.scheduleRunNow(id).catch(() => null);
+  if (!r || !r.ok) { toast('触发失败', (r && r.errors && r.errors[0]) || '', '⚠'); return; }
+  toast('已触发', '正在生成 ' + ((r.schedule && r.schedule.name) || ''), '⏰');
+  hydrateSchedules();
+}
+async function schedRemove(id) {
+  const sc = schedCache.find(x => x.id === id); if (!sc) return;
+  const r = await window.reins.scheduleRemove(id).catch(() => null);
+  if (!r || !r.ok) { toast('删除失败', (r && r.errors && r.errors[0]) || '', '⚠'); return; }
+  toast('已删除调度', sc.name, '✕');
+  hydrateSchedules();
+}
+function openSchedModal(id) {
+  const sc = schedCache.find(x => x.id === id) || { kind: 'standup', name: '', freq: 'daily', time: '09:30', weekday: 5, cron: '0 9 * * 1-5', webhook: false };
+  openModal(`<div class="modal-head"><h3>${id ? '编辑调度' : '新增调度'}</h3><span>站报 / 周报定时生成</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body">
+      <div class="f-2col">
+        <div class="f-row"><label>调度名称</label><input type="text" id="sc-name" value="${esc(sc.name || '')}" placeholder="站报生成（留空按类型默认）"></div>
+        <div class="f-row"><label>类型</label>${ds('sc-kind', [{ v: 'standup', l: '站报（每日站会材料）' }, { v: 'weekly', l: '周报（近 7 天汇总）' }], sc.kind)}</div>
+      </div>
+      <div class="f-2col">
+        <div class="f-row"><label>频率</label>${ds('sc-freq', [{ v: 'daily', l: '每日' }, { v: 'weekly', l: '每周' }, { v: 'cron', l: 'cron 表达式' }], sc.freq, 'schedSyncForm()')}</div>
+        <div class="f-row" id="sc-time-row"><label>时间（HH:MM）</label><input type="text" id="sc-time" value="${esc(sc.time || '09:30')}" placeholder="09:30"></div>
+      </div>
+      <div class="f-2col">
+        <div class="f-row" id="sc-week-row"><label>星期（每周频率用）</label>${ds('sc-week', WEEK_CN.map((w, i) => ({ v: String(i), l: '周' + w })), String(sc.weekday ?? 5))}</div>
+        <div class="f-row" id="sc-cron-row"><label>cron（分 时 日 月 周）</label><input type="text" id="sc-cron" value="${esc(sc.cron || '0 9 * * 1-5')}" placeholder="30 9 * * 1-5"></div>
+      </div>
+      <label class="f-check"><input type="checkbox" id="sc-webhook" ${sc.webhook ? 'checked' : ''}> 生成后推送到 Webhook（地址沿用「集成」页配置）</label>
+      <div class="set-desc" style="margin-top:6px">站报定时写入当前空间看板（已完成状态）；周报额外自动下载 Markdown。cron 为 5 字段标准表达式（分 时 日 月 周）。</div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
+      <button class="btn btn-p" onclick="schedSave('${id || ''}')">保存</button></div>`);
+  schedSyncForm();
+}
+/* 频率切换：仅露出当前频率需要的字段（隐藏行仍可取值，交主进程校验） */
+function schedSyncForm() {
+  const f = $('#sc-freq')?.value;
+  const wr = $('#sc-week-row'), cr = $('#sc-cron-row'), tr = $('#sc-time-row');
+  if (!wr) return;
+  wr.style.display = f === 'weekly' ? '' : 'none';
+  cr.style.display = f === 'cron' ? '' : 'none';
+  if (tr) tr.style.display = f === 'cron' ? 'none' : '';
+}
+async function schedSave(id) {
+  /* 编辑保留原启用态：单次 upsert 直接带真实 enabled（暂停中的编辑后仍是暂停），
+     不再「先 true 再补 toggle」——两次 IPC 之间命中 30s tick 会误触发 */
+  const editing = schedCache.find(x => x.id === id);
+  const sc = {
+    id: id || undefined,
+    kind: $('#sc-kind')?.value || 'standup',
+    name: $('#sc-name')?.value.trim() || '',
+    freq: $('#sc-freq')?.value || 'daily',
+    time: $('#sc-time')?.value.trim() || '',
+    weekday: Number($('#sc-week')?.value ?? 5),
+    cron: $('#sc-cron')?.value.trim() || '',
+    webhook: !!$('#sc-webhook')?.checked,
+    enabled: editing ? editing.enabled : true,
+  };
+  const r = await window.reins.scheduleUpsert(sc).catch(e => ({ ok: false, errors: [e.message] }));
+  if (!r || !r.ok) { toast('保存失败', (r && r.errors && r.errors.join('；')) || '调度配置未通过校验', '⚠'); return; }
+  closeModal();
+  toast('调度已保存', ((r.schedule && r.schedule.name) || '') + ' · ' + schedFreqLabel(r.schedule) + ' · 下次 ' + fmtNextRun(r.schedule && r.schedule.nextRun), '⏰');
+  hydrateSchedules();
+}
+
+/* —— 调度触发（REINS-128）：主进程时间轮到点通知 → 渲染层生成站报/周报写入看板 —— */
+function handleScheduleFire(info) {
+  const sc = info && info.schedule; if (!sc) return;
+  try {
+    const weekly = sc.kind === 'weekly';
+    const text = weekly ? buildWeekly() : buildStandup();
+    const d = new Date();
+    const tag = info.manual ? '手动触发' : info.missed ? '补执行（休眠唤醒）' : '定时生成';
+    const title = (weekly ? '周报' : '站报') + ' · ' + S().name + ' · ' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    const t = {
+      id: 't' + S().seq, key: 'REINS-' + S().seq, title,
+      type: 'writing', pri: 'P2', desc: tag + ' · ' + schedFreqLabel(sc),
+      status: 'done', assignee: null, tags: [], pr: null, result: text, thread: [],
+      attachPrompt: null, comments: [], repoRoot: '', runModel: '', modelParams: null,
+      createdAt: now(), doneAt: now(),
+    };
+    S().tasks.unshift(t); S().seq++; S().chart[6]++;
+    addActivity('⏰', title + '（' + schedFreqLabel(sc) + '）');
+    toast(weekly ? '周报已自动生成' : '站报已自动生成', t.key + ' 已写入看板 · 当前空间「' + S().name + '」', '⏰');
+    if (weekly) downloadReportMd(title, text);
+    if (sc.webhook && window.reins) {
+      /* 复用现有 webhook 通道，内容与手动生成的报告一致 */
+      window.reins.webhookSend({ event: weekly ? 'report.weekly' : 'report.standup', at: new Date().toISOString(), space: S().name, schedule: sc.name, report: text })
+        .then(r => { if (r && !r.ok) toast('Webhook 推送失败', r.error || ('HTTP ' + r.status), '⚠'); }).catch(() => { });
+    }
+    save(); refreshViews();
+  } catch (e) { console.error('[schedule] 报告生成失败（不中断）', e); }
+}
+function downloadReportMd(title, text) {
+  const d = new Date();
+  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = String(title).replace(/[\\/:*?"<>|\s]+/g, '-') + '-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.md';
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* —— 密钥安全存储状态（REINS-128）：safeStorage 可用性 / 明文盘点 / 降级确认 —— */
+async function hydrateSec() {
+  const box = document.getElementById('sec-box'); if (!box || !window.reins) return;
+  let st = null;
+  try { st = await window.reins.keyStatus(); } catch (e) { }
+  if (!st) { box.innerHTML = '<div class="set-desc">密钥存储状态暂不可用。</div>'; return; }
+  const c = st.stateKeys || {};
+  const backendLine = st.available
+    ? `<div style="display:flex;align-items:center;gap:8px"><span class="status-pill idle">系统加密已启用</span><span class="set-desc">密钥经系统钥匙串（${esc(st.backend === 'safeStorage' ? 'macOS Keychain / Windows DPAPI / Linux libsecret' : st.backend)}）加密后落盘，磁盘上不存明文。</span></div>`
+    : `<div style="display:flex;align-items:center;gap:8px"><span class="status-pill offline">加密后端不可用</span><span class="set-desc">当前环境 safeStorage 不可用（常见于 Linux 缺 libsecret）。</span></div>`;
+  const counts = `<div class="set-desc" style="margin-top:6px">密钥盘点：已加密 ${c.sealed || 0} 个 · 明文 ${c.plaintext || 0} 个${c.locked ? ` · <b style="color:#c05656">解锁失败 ${c.locked} 个（系统钥匙串变更？重配一次 Key 即恢复）</b>` : ''} · 存储策略：${st.policy === 'plain' ? '明文（用户选择）' : '自动（可用即加密）'}</div>`;
+  let extra = '';
+  if (st.warning) {
+    extra = `<div class="sec-warn"><b>⚠ 安全警示</b><div>系统加密不可用，且磁盘上存在明文密钥。可在本机配置对应钥匙串服务后重启，或明确选择明文存储（风险自担）。</div>
+      <div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="confirmSecPlain()">我已知晓风险，使用明文存储</button></div></div>`;
+  } else if (st.policy === 'plain' && st.available) {
+    extra = `<div class="set-desc" style="margin-top:6px">当前策略为明文存储；<span class="lnk" onclick="secRestoreAuto()">恢复自动加密</span>（下次保存/重启时明文密钥自动迁移）。</div>`;
+  }
+  box.innerHTML = backendLine + counts + extra;
+}
+function confirmSecPlain() {
+  openModal(`<div class="modal-head"><h3>使用明文存储</h3><span>安全确认</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim);line-height:1.7">确认后 API Key 与令牌将以<b>明文</b>写入本机数据文件，任何能读取该文件的程序或人员都可获得它们。仅建议在受控的私人设备上选择此方式。</div></div>
+    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
+      <button class="btn btn-danger" onclick="secSetPlain()">确认使用明文</button></div>`);
+}
+async function secSetPlain() {
+  const r = await window.reins.setSettings({ keyStorage: 'plain' }).catch(() => null);
+  const s2 = settingsApplied(r);
+  closeModal();
+  if (!s2) return;
+  toast('已切换为明文存储', '后续密钥不再加密落盘', '⚠');
+  hydrateSec();
+}
+async function secRestoreAuto() {
+  const r = await window.reins.setSettings({ keyStorage: 'auto' }).catch(() => null);
+  const s2 = settingsApplied(r);
+  if (!s2) return;
+  toast('已恢复自动加密', '下次保存 / 重启时明文密钥将自动迁移为加密存储', '🔒');
+  hydrateSec();
+}
+
+/* —— Git 远程（REINS-128）：托管平台 PAT（推送走 git 凭据，PR 走令牌） —— */
+function gitTokensSave() {
+  if (!window.reins) { toast('浏览器模式', '该设置仅在桌面客户端内生效', '⚠'); return; }
+  /* settings:set 对 gitTokens 整键替换：留空成员若现值是未解锁密文须原样带回，
+     否则改另一个令牌会把这边的密文副本静默抹掉（同 Agent 表单"空值不抹密文"语义） */
+  const prev = hookCfg.gitTokens || {};
+  const tokens = { github: secretPick($('#gt-github')?.value, prev.github), gitee: secretPick($('#gt-gitee')?.value, prev.gitee) };
+  window.reins.setSettings({ gitTokens: tokens }).then(r => {
+    const s2 = settingsApplied(r);
+    if (!s2) return;
+    hookCfg = { ...hookCfg, ...s2 };
+    toast('令牌已保存', 'GitHub / Gitee PAT 已更新（仅本机）', '⚙');
+  }).catch(() => toast('保存失败', '主进程不可达', '⚠'));
 }
 
 function exportData() {
@@ -3329,8 +3809,9 @@ async function init() {
   updateNodePill(); setInterval(updateNodePill, 30000);
   boot('bell', () => renderBell());
 
-  // 主进程执行事件 → 更新运行 UI
+  // 主进程执行事件 → 更新运行 UI；调度器触发 → 生成站报/周报写入看板
   window.reins?.onRunEvent(evt => handleRunEvent(evt));
+  window.reins?.onScheduleFire?.(info => handleScheduleFire(info));
   window.reins?.getSettings?.().then(s => { if (s) hookCfg = { ...hookCfg, ...s }; }).catch(() => { });
 
   $('#search').addEventListener('input', e => { filters.search = e.target.value; if (curView === 'kanban' || curView === 'list') render(); });
@@ -3357,6 +3838,18 @@ async function init() {
       .forEach((t, i) => {
         const a = t.assignee.kind === 'role' ? (resolveRoleAgent(t) || {}).agent : agentById(t.assignee.id);
         if (a && a.mode === 'sim') setTimeout(() => {
+          /* 流水线中断续跑：并行阶段实例逐个恢复（与派发同构，键 taskId#阶段id），避免兄弟阶段卡在运行态 */
+          const inFlight = (t.pipeline?.on && t.pipeline.stages || []).filter(s => ['running', 'rework'].includes(s.state) && s.id);
+          if (inFlight.length) {
+            a.status = 'working'; a.taskId = t.id;
+            addActivity('🚀', a.name + ' 恢复执行 ' + t.key + ' ' + t.title + '（并行阶段 × ' + inFlight.length + '）');
+            inFlight.forEach(s => {
+              if (runs[t.id + '#' + s.id]) return;
+              runs[t.id + '#' + s.id] = { mode: 'sim', steps: buildSteps(t), idx: 0, log: [], done: false, stageId: s.id, stageNo: s.no };
+              stepRun(t.id + '#' + s.id);
+            });
+            return;
+          }
           if (!runs[t.id]) {
             a.status = 'working'; a.taskId = t.id;
             runs[t.id] = { mode: 'sim', steps: buildSteps(t), idx: 0, log: [], done: false };

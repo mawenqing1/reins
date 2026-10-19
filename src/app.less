@@ -708,7 +708,8 @@ a { color: var(--accent); text-decoration: none; }
 .f-row {
   margin-bottom: 14px;
   label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-dim); margin-bottom: 6px; }
-  input[type="text"], input[type="password"], select, textarea {
+  /* number 也纳入：执行策略 / 高级选项的参数输入与文本框同律（否则浏览器默认焦点环破相） */
+  input[type="text"], input[type="password"], input[type="number"], select, textarea {
     width: 100%; padding: 9px 12px;
     border: 1px solid var(--line-strong); border-radius: 7px;
     background: var(--card); transition: border-color .15s, box-shadow .15s;
@@ -1259,8 +1260,10 @@ label.pipe-toggle {
     b { display: block; font-size: 12.5px; font-weight: 600; }
     span { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
   }
-  &.cur { background: #fdf6ea; .pp-ic { color: var(--doing); } }
+  &.cur { background: @warn-bg; .pp-ic { color: var(--doing); } }
   &.done .pp-ic { color: var(--done); }
+  /* @fail-* 定义在下方 REINS-128 区块：LESS 变量惰性求值，先后无碍 */
+  &.failed { background: @fail-bg; .pp-ic { color: @fail-ink; } .pp-main span { color: @fail-ink; } }
 }
 .pp-res {
   summary { font-size: 11.5px; color: var(--accent); cursor: pointer; padding: 2px 8px 2px 35px; user-select: none; }
@@ -1269,6 +1272,90 @@ label.pipe-toggle {
 .pp-gate {
   margin-top: 8px; padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5;
   &.pass { background: var(--done-bg, #e3f3ea); color: #2c7a4b; }
-  &.rework { background: #fdf1e3; color: #9a6413; }
+  &.rework { background: #fdf1e3; color: @warn-ink; }
 }
 .pp-evid { margin-top: 3px; font-size: 11px; opacity: .8; }
+
+// ============ REINS-128：执行策略 / 自动化调度 / 安全存储 / 并行流水线 / Git 远程 ============
+// 设计令牌：琥珀警示族（进行中/重试/警示同源，取「进行中=琥珀」既有语义色相，压深保对比度）
+@warn-bg:   #fdf6ea;
+@warn-line: #ecd9bd;
+@warn-ink:  #9a6413;
+// 设计令牌：失败族（沿用 .bug 红系，阶段清单 / 甘特胶囊共用）
+@fail-bg:   #fbe5e5;
+@fail-ink:  #b04848;
+@fail-line: #f0cdcd;
+
+// 执行日志：瞬态错误自动重试提示（琥珀 @warn-ink——浅终端底上 ≥4.5:1，与错误红 / 品牌青三分）
+.term-scroll .ln.retry { color: @warn-ink; }
+
+// —— 设置页：调度管理行 ——
+.sched-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+  &:last-child { border-bottom: none; }
+  .sr-main {
+    flex: 1; min-width: 0;
+    b { font-size: 13px; font-weight: 600; }
+  }
+  /* 暂停态整行退隐（开关之外的第二视觉通道），恢复启用即复原 */
+  &.off .sr-main { opacity: .55; }
+  .sr-tag {
+    display: inline-block; vertical-align: 1px; margin-left: 7px;
+    font-size: 10px; font-weight: 600; letter-spacing: .3px;
+    color: var(--ink-faint); background: #eef0f3; border-radius: 4px; padding: 1px 6px;
+  }
+}
+
+// —— 设置页：密钥安全警示横幅（琥珀警示族） ——
+.sec-warn {
+  margin-top: 10px; padding: 11px 14px; border-radius: @r-xs;
+  background: @warn-bg; border: 1px solid @warn-line; color: @warn-ink;
+  font-size: 12.5px; line-height: 1.6;
+  b { display: block; margin-bottom: 2px; }
+}
+
+// —— 新建任务：高级选项折叠 ——
+.adv-opts {
+  border: 1px dashed var(--line-strong); border-radius: @r-xs; padding: 0 12px;
+  summary { font-size: 12.5px; color: var(--ink-dim); padding: 9px 0; cursor: pointer; user-select: none;
+    transition: color .13s;
+    &:hover { color: var(--ink); } }
+  .set-desc { margin: 6px 0 10px; }
+}
+
+// —— 流水线并行波次甘特（简化版：同波次左右并列、波次间上下衔接） ——
+.pp-gantt {
+  margin-top: 10px; border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px;
+  .pp-wave { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+  .pw-idx { font-family: @mono; font-size: 10.5px; color: var(--ink-faint); width: 26px; flex: none; }
+  .pw-stages { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pw-stage {
+    font-size: 11.5px; padding: 3px 10px; border-radius: 99px;
+    background: #f4f4f2; color: var(--ink-dim); border: 1px solid var(--line);
+    &.done { background: #e3f3ea; color: #3d8a5f; border-color: #cfe7d8; }
+    &.running, &.rework {
+      background: @warn-bg; color: @warn-ink; border-color: @warn-line;
+      /* 与全站「运行中」动效语言同源（pdot.running 光环 / 状态点 pulse）：柔和呼吸而非闪烁 */
+      animation: pw-breathe 1.8s ease-in-out infinite;
+    }
+    &.failed { background: @fail-bg; color: @fail-ink; border-color: @fail-line; }
+  }
+  .pw-hint { font-size: 11px; color: var(--ink-faint); margin-top: 6px; }
+}
+@keyframes pw-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(196, 127, 23, 0); }
+  50%      { box-shadow: 0 0 0 3px rgba(196, 127, 23, .16); }
+}
+
+// —— Git 远程交付（任务抽屉）——
+.git-log {
+  margin-top: 8px; font-family: @mono; font-size: 11.5px; line-height: 1.8;
+  &:empty { display: none; }
+  .ln { display: block; }
+  .ln.ok { color: #2f7d4e; }
+  .ln.act { color: @brand-text; }
+  .ln.err { color: #c05656; }
+}
+.pr-link { font-size: 12px; color: var(--accent); font-family: @mono; }
+.lnk { color: var(--accent); cursor: pointer; }

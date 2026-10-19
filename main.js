@@ -1,9 +1,13 @@
 /* Reins — Electron 主进程 */
-const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, Tray, nativeImage, ipcMain, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const store = require('./services/store');
 const runner = require('./services/runner');
+const secureKeys = require('./services/secure-keys');
+const schedulerMod = require('./services/scheduler');
+const pipelineMod = require('./services/pipeline');
+const gitRemote = require('./services/git-remote');
 
 const isMac = process.platform === 'darwin';
 let mainWindow = null;
@@ -24,11 +28,37 @@ let tray = null;
      c) 渲染层把 settings:get 的返回整包回传（带 platform/version 只读信息），
         保留字段在 settings:set 一律剔除。 */
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
-const defaultSettings = { launchAtLogin: false, keepInTray: true, webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, cloudUrl: '', cloudToken: '' , preventSleep: false, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto' };
+const defaultSettings = {
+  launchAtLogin: false, keepInTray: true, webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, cloudUrl: '', cloudToken: '', preventSleep: false,
+  jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto',
+  /* REINS-128 新增：API 执行策略 / 模型参数 / 调度任务 / 密钥存储策略 / Git 托管令牌 */
+  apiTimeoutMs: 120000,          // API 无响应超时（可调大防误杀长推理）
+  apiRetries: 3,                 // 429/5xx/网络超时自动重试上限
+  modelParams: { temperature: 0.6, maxTokens: 4096, topP: 1.0 },   // 全局默认模型参数
+  schedules: [],                 // 自动化调度任务（scheduler.js 管理，随档持久化）
+  keyStorage: 'auto',            // 密钥存储策略：auto（可用即加密）/ plain（用户明确选择不加密）
+  gitTokens: { github: '', gitee: '' },   // PR 创建用的托管平台 PAT
+};
 let settingsLastGood = null;   // 最近一次成功读到的整档；坏档/瞬时读失败时回退，防止后续写盘把配置抹平
+
+/* 新增数值/对象字段兜底归一：旧档升级后缺字段时补默认，坏值（越界/非数）回退默认 */
+function normalizeNewFields(s) {
+  if (!Number.isFinite(s.apiTimeoutMs) || s.apiTimeoutMs < 5000) s.apiTimeoutMs = defaultSettings.apiTimeoutMs;
+  if (!Number.isFinite(s.apiRetries) || s.apiRetries < 0 || s.apiRetries > 10) s.apiRetries = defaultSettings.apiRetries;
+  const mp = { ...defaultSettings.modelParams, ...(s.modelParams && typeof s.modelParams === 'object' ? s.modelParams : {}) };
+  mp.temperature = Number.isFinite(Number(mp.temperature)) ? Math.min(2, Math.max(0, Number(mp.temperature))) : 0.6;
+  mp.maxTokens = Number.isFinite(Number(mp.maxTokens)) ? Math.min(200000, Math.max(1, Math.round(Number(mp.maxTokens)))) : 4096;
+  mp.topP = Number.isFinite(Number(mp.topP)) ? Math.min(1, Math.max(0.01, Number(mp.topP))) : 1.0;
+  s.modelParams = mp;
+  if (!Array.isArray(s.schedules)) s.schedules = [];
+  if (s.keyStorage !== 'plain') s.keyStorage = 'auto';
+  if (!s.gitTokens || typeof s.gitTokens !== 'object') s.gitTokens = { ...defaultSettings.gitTokens };
+  return s;
+}
 function readSettings() {
   try {
-    const s = { ...defaultSettings, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf-8')) };
+    const s = normalizeNewFields({ ...defaultSettings, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf-8')) });
+    secureKeys.openSettings(s);   // 密文 cloudToken/jevKey → 内存明文（渲染层零改动）；解不开保留密文并标记 __*Locked
     settingsLastGood = s;
     return { ...s };
   } catch (e) {
@@ -38,15 +68,18 @@ function readSettings() {
 function writeSettings(s) {
   /* 原子写（tmp+rename，与 store.js 同策略）：直接覆写 settings.json 一旦中途失败/掉电，
      会留下半截文件，重启后配置整体丢失。
-     写失败向上抛错：settings:set 把错误透给界面 */
+     写失败向上抛错：settings:set 把错误透给界面。
+     落盘前对密钥字段加密（内存/lastGood 恒为明文，只有磁盘持密文） */
   const f = settingsFile(), tmp = f + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
+  const sealed = secureKeys.sealSettings({ ...s }, s.keyStorage).state;
+  fs.writeFileSync(tmp, JSON.stringify(sealed, null, 2));
   fs.renameSync(tmp, f);
   settingsLastGood = { ...s };
 }
-/* 保留字段：platform/version 是 settings:get 附加的只读信息。
+/* 保留字段：platform/version 是 settings:get 附加的只读信息；schedules 只经
+   reins:schedule:* 通道维护（校验/nextRun 由调度器负责），整包回传一律剔除。
    settings:set 收到这些键一律剔除，杜绝渲染层把读到的快照整包回传造成的交叉覆盖 */
-const SETTINGS_RESERVED = new Set(['platform', 'version']);
+const SETTINGS_RESERVED = new Set(['platform', 'version', 'schedules']);
 function applySettings(s) {
   // 关闭态不调用系统 API：未签名/未打包环境下注册登录项会被 macOS 拒绝并打印报错
   if (!s.launchAtLogin) return;
@@ -66,9 +99,22 @@ ipcMain.handle('reins:settings:set', (_e, patch) => {
   return { ok: true, settings: s };
 });
 
-/* ---------- 任务数据（文件持久化） ---------- */
-ipcMain.handle('reins:state:load', () => store.loadState());
-ipcMain.handle('reins:state:save', (_e, data, immediate) => { store.saveState(data, !!immediate); return true; });
+/* ---------- 任务数据（文件持久化） ----------
+   落盘钩子加解密（REINS-128）：内存/渲染层恒为明文 apiKey，磁盘上只存
+   safeStorage 密文（{__encrypted:true,data}）；后端不可用或用户选 plain 时明文透传 */
+ipcMain.handle('reins:state:load', () => {
+  const d = store.loadState();
+  if (!d) return d;
+  try { secureKeys.openState(d); } catch (e) { }
+  return d;
+});
+ipcMain.handle('reins:state:save', (_e, data, immediate) => {
+  if (data && typeof data === 'object') {
+    try { secureKeys.sealState(data, readSettings().keyStorage); } catch (e) { }
+  }
+  store.saveState(data, !!immediate);
+  return true;
+});
 
 /* ---------- 真实执行引擎 ---------- */
 ipcMain.handle('reins:providers', () => runner.PROVIDERS);
@@ -83,7 +129,8 @@ ipcMain.handle('reins:cli:detect', (_e, cmds) => runner.detectClis(cmds));
 ipcMain.handle('reins:cli:models', (_e, agent) => runner.listAgentModels(agent));
 ipcMain.handle('reins:runtimes:discover', () => runner.discoverAppRuntimes());
 
-ipcMain.handle('reins:run:start', (e, { task, agent, extraPrompt, repoRoot, runtime }) => {
+ipcMain.handle('reins:run:start', (e, payload) => {
+  const { task, agent, extraPrompt, repoRoot, runtime, modelParams, stage } = payload || {};
   const win = BrowserWindow.fromWebContents(e.sender);
   if (!win) return false;
   /* 会话过程日志（第八轮）：tee 全部执行事件，结束时追加落盘 deliveries/<KEY>/session.log。
@@ -91,17 +138,22 @@ ipcMain.handle('reins:run:start', (e, { task, agent, extraPrompt, repoRoot, runt
   const t0 = Date.now();
   const sessLines = [];
   let deliveryDir = path.join(app.getPath('userData'), 'deliveries', String(task.key || task.id).replace(/[^\w.-]+/g, '_'));
-  /* 流水线任务：各阶段交付落 stages/sN 子目录（报告/日志互不覆盖）；最终交付阶段落根目录（聚合全流程产出） */
-  if (task.pipeline && task.pipeline.on && !task.pipeline.final) {
-    deliveryDir = path.join(deliveryDir, 'stages', 's' + (task.pipeline.stageNo || 1));
+  /* 流水线任务：各阶段交付落 stages/sN 子目录（报告/日志互不覆盖）；最终交付阶段落根目录（聚合全流程产出）。
+     并行阶段（REINS-128）：stage.no 显式指定子目录编号——并发阶段各自持有编号，
+     不再依赖 task.pipeline.stageNo（并发下同字段会互相踩） */
+  const stageNo = stage && Number.isFinite(Number(stage.no)) ? Number(stage.no) : (task.pipeline && task.pipeline.stageNo);
+  if (task.pipeline && task.pipeline.on && !task.pipeline.final && stageNo) {
+    deliveryDir = path.join(deliveryDir, 'stages', 's' + stageNo);
   }
   const tee = evt => {
     if (evt.type === 'start') sessLines.push('▶ 开始执行 · ' + (evt.model || '') + '\n');
     else if (evt.type === 'model') sessLines.push('◆ 执行模型 ' + evt.model + (evt.final ? '（引擎确认）' : '') + '\n');
     else if (evt.type === 'note') sessLines.push(evt.text + '\n');
+    else if (evt.type === 'retry') sessLines.push(evt.text + '\n');   // 重试留痕：排障时能看到瞬态错误与重试节奏
     else if (evt.type === 'delta' && evt.text) sessLines.push(evt.text);
   };
   const emit = evt => {
+    if (stage && Number.isFinite(Number(stage.no))) evt.stageNo = Number(stage.no);   // 并行阶段事件打标，渲染层分流
     tee(evt);
     if (evt.type === 'done') {
       // done 时构建类型化交付：diff 解析 + report.md/changes.patch 落盘（交付页预览/下载/访达显示）
@@ -122,9 +174,15 @@ ipcMain.handle('reins:run:start', (e, { task, agent, extraPrompt, repoRoot, runt
   };
   if (runtime === 'cloud') {
     const s = readSettings();
-    runner.runCloudTask(task, agent, extraPrompt, emit, { repoRoot, cloud: { url: s.cloudUrl, token: s.cloudToken } });
+    runner.runCloudTask(task, agent, extraPrompt, emit, { repoRoot, stage, cloud: { url: s.cloudUrl, token: s.cloudToken } });
   } else {
-    runner.runTask(task, agent, extraPrompt, emit, { repoRoot });
+    const s = readSettings();
+    runner.runTask(task, agent, extraPrompt, emit, {
+      repoRoot, stage,
+      params: modelParams || null,               // 任务创建时「高级选项」临时覆盖模型参数
+      modelDefaults: s.modelParams,              // 设置页全局默认
+      http: { timeoutMs: s.apiTimeoutMs, retries: s.apiRetries },
+    });
   }
   return true;
 });
@@ -176,6 +234,69 @@ ipcMain.handle('reins:webhook:test', async () => {
     event: 'ping', at: new Date().toISOString(),
     text: 'Reins Webhook 连通性测试：收到即表示链路正常。',
   });
+});
+
+/* ---------- 自动化调度器（REINS-128）：持久化在 settings.schedules，主进程常驻时间轮 ---------- */
+const scheduler = schedulerMod.createScheduler({
+  load: () => readSettings().schedules || [],
+  save: list => {
+    const s = readSettings();
+    s.schedules = list;
+    try { writeSettings(s); } catch (e) { console.error('[scheduler] 持久化失败:', e.message); }
+  },
+  /* 触发即通知渲染层生成站报/周报并写看板；manual/missed 标记随发，
+     渲染层按 schedule.webhook 决定是否复用 webhook 通道推送（格式与手动触发一致） */
+  onFire: (sc, info) => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reins:schedule:fire', { schedule: sc, ...info });
+    } catch (e) { }
+  },
+});
+ipcMain.handle('reins:schedule:list', () => scheduler.list());
+ipcMain.handle('reins:schedule:upsert', (_e, sc) => scheduler.upsert(sc));
+ipcMain.handle('reins:schedule:remove', (_e, id) => scheduler.remove(id));
+ipcMain.handle('reins:schedule:toggle', (_e, id, enabled) => scheduler.toggle(id, enabled));
+ipcMain.handle('reins:schedule:run-now', (_e, id) => scheduler.runNow(id));
+
+/* ---------- Git 远程操作（REINS-128）：任务分支推送 + PR 创建 ---------- */
+ipcMain.handle('reins:git:remote', (_e, cwd) => gitRemote.remoteInfo(cwd));
+ipcMain.handle('reins:git:push', (_e, p) => gitRemote.pushBranch(p && p.cwd, p));
+ipcMain.handle('reins:git:pr', async (_e, p) => {
+  const s = readSettings();
+  const tokens = { ...(s.gitTokens || {}), ...((p && p.tokens) || {}) };
+  return gitRemote.createPR({ ...(p || {}), tokens });
+});
+
+/* ---------- 流水线依赖编排（REINS-128）：并行波次 / 下游上下文合并 ----------
+   渲染层无法 require 主进程模块，编排语义经 IPC 提供——执行器与甘特图共用同一结果 */
+ipcMain.handle('reins:pipeline:deps', (_e, payload) => {
+  const stages = (payload && payload.stages) || [];
+  const normalized = pipelineMod.normalizeDeps(stages);
+  const plan = pipelineMod.planWaves(normalized);
+  return { ok: true, stages: normalized, waves: plan.waves, order: plan.order, hasCycle: plan.hasCycle };
+});
+ipcMain.handle('reins:pipeline:ctx', (_e, payload) => {
+  const r = pipelineMod.mergeUpstream((payload && payload.stages) || [], payload && payload.stageId);
+  return { ok: true, text: r.text, sources: r.sources };
+});
+
+/* ---------- 密钥存储状态（REINS-128）：设置页安全警示（safeStorage 不可用/明文密钥盘点） ---------- */
+ipcMain.handle('reins:keystatus', () => {
+  const info = secureKeys.backendInfo();
+  const s = readSettings();
+  let counts = { plaintext: 0, sealed: 0, locked: 0 };
+  try { counts = secureKeys.countSecrets(store.loadState()); } catch (e) { }
+  const gt = s.gitTokens || {};
+  const plainTokens = ['github', 'gitee'].filter(p => typeof gt[p] === 'string' && gt[p]);
+  return {
+    available: info.available,
+    backend: info.kind,
+    policy: s.keyStorage,
+    stateKeys: counts,
+    plaintextSettings: ['cloudToken', 'jevKey'].filter(k => typeof s[k] === 'string' && s[k]).concat(plainTokens.map(p => 'gitTokens.' + p)),
+    /* 需要弹警示的条件：加密后端不可用 且 用户未明确选择不加密 且 磁盘上确有明文密钥 */
+    warning: !info.available && s.keyStorage !== 'plain' && (counts.plaintext > 0 || plainTokens.length > 0 || typeof s.cloudToken === 'string' && s.cloudToken || typeof s.jevKey === 'string' && s.jevKey),
+  };
 });
 
 /* ---------- 执行期间防止系统休眠（caffeinate，接入电源时合盖也不中断） ---------- */
@@ -241,6 +362,49 @@ app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => store.flush());   // 退出前把去抖窗口内的最后变更落盘
 app.whenReady().then(() => { if (readSettings().preventSleep) setCaffeinate(true); });
 
+/* ---------- 密钥加密迁移（REINS-128）：启动即把磁盘上的明文密钥转为加密存储 ----------
+   顺序保证不丢 Key：先在内存生成加密副本 → 回读校验（sealOne 内置）→ 原子写回。
+   任何一步失败保留明文并记日志，绝不阻断启动 */
+function migrateKeysOnDisk() {
+  try {
+    const policy = readSettings().keyStorage;
+    const rawState = store.loadState();
+    if (rawState) {
+      const r = secureKeys.sealState(rawState, policy);
+      if (r.sealed > 0) { store.saveState(r.state, true); console.log('[keys] 已迁移', r.sealed, '个明文 API Key 为加密存储'); }
+    }
+    const raw = fs.readFileSync(settingsFile(), 'utf-8');
+    const rawSettings = JSON.parse(raw);
+    const rs = secureKeys.sealSettings(rawSettings, policy);
+    if (rs.sealed > 0) {
+      const f = settingsFile(), tmp = f + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(rs.state, null, 2));
+      fs.renameSync(tmp, f);
+      console.log('[keys] 已迁移设置中的', rs.sealed, '个明文密钥为加密存储');
+    }
+  } catch (e) { console.error('[keys] 密钥迁移失败（保留明文，不阻断启动）:', e.message); }
+}
+
+app.whenReady().then(() => {
+  migrateKeysOnDisk();
+  /* 休眠唤醒/解锁：时间轮在休眠期停摆，唤醒立即对账——错过但落在 5 分钟补执行窗口内的照常触发 */
+  try {
+    powerMonitor.on('resume', () => scheduler.wake());
+    powerMonitor.on('unlock-screen', () => scheduler.wake());
+  } catch (e) { }
+});
+
+/* 调度器首 tick 延迟到渲染层就绪之后：onScheduleFire 监听器随页面加载注册，
+   whenReady 时同步 tick 会把触发推给尚无监听器的 webContents（一次性调度会被
+   消耗丢失）。页面加载异常时 10s 兜底启动，保证调度不因窗口问题整体停摆 */
+let schedulerStarted = false;
+function startSchedulerOnce() {
+  if (schedulerStarted) return;
+  schedulerStarted = true;
+  scheduler.start();
+}
+setTimeout(startSchedulerOnce, 10000).unref();
+
 function createWindow(hidden) {
   mainWindow = new BrowserWindow({
     width: 1360,
@@ -259,7 +423,7 @@ function createWindow(hidden) {
     }
   });
   mainWindow.loadFile(path.join(__dirname, 'web', 'app.html'));
-  mainWindow.once('ready-to-show', () => { if (!hidden) mainWindow.show(); });
+  mainWindow.once('ready-to-show', () => { if (!hidden) mainWindow.show(); startSchedulerOnce(); });   // 渲染层就绪：调度器首 tick 放行（见 startSchedulerOnce 注释）
 
   // 关闭驻留托盘：保持本机节点在线（Agent 可继续接单），除非用户从托盘退出
   mainWindow.on('close', (e) => {

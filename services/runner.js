@@ -13,13 +13,55 @@ const PROVIDERS = {
   custom:  { label: '自定义（OpenAI 兼容）', baseURL: '',                              model: '' },
 };
 
-const aborts = new Map();   // taskId -> AbortController
+const aborts = new Map();   // runKey -> AbortController；并行阶段用 taskId#阶段键 隔离（见 stageKeyOf）
 
 /* 部分服务的 WAF 会按 TLS 指纹丢弃 Node 自带 fetch 的握手（表现为 connect timeout 而 curl 正常）。
    Electron 主进程优先用 net.fetch（Chromium 网络栈，浏览器级指纹），纯 Node 环境回退原生 fetch */
 let _netFetch = null;
 try { _netFetch = require('electron').net.fetch; } catch (e) { }
 const pfetch = (...a) => (_netFetch || global.fetch)(...a);
+
+/* 出站 HTTP 统一走共享层：429/5xx/网络超时自动重试（指数退避 + Retry-After）、
+   无响应超时（AbortController，与用户取消共用通道）。见 services/http.js */
+const { fetchWithRetry } = require('./http');
+
+/* ---------- 模型参数（temperature / max_tokens / top_p）可配置 ----------
+   优先级：任务级覆盖（高级选项）> 任务卡配置 > Agent 配置 > 设置页全局默认 > 内置默认。
+   任一层给出非法值（非有限数/越界）直接回退下一层，坏配置绝不打断执行。
+   字段名容错：maxTokens/max_tokens、topP/top_p 两种拼法都认 */
+const MODEL_PARAM_DEFAULTS = { temperature: 0.6, maxTokens: 4096, topP: 1.0 };
+const clampNum = (v, lo, hi) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null);
+function resolveModelParams(agent, task, override, defaults) {
+  const layers = [
+    override || null,
+    task && task.modelParams || null,
+    agent && agent.modelParams || null,
+    defaults || null,
+    MODEL_PARAM_DEFAULTS,
+  ];
+  const pick = (keys, clamp) => {
+    for (const layer of layers) {
+      if (!layer) continue;
+      for (const k of keys) {
+        const raw = layer[k];
+        if (raw === undefined || raw === null || raw === '') continue;
+        const v = clamp(Number(raw));
+        if (v !== null) return v;
+      }
+    }
+    return null;   // 不可达：末层内置默认值恒合法，防御性保留
+  };
+  return {
+    temperature: pick(['temperature'], v => clampNum(v, 0, 2)),
+    maxTokens: pick(['maxTokens', 'max_tokens'], v => clampNum(Math.round(v), 1, 200000)),
+    topP: pick(['topP', 'top_p'], v => clampNum(v, 0.01, 1)),
+  };
+}
+/* OpenAI 兼容载荷字段名 */
+const modelParamsBody = p => ({ temperature: p.temperature, max_tokens: p.maxTokens, top_p: p.topP });
+
+/* 并行阶段的取消键：同一任务的多个阶段并发时各持独立键，取消任务时按前缀全量终止 */
+const stageKeyOf = (task, stage) => (stage && stage.key ? task.id + '#' + stage.key : task.id);
 
 function buildMessages(task, extraPrompt, scenePrompt) {
   /* let：场景/角色设定要拼接到 sys 尾部（const 重赋值会让带角色提示词的 API 执行直接抛
@@ -51,33 +93,60 @@ function buildMessages(task, extraPrompt, scenePrompt) {
 }
 
 /* 流式执行一个任务；onEvent(evt) 回调：
-   {type:'start',...} {type:'delta',text} {type:'usage',usage}
-   {type:'done',result,usage} {type:'error',message} {type:'cancelled'} */
+   {type:'start',...} {type:'delta',text} {type:'usage',usage} {type:'retry',retryNo,retries,delayMs,status,reason,text}
+   {type:'done',result,usage} {type:'error',message} {type:'cancelled'}
+   opts：{ repoRoot, params(任务级模型参数覆盖), modelDefaults(全局默认), http:{timeoutMs,retries}, stage:{key,no} } */
 async function runTask(task, agent, extraPrompt, onEvent, opts = {}) {
-  if (agent.mode === 'cli' && agent.acp) return runAcpSession(task, agent, extraPrompt, onEvent, opts.repoRoot);
-  if (agent.mode === 'cli') return runCliTask(task, agent, extraPrompt, onEvent, opts.repoRoot);
+  if (agent.mode === 'cli' && agent.acp) return runAcpSession(task, agent, extraPrompt, onEvent, opts);
+  if (agent.mode === 'cli') return runCliTask(task, agent, extraPrompt, onEvent, opts);
   const provider = PROVIDERS[agent.provider] || PROVIDERS.custom;
   const baseURL = (agent.baseURL || provider.baseURL).replace(/\/+$/, '');
   const model = agent.model || provider.model;
   const key = agent.apiKey || '';
   if (!baseURL || !key) { onEvent({ type: 'error', message: '未配置 baseURL 或 API Key，请在「设置 → 模型与密钥」补全。' }); return; }
 
+  const params = modelParamsBody(resolveModelParams(agent, task, opts.params, opts.modelDefaults));
+  const timeoutMs = Number.isFinite(opts.http && opts.http.timeoutMs) ? opts.http.timeoutMs : 120000;
+  const retries = Number.isFinite(opts.http && opts.http.retries) ? opts.http.retries : 3;
+  const runKey = stageKeyOf(task, opts.stage);
   const ac = new AbortController();
-  aborts.set(task.id, ac);
+  aborts.set(runKey, ac);
   onEvent({ type: 'start', model, provider: provider.label, baseURL });
 
+  /* 流内断流看门狗：响应已开始（拿到字节）后，每次收到数据重置计时；
+     timeoutMs 内无任何字节（服务端挂起/连接静默死亡）→ 中止并如实报错。
+     此时已有部分输出上屏，不重试（重放会重复输出），与出站前的"无响应超时可重试"分层处理 */
+  let stalled = false;
+  let watchdog = null;
+  const armWatchdog = () => {
+    if (watchdog) clearTimeout(watchdog);
+    watchdog = setTimeout(() => { stalled = true; ac.abort(); }, timeoutMs);
+  };
+
   try {
-    const resp = await fetch(baseURL + '/chat/completions', {
+    const resp = await fetchWithRetry(baseURL + '/chat/completions', {
       method: 'POST',
-      signal: ac.signal,
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({
         model,
         messages: buildMessages(task, extraPrompt, agent.scenePrompt),
         stream: true,
         stream_options: { include_usage: true },
-        temperature: 0.6,
-        max_tokens: 4096,
+        ...params,
+      }),
+    }, {
+      fetchImpl: pfetch,
+      signal: ac.signal,          // 用户取消与超时共用通道：取消即中止且不重试
+      timeoutMs,
+      retries,
+      onRetry: info => onEvent({
+        type: 'retry',
+        retryNo: info.retryNo,
+        retries: info.retries,
+        delayMs: info.delayMs,
+        status: info.status,
+        reason: info.reason,
+        text: '↻ ' + info.reason + '，' + Math.max(1, Math.round(info.delayMs / 1000)) + 's 后自动重试（第 ' + info.retryNo + '/' + info.retries + ' 次）',
       }),
     });
     if (!resp.ok || !resp.body) {
@@ -90,10 +159,18 @@ async function runTask(task, agent, extraPrompt, onEvent, opts = {}) {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
+    armWatchdog();
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (e) {
+        if (stalled) throw new Error('响应流中断：超过 ' + Math.round(timeoutMs / 1000) + 's 无数据（已收到 ' + result.length + ' 字符，不自动重试避免重复输出）');
+        throw e;
+      }
+      if (chunk.done) break;
+      armWatchdog();
+      buf += decoder.decode(chunk.value, { stream: true });
       const lines = buf.split('\n');
       buf = lines.pop() || '';
       for (const line of lines) {
@@ -108,34 +185,48 @@ async function runTask(task, agent, extraPrompt, onEvent, opts = {}) {
         if (delta) { result += delta; onEvent({ type: 'delta', text: delta }); }
       }
     }
+    if (watchdog) clearTimeout(watchdog);
     if (!result && usage) result = '（模型未返回内容）';
     onEvent({ type: 'done', result, usage });
   } catch (e) {
-    if (e.name === 'AbortError' || ac.signal.aborted) onEvent({ type: 'cancelled' });
+    if (e.name === 'AbortError' || ac.signal.aborted) {
+      // 看门狗先置 stalled 再 abort；用户取消不会置 stalled——据此区分两种中止
+      if (stalled) onEvent({ type: 'error', message: '响应流中断：超过 ' + Math.round(timeoutMs / 1000) + 's 无数据' });
+      else onEvent({ type: 'cancelled' });
+    }
     else onEvent({ type: 'error', message: e.message });
   } finally {
-    aborts.delete(task.id);
+    if (watchdog) clearTimeout(watchdog);
+    aborts.delete(runKey);
   }
 }
 
+/* 取消一个任务的全部在途回合：并行阶段共用 taskId 前缀（taskId#阶段键），一次全停 */
 function cancelTask(taskId) {
-  const ac = aborts.get(taskId);
-  if (ac) { ac.abort(); return true; }
-  return false;
+  let hit = false;
+  for (const k of Array.from(aborts.keys())) {
+    if (k === taskId || k.startsWith(taskId + '#')) {
+      const c = aborts.get(k);
+      try { c.abort(); } catch (e) { }
+      aborts.delete(k);
+      hit = true;
+    }
+  }
+  return hit;
 }
 
-/* 连通性测试：发一个极小请求 */
+/* 连通性测试：发一个极小请求（出站同样走重试层，但次数收紧：交互式等待不宜过长） */
 async function testAgent(agent) {
   const provider = PROVIDERS[agent.provider] || PROVIDERS.custom;
   const baseURL = (agent.baseURL || provider.baseURL).replace(/\/+$/, '');
   const model = agent.model || provider.model;
   if (!baseURL || !agent.apiKey) return { ok: false, message: '未配置 baseURL 或 API Key' };
   try {
-    const resp = await fetch(baseURL + '/chat/completions', {
+    const resp = await fetchWithRetry(baseURL + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + agent.apiKey },
       body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping，请回复 pong' }], max_tokens: 8 }),
-    });
+    }, { fetchImpl: pfetch, timeoutMs: 30000, retries: 1 });
     if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}：` + (await resp.text().catch(() => '')).slice(0, 200) };
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content || '';
@@ -166,11 +257,11 @@ async function triageTask(task, agent, roster) {
     `【可选经办】Agent：${agentList}。AI 角色：${roleList}。团队成员：${memberList}。`,
   ].join('\n\n');
   try {
-    const resp = await fetch(baseURL + '/chat/completions', {
+    const resp = await fetchWithRetry(baseURL + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({ model, messages: [{ role: 'system', content: sys }, { role: 'user', content: card }], temperature: 0.2, max_tokens: 300 }),
-    });
+    }, { fetchImpl: pfetch });
     if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}：` + (await resp.text().catch(() => '')).slice(0, 150) };
     const data = await resp.json();
     let raw = String(data.choices?.[0]?.message?.content || '').trim();
@@ -214,13 +305,14 @@ async function planPipeline(task, agent) {
   const key = agent.apiKey || '';
   if (!baseURL || !key) return { ok: false, message: '规划引擎未配置 baseURL 或 API Key' };
   const sys = [
-    '你是项目经理。把用户的任务拆成一条按顺序执行的流水线，每个阶段指定一个负责角色，前一阶段的产出会自动作为后一阶段的输入。',
+    '你是项目经理。把用户的任务拆成一条可执行的流水线，每个阶段指定一个负责角色，并声明阶段间依赖。',
     '可用角色（roleKey → 职责）：',
     ...Object.entries(PIPELINE_ROLE_KEYS).map(([k, v]) => '- ' + k + '：' + v),
     '规则：研发类任务的标准链是 产品文档(pm) → 后端(be) → 前端(fe) → 测试(qa)；可按任务性质增删（如纯文案任务不需要 be/fe/qa）。交付阶段由系统自动追加（项目经理汇总），不要输出。',
+    '依赖声明：默认串行——每个阶段 dependsOn 填它所依赖阶段的序号数组（第 1 个阶段填 []，第 3 个阶段若依赖第 1、2 个阶段填 [1,2]）。只有当两个阶段确实互不依赖、可以同时开工时（例如后端与前端可并行），才让其中一方只依赖共同的上游（如后端与前端都只填 [1]）。',
     '只输出一个 JSON 对象，不要任何其他文字、不要代码块标记。格式：',
-    '{"stages":[{"roleKey":"pm","name":"产品文档","goal":"这一阶段要产出什么（一句话）"}],"reason":"一句话拆分理由"}',
-    '阶段数量 2-6 个；name 与 goal 用中文，简洁。',
+    '{"stages":[{"roleKey":"pm","name":"产品文档","goal":"这一阶段要产出什么（一句话）","dependsOn":[]}],"reason":"一句话拆分理由"}',
+    '阶段数量 2-6 个；name 与 goal 用中文，简洁；dependsOn 用阶段序号数组（从 1 开始）。',
   ].join('\n');
   const lastUser = (Array.isArray(task.thread) ? task.thread : []).filter(m => m && m.role === 'user').pop();
   const card = [
@@ -230,23 +322,36 @@ async function planPipeline(task, agent) {
     lastUser ? `【用户最新反馈】\n${lastUser.content}` : '',
   ].filter(Boolean).join('\n\n');
   try {
-    const resp = await fetch(baseURL + '/chat/completions', {
+    const resp = await fetchWithRetry(baseURL + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({ model, messages: [{ role: 'system', content: sys }, { role: 'user', content: card }], temperature: 0.3, max_tokens: 600 }),
-    });
+    }, { fetchImpl: pfetch });
     if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}：` + (await resp.text().catch(() => '')).slice(0, 150) };
     const data = await resp.json();
     let raw = String(data.choices?.[0]?.message?.content || '').trim();
     raw = raw.replace(/^```(json)?\s*/i, '').replace(/```\s*$/, '').trim();
     const m = raw.match(/\{[\s\S]*\}/);
     const sug = JSON.parse(m ? m[0] : raw);
+    /* dependsOn 清洗 + 稳定阶段 id（'s'+序号）：PM 输出的依赖序号不可信，
+       越界/自引用剔除；未声明 dependsOn 的历史结构原样透传（渲染层按串行处理） */
     const stages = (Array.isArray(sug.stages) ? sug.stages : [])
-      .map(s => ({ roleKey: String(s.roleKey || '').trim(), name: String(s.name || '').trim().slice(0, 24), goal: String(s.goal || '').trim().slice(0, 160) }))
+      .map(s => ({ roleKey: String(s.roleKey || '').trim(), name: String(s.name || '').trim().slice(0, 24), goal: String(s.goal || '').trim().slice(0, 160), dependsOn: s.dependsOn }))
       .filter(s => PIPELINE_ROLE_KEYS[s.roleKey])
       .slice(0, 6);
-    if (!stages.length) return { ok: false, message: '拆分结果中没有可用阶段' };
-    return { ok: true, stages, reason: String(sug.reason || '').slice(0, 160), engine: model, usage: data.usage || null };
+    const total = stages.length;
+    const withDeps = stages.map((s, i) => {
+      const id = 's' + (i + 1);
+      if (!Array.isArray(s.dependsOn)) return { ...s, id };   // 未声明依赖：保持无字段（串行兼容）
+      const deps = [];
+      for (let d of s.dependsOn) {
+        const n = parseInt(d, 10);
+        if (Number.isFinite(n) && n >= 1 && n <= total && n !== i + 1 && !deps.includes('s' + n)) deps.push('s' + n);
+      }
+      return { ...s, id, dependsOn: deps };
+    });
+    if (!withDeps.length) return { ok: false, message: '拆分结果中没有可用阶段' };
+    return { ok: true, stages: withDeps, reason: String(sug.reason || '').slice(0, 160), engine: model, usage: data.usage || null };
   } catch (e) { return { ok: false, message: e.message }; }
 }
 
@@ -274,11 +379,11 @@ async function judgePipelineGate(task, agent, { qaReport, round, maxRework, prev
     `【测试报告（第 ${round} 轮）】\n${String(qaReport || '').slice(0, 8000)}`,
   ].filter(Boolean).join('\n\n');
   try {
-    const resp = await fetch(baseURL + '/chat/completions', {
+    const resp = await fetchWithRetry(baseURL + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
       body: JSON.stringify({ model, messages: [{ role: 'system', content: sys }, { role: 'user', content: card }], temperature: 0.2, max_tokens: 500 }),
-    });
+    }, { fetchImpl: pfetch });
     if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}：` + (await resp.text().catch(() => '')).slice(0, 150) };
     const data = await resp.json();
     let raw = String(data.choices?.[0]?.message?.content || '').trim();
@@ -312,27 +417,29 @@ const JEV_TYPES = {
   writing: '文案、文章、初稿、周报等内容创作',
   data: '数据清洗、整理、核对、表格处理',
 };
-async function callJev(cfg, state, questions) {
+/* 出站与 API Agent 同走共享重试层（429/5xx/无响应超时可重试，尊重 Retry-After）；
+   保留 15s 短超时（决策模型应秒级返回），retries=2 平衡交互等待与瞬态容错 */
+async function callJev(cfg, state, questions, opts = {}) {
   const url = String(cfg.jevUrl || 'https://api.typesafe.ai/v1/systemone').trim().replace(/\/+$/, '');
   if (!cfg.jevKey) return { ok: false, message: '未配置 Jev API Key' };
   if (!/^https?:\/\//.test(url)) return { ok: false, message: 'Jev 地址需以 http:// 或 https:// 开头' };
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15000);
   try {
-    const resp = await pfetch(url, {
+    const resp = await fetchWithRetry(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.jevKey },
       body: JSON.stringify({ state, model: cfg.jevModel || 'jev-latest', questions }),
-      signal: ctrl.signal,
+    }, {
+      fetchImpl: opts.fetchImpl || pfetch,
+      timeoutMs: Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 15000,
+      retries: Number.isFinite(opts.retries) ? opts.retries : 2,
     });
     if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}：` + (await resp.text().catch(() => '')).slice(0, 150) };
     const data = await resp.json();
     if (!data || !data.answers) return { ok: false, message: '响应缺少 answers 字段，请确认接入地址正确' };
     return { ok: true, data };
-  } catch (e) { return { ok: false, message: e.name === 'AbortError' ? '超时（15s）' : (e.message + (e.cause && e.cause.code ? '（' + e.cause.code + '）' : '')) }; }
-  finally { clearTimeout(timer); }
+  } catch (e) { return { ok: false, message: e.message + (e.cause && e.cause.code ? '（' + e.cause.code + '）' : '') }; }
 }
-async function triageJev(task, roster, cfg) {
+async function triageJev(task, roster, cfg, opts = {}) {
   const agents = ((roster && roster.agents) || []).slice(0, 200);
   const roles = ((roster && roster.roles) || []).slice(0, 100);
   const members = ((roster && roster.members) || []).slice(0, Math.max(0, 240 - agents.length - roles.length));
@@ -351,7 +458,7 @@ async function triageJev(task, roster, cfg) {
     type: { type: 'choice', instructions: '判断这条任务的所属类型', criteria: JEV_TYPES },
     pri: { type: 'choice', instructions: '判断处理优先级', criteria: { P0: '线上事故、紧急、需立即处理', P1: '重要或有明确时限，应尽快安排', P2: '常规事项，按正常排期处理' } },
     assignee: { type: 'choice', instructions: '从候选人中挑选最合适的经办人', criteria: cand },
-  });
+  }, opts);
   if (!r.ok) return r;
   const ans = r.data.answers;
   const type = Object.keys(JEV_TYPES).includes(ans.type && ans.type.choice) ? ans.type.choice : 'chore';
@@ -367,10 +474,10 @@ async function triageJev(task, roster, cfg) {
     usage: r.data.usage ? { total_tokens: (r.data.usage.input_tokens || 0) + (r.data.usage.output_tokens || 0) } : null,
   };
 }
-async function testJev(cfg) {
+async function testJev(cfg, opts = {}) {
   const r = await callJev(cfg, '这是一条来自 Reins的连通性测试消息。', {
     ping: { type: 'noul', instructions: '这句话表达了一个测试断言' },
-  });
+  }, opts);
   if (!r.ok) return r;
   const mdl = r.data.model || cfg.jevModel || 'jev';
   const brand = /startlux/i.test(mdl) ? 'StartLux' : /^jev/i.test(mdl) ? 'Jev' : '决策引擎';
@@ -518,7 +625,7 @@ function discoverAppRuntimes() {
   return found;
 }
 
-module.exports = { PROVIDERS, runTask, runCloudTask, cancelTask, testAgent, triageTask, triageJev, testJev, planPipeline, judgePipelineGate, discoverAppRuntimes, listAgentModels, buildDelivery, applyDelivery, discardDelivery, parseDiff, appendSessionLog };
+module.exports = { PROVIDERS, runTask, runCloudTask, cancelTask, testAgent, triageTask, triageJev, testJev, planPipeline, judgePipelineGate, discoverAppRuntimes, listAgentModels, buildDelivery, applyDelivery, discardDelivery, parseDiff, appendSessionLog, resolveModelParams, stageKeyOf };
 
 /* ============================================================
    本机 CLI Agent 执行（Claude Code / Codex / CodeBuddy …）
@@ -766,7 +873,8 @@ const authFailHint = (text, cmd) => AUTH_FAIL_RE.test(String(text || ''))
    agent.acp = {cmd, args}，统一会话协议替代各家 CLI 的模板 spawn——
    权限请求结构化上屏自动放行、过程事件流式回传、会话可取消、可恢复（session/load）。
    隔离工作区约定与 runCliTask 一致 */
-async function runAcpSession(task, agent, extraPrompt, onEvent, repoRoot) {
+async function runAcpSession(task, agent, extraPrompt, onEvent, opts = {}) {
+  const repoRoot = opts.repoRoot;
   const acp = agent.acp || {};
   // 会话恢复锚点：同一 Agent 的上一轮 ACP 会话（打回重跑续会话，不重喂全量历史）
   const prevSid = task.acpSessionId && task.acpAgentId === agent.id ? task.acpSessionId : null;
@@ -780,17 +888,20 @@ async function runAcpSession(task, agent, extraPrompt, onEvent, repoRoot) {
     onEvent({ type: 'note', text: '⚠ 空间未配置代码仓库，本次在临时目录执行：' + cwd });
   }
   onEvent({ type: 'start', model: (agent.name || 'ACP Agent') + '（ACP 会话协议）', provider: '本机命令', cli: true });
+  const runKey = stageKeyOf(task, opts.stage);
   await require('./acp').runAcpTask({
     cmd: acp.cmd, args: acp.args || [], env: agent.cliEnv, cwd,
     prompt, promptFallback: buildCliPrompt(task, extraPrompt, agent.scenePrompt),
     resumeSessionId: prevSid, onEvent,
     timeoutMs: 20 * 60 * 1000,   // 大型集成任务 10 分钟不够（REINS-126 前端阶段两连超时实证），放宽到 20 分钟
-    onSpawn: child => { aborts.set(task.id, { abort: () => { try { child.kill('SIGTERM'); } catch (e) { } } }); },
+    onSpawn: child => { aborts.set(runKey, { abort: () => { try { child.kill('SIGTERM'); } catch (e) { } } }); },
   });
-  aborts.delete(task.id);
+  aborts.delete(runKey);
 }
 
-async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
+async function runCliTask(task, agent, extraPrompt, onEvent, opts = {}) {
+  const repoRoot = opts.repoRoot;
+  const runKey = stageKeyOf(task, opts.stage);
   const healed = healCliRuntime(agent);
   if (healed) {
     agent = healed;
@@ -854,7 +965,7 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
     stdio: ideLaunch ? 'ignore' : ['ignore', 'pipe', 'pipe'],
   });
   const ac = new AbortController();
-  aborts.set(task.id, { abort: () => { try { child.kill('SIGTERM'); } catch (e) { } } });
+  aborts.set(runKey, { abort: () => { try { child.kill('SIGTERM'); } catch (e) { } } });
 
   if (ideLaunch) {
     await new Promise(resolve => {
@@ -878,7 +989,7 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
         resolve();
       });
     });
-    aborts.delete(task.id);
+    aborts.delete(runKey);
     return;
   }
 
@@ -936,7 +1047,7 @@ async function runCliTask(task, agent, extraPrompt, onEvent, repoRoot) {
       else onEvent({ type: 'done', result: (finalResult !== null ? finalResult : out.trim()) || '（无输出）', usage: null, worktree: cwd || null, changes: worktreeChanges(cwd) });
     }));
   });
-  aborts.delete(task.id);
+  aborts.delete(runKey);
 }
 
 /* ==================== 交付物体系（借鉴 HiFox 四层交付） ====================
@@ -1145,47 +1256,97 @@ async function runCloudTask(task, agent, extraPrompt, onEvent, opts = {}) {
 
   onEvent({ type: 'start', model: cliRunLabel(cmd, agent) + '（云端节点' + (cfg.name ? ' ' + cfg.name : '') + '）', provider: '云端执行', cli: true, cloud: true });
 
-  let resp;
-  try {
-    resp = await fetch(base + '/run', { method: 'POST', headers: auth, body: JSON.stringify({ runId, taskKey: task.key, cmd, args, repoRoot: opts.repoRoot || '', timeoutMs: 20 * 60 * 1000 }) });
-  } catch (e) { onEvent({ type: 'error', message: '云端节点连接失败：' + e.message }); return; }
-  if (!resp.ok) { onEvent({ type: 'error', message: '云端节点拒绝派发：HTTP ' + resp.status + ' ' + (await resp.text().catch(() => '')).slice(0, 120) }); return; }
+  /* 派发与事件流出站同走共享重试层（429/5xx/无响应超时自动重试，见 services/http.js）。
+     重试安全性：节点对同一 runId 的重复派发幂等拒绝（400 runId 已存在）——首次响应丢失的
+     重试不会双跑任务，收到该错误按"已派发"续接事件流。
+     取消通道先行登记（派发阶段即可取消）：断开本地事件流等待 + 通知节点终止；
+     pfetch 在纯 Node（无 global.fetch）下同步抛错，须吞掉不能打断取消链路 */
+  const http = opts.http || {};
+  const ac = new AbortController();
+  const runKey = stageKeyOf(task, opts.stage);
+  const cancelUrl = base + '/run/' + encodeURIComponent(runId) + '/cancel';
+  const ropts = {
+    fetchImpl: http.fetchImpl || pfetch,
+    timeoutMs: Number.isFinite(http.timeoutMs) ? http.timeoutMs : 30000,
+    retries: Number.isFinite(http.retries) ? http.retries : 2,
+    signal: ac.signal,   // 用户取消（与超时共用通道）：外部 signal 进 opts 而非 fetch init——init.signal 会被共享层的每次尝试信号覆盖
+  };
+  aborts.set(runKey, { abort: () => {
+    try { ac.abort(); } catch (e) { }
+    try { ropts.fetchImpl(cancelUrl, { method: 'POST', headers: auth }).catch(() => { }); } catch (e) { }
+  } });
 
-  aborts.set(task.id, { abort: () => { fetch(base + '/run/' + encodeURIComponent(runId) + '/cancel', { method: 'POST', headers: auth }).catch(() => { }); } });
-
-  let out = '', errTail = '';
   try {
-    const es = await fetch(base + '/run/' + encodeURIComponent(runId) + '/events', { headers: auth });
-    if (!es.ok || !es.body) throw new Error('HTTP ' + es.status);
-    const reader = es.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) >= 0) {
-        const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
-        const line = chunk.split('\n').find(l => l.startsWith('data: '));
-        if (!line) continue;
-        let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
-        if (ev.t === 'out') { out += ev.text; onEvent({ type: 'delta', text: ev.text }); }
-        else if (ev.t === 'note') onEvent({ type: 'note', text: '[云端] ' + ev.text });
-        else if (ev.t === 'err') errTail = (errTail + ev.text).slice(-500);
-        else if (ev.t === 'killed') { onEvent({ type: 'cancelled' }); aborts.delete(task.id); return; }
-        else if (ev.t === 'done') {
-          if (ev.code !== 0 && !out && ev.error) onEvent({ type: 'error', message: '云端执行失败：' + ev.error });
-          else if (ev.code !== 0 && !out) onEvent({ type: 'error', message: cmd + ' 云端退出码 ' + ev.code + (errTail ? '：' + errTail.slice(-200) : '') });
-          else onEvent({ type: 'done', result: out.trim() || '（无输出）', usage: null, worktree: ev.worktree || null });
-          aborts.delete(task.id);
-          return;
+    let resp;
+    try {
+      resp = await fetchWithRetry(base + '/run', {
+        method: 'POST', headers: auth,
+        body: JSON.stringify({ runId, taskKey: task.key, cmd, args, repoRoot: opts.repoRoot || '', timeoutMs: 20 * 60 * 1000 }),
+      }, ropts);
+    } catch (e) {
+      if (e.name === 'AbortError' || ac.signal.aborted) { onEvent({ type: 'cancelled' }); return; }
+      onEvent({ type: 'error', message: '云端节点连接失败：' + e.message }); return;
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      /* runId 已存在 = 本轮重试的首次派发实际已落地（响应丢失），续接而非报错 */
+      if (!/runId\s*已存在/.test(text)) { onEvent({ type: 'error', message: '云端节点拒绝派发：HTTP ' + resp.status + ' ' + text.slice(0, 120) }); return; }
+    }
+
+    /* 事件流（SSE）：建连（含响应头）由重试层的每次尝试超时兜底；进入流读取后由
+       断流看门狗接管——超过 stallMs 无任何字节（连接静默死亡/半开）中止本地等待。
+       云端 CLI 长静默属正常，窗口放宽到 10 分钟（可用 http.stallMs 覆盖） */
+    const stallMs = Number.isFinite(http.stallMs) ? http.stallMs : 10 * 60 * 1000;
+    let stalled = false;
+    let stallTimer = null;
+    const armStall = () => { if (stallTimer) clearTimeout(stallTimer); stallTimer = setTimeout(() => { stalled = true; try { ac.abort(); } catch (e) { } }, stallMs); };
+
+    let out = '', errTail = '';
+    try {
+      const es = await fetchWithRetry(base + '/run/' + encodeURIComponent(runId) + '/events', { headers: auth }, ropts);
+      if (!es.ok || !es.body) throw new Error('HTTP ' + es.status);
+      const reader = es.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      armStall();
+      for (;;) {
+        let chunk;
+        try { chunk = await reader.read(); }
+        catch (e) {
+          if (stalled) throw new Error('云端事件流超时：超过 ' + Math.round(stallMs / 1000) + 's 无数据，已结束本地等待（任务可能仍在节点上执行）');
+          throw e;
+        }
+        if (chunk.done) break;
+        armStall();
+        buf += dec.decode(chunk.value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          const piece = buf.slice(0, idx); buf = buf.slice(idx + 2);
+          const line = piece.split('\n').find(l => l.startsWith('data: '));
+          if (!line) continue;
+          let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+          if (ev.t === 'out') { out += ev.text; onEvent({ type: 'delta', text: ev.text }); }
+          else if (ev.t === 'note') onEvent({ type: 'note', text: '[云端] ' + ev.text });
+          else if (ev.t === 'err') errTail = (errTail + ev.text).slice(-500);
+          else if (ev.t === 'killed') { onEvent({ type: 'cancelled' }); return; }
+          else if (ev.t === 'done') {
+            if (ev.code !== 0 && !out && ev.error) onEvent({ type: 'error', message: '云端执行失败：' + ev.error });
+            else if (ev.code !== 0 && !out) onEvent({ type: 'error', message: cmd + ' 云端退出码 ' + ev.code + (errTail ? '：' + errTail.slice(-200) : '') });
+            else onEvent({ type: 'done', result: out.trim() || '（无输出）', usage: null, worktree: ev.worktree || null });
+            return;
+          }
         }
       }
+      onEvent({ type: 'error', message: '云端事件流中断（任务可能仍在节点上执行）' });
+    } catch (e) {
+      if ((e.name === 'AbortError' || ac.signal.aborted) && !stalled) { onEvent({ type: 'cancelled' }); return; }
+      onEvent({ type: 'error', message: '云端事件流失败：' + e.message });
+    } finally {
+      if (stallTimer) clearTimeout(stallTimer);
     }
-    onEvent({ type: 'error', message: '云端事件流中断（任务可能仍在节点上执行）' });
-  } catch (e) { onEvent({ type: 'error', message: '云端事件流失败：' + e.message }); }
-  aborts.delete(task.id);
+  } finally {
+    aborts.delete(runKey);
+  }
 }
 
 module.exports.CLI_PRESETS = CLI_PRESETS;

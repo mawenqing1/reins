@@ -16,12 +16,31 @@ contextBridge.exposeInMainWorld('reins', {
   triageRun: (payload) => ipcRenderer.invoke('reins:triage:run', payload),
   pipelinePlan: (payload) => ipcRenderer.invoke('reins:pipeline:plan', payload),
   pipelineGate: (payload) => ipcRenderer.invoke('reins:pipeline:gate', payload),
+  /* 流水线依赖编排（REINS-128）：波次规划（并行执行/甘特图）与下游上下文合并 */
+  pipelineDeps: (payload) => ipcRenderer.invoke('reins:pipeline:deps', payload),
+  pipelineCtx: (payload) => ipcRenderer.invoke('reins:pipeline:ctx', payload),
   cliList: () => ipcRenderer.invoke('reins:cli:list'),
   cliDetect: (cmds) => ipcRenderer.invoke('reins:cli:detect', cmds),
   cliModels: (agent) => ipcRenderer.invoke('reins:cli:models', agent),
   runtimeDiscover: () => ipcRenderer.invoke('reins:runtimes:discover'),
-  runStart: ({ task, agent, extraPrompt, repoRoot, runtime }) => ipcRenderer.invoke('reins:run:start', { task, agent, extraPrompt, repoRoot, runtime }),
+  runStart: ({ task, agent, extraPrompt, repoRoot, runtime, modelParams, stage }) => ipcRenderer.invoke('reins:run:start', { task, agent, extraPrompt, repoRoot, runtime, modelParams, stage }),
   runCancel: (taskId) => ipcRenderer.invoke('reins:run:cancel', taskId),
+
+  /* 自动化调度器（REINS-128）：设置页调度管理 + 定时触发通知（渲染层生成站报/周报） */
+  scheduleList: () => ipcRenderer.invoke('reins:schedule:list'),
+  scheduleUpsert: (sc) => ipcRenderer.invoke('reins:schedule:upsert', sc),
+  scheduleRemove: (id) => ipcRenderer.invoke('reins:schedule:remove', id),
+  scheduleToggle: (id, enabled) => ipcRenderer.invoke('reins:schedule:toggle', id, enabled),
+  scheduleRunNow: (id) => ipcRenderer.invoke('reins:schedule:run-now', id),
+  onScheduleFire: (cb) => ipcRenderer.on('reins:schedule:fire', (_e, info) => cb(info)),
+
+  /* Git 远程操作（REINS-128）：远程识别 / 分支推送 / PR 创建 */
+  gitRemote: (cwd) => ipcRenderer.invoke('reins:git:remote', cwd),
+  gitPush: (p) => ipcRenderer.invoke('reins:git:push', p),
+  gitCreatePR: (p) => ipcRenderer.invoke('reins:git:pr', p),
+
+  /* 密钥存储状态（REINS-128）：设置页安全警示（safeStorage 不可用降级提示） */
+  keyStatus: () => ipcRenderer.invoke('reins:keystatus'),
 
   /* 云端节点 */
   cloudTest: (url, token) => ipcRenderer.invoke('reins:cloud:test', url, token),
