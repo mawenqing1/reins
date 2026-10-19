@@ -23,25 +23,6 @@ contextBridge.exposeInMainWorld('reins', {
   runStart: ({ task, agent, extraPrompt, repoRoot, runtime }) => ipcRenderer.invoke('reins:run:start', { task, agent, extraPrompt, repoRoot, runtime }),
   runCancel: (taskId) => ipcRenderer.invoke('reins:run:cancel', taskId),
 
-  /* 漫剧生成工作流（REINS-126）：项目工厂/体检 + 引擎执行 + 渲染引擎配置（契约见 docs/REINS-126-backend.md） */
-  comicMeta: () => ipcRenderer.invoke('reins:comic:meta'),
-  comicCreate: (input) => ipcRenderer.invoke('reins:comic:create', input),
-  comicNormalize: (raw) => ipcRenderer.invoke('reins:comic:normalize', raw),
-  comicAdopt: (comic) => ipcRenderer.invoke('reins:comic:adopt', comic),
-  comicRenderGet: () => ipcRenderer.invoke('reins:comic:render:get'),
-  comicRenderSet: (patch) => ipcRenderer.invoke('reins:comic:render:set', patch),
-  comicRenderTest: (cfg) => ipcRenderer.invoke('reins:comic:render:test', cfg),
-  /* 配音引擎（可选 · 独立配置）：本地 TTS / 云端 /audio/speech 兼容端点 */
-  comicVoiceGet: () => ipcRenderer.invoke('reins:comic:voice:get'),
-  comicVoiceSet: (patch) => ipcRenderer.invoke('reins:comic:voice:set', patch),
-  comicVoiceTest: (cfg) => ipcRenderer.invoke('reins:comic:voice:test', cfg),
-  comicStart: (payload) => ipcRenderer.invoke('reins:comic:start', payload),
-  comicCancel: (comicId) => ipcRenderer.invoke('reins:comic:cancel', comicId),
-  comicSnapshot: (comicId) => ipcRenderer.invoke('reins:comic:snapshot', comicId),
-  comicPackage: (comic, episodeId) => ipcRenderer.invoke('reins:comic:package', comic, episodeId),
-  /* 事件通道：主进程按窗口批量推送 {type:'batch', events:[...]}（终态立即冲刷），渲染层一次应用整批 */
-  onComicEvent: (cb) => ipcRenderer.on('reins:comic:event', (_e, evt) => cb(evt)),
-
   /* 云端节点 */
   cloudTest: (url, token) => ipcRenderer.invoke('reins:cloud:test', url, token),
 
@@ -63,14 +44,6 @@ contextBridge.exposeInMainWorld('reins', {
   deliveryDiscard: (worktree) => ipcRenderer.invoke('reins:delivery:discard', worktree),
   deliveryReveal: (dir) => ipcRenderer.invoke('reins:delivery:reveal', dir),
   deliveryRead: (dir, file) => ipcRenderer.invoke('reins:delivery:read', dir, file),
-
-  /* ComfyUI 本地视频生成：探活 / 选模板 / 解析节点 / 提交 / 取消 + 事件回推 */
-  comfyStatus: (cfg) => ipcRenderer.invoke('reins:comfy:status', cfg),
-  comfyPick: () => ipcRenderer.invoke('reins:comfy:pick'),
-  comfyInspect: (p) => ipcRenderer.invoke('reins:comfy:inspect', p),
-  comfySubmit: ({ jobId, prompt, negative }) => ipcRenderer.invoke('reins:comfy:submit', { jobId, prompt, negative }),
-  comfyCancel: (jobId) => ipcRenderer.invoke('reins:comfy:cancel', jobId),
-  onComfyEvent: (cb) => ipcRenderer.on('reins:comfy:event', (_e, evt) => cb(evt)),
 
   /* 关窗驻留提示：主进程通知渲染层弹窗，确认后隐藏/退出 */
   onTrayNotice: (cb) => ipcRenderer.on('reins:tray-notice', () => cb()),

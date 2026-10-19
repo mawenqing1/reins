@@ -61,7 +61,7 @@ function mdToHtml(src) {
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = arr => arr[rnd(0, arr.length - 1)];
 
-const TYPE_LABEL = { req: '需求', bug: '缺陷', support: '支持', test: '测试', chore: '杂务', research: '调研', writing: '文案', data: '数据', comic: '漫剧' };
+const TYPE_LABEL = { req: '需求', bug: '缺陷', support: '支持', test: '测试', chore: '杂务', research: '调研', writing: '文案', data: '数据' };
 const STATUS_LABEL = { todo: '待处理', doing: '进行中', review: '待审查', done: '已归档' };
 const STATUS_FLOW = ['todo', 'doing', 'review', 'done'];
 
@@ -331,8 +331,6 @@ const VIEWS = [
   { id: 'kanban', ic: 'kanban', label: '看板', sub: '拖动卡片流转状态，指派 Agent 的任务自动执行', group: 'work' },
   { id: 'list', ic: 'list', label: '任务', sub: '全部任务', group: 'work' },
   { id: 'deliveries', ic: 'package', label: '交付', sub: '任务的交付物，可预览、复制、下载', group: 'work' },
-  { id: 'video', ic: 'play', label: '视频', sub: 'ComfyUI 本地视频生成（Wan 等）', group: 'work' },
-  { id: 'comics', ic: 'clapperboard', label: '漫剧', sub: '从设定到成片的漫剧生产线', group: 'work' },
   { id: 'nodes', ic: 'server', label: '节点', sub: '本机与云端执行节点', group: 'work' },
   { id: 'agents', ic: 'bot', label: 'Agent', sub: '接入 API 或本机 CLI，统一指派任务', group: 'cmd' },
   { id: 'prompts', ic: 'library', label: '提示词库', sub: '共享的提示词，执行时可附加到任务', group: 'cmd' },
@@ -343,7 +341,7 @@ const VIEWS = [
 
 function renderNav() {
   const sec = (label, ids) => `${label ? `<div class="nav-label">${label}</div>` : ''}${ids.map(id => navItem(VIEWS.find(v => v.id === id))).join('')}`;
-  $('#nav').innerHTML = sec('工作台', ['dash', 'kanban', 'list', 'deliveries', 'video', 'comics', 'nodes'])
+  $('#nav').innerHTML = sec('工作台', ['dash', 'kanban', 'list', 'deliveries', 'nodes'])
     + sec('指挥', ['agents', 'prompts', 'autos', 'integ'])
     + sec('', ['settings']);
 }
@@ -351,23 +349,15 @@ function navItem(v) {
   let cnt = '';
   if (v.id === 'kanban') cnt = (S()?.tasks || []).filter(t => t.status !== 'done').length;
   if (v.id === 'agents') cnt = (O().agents || []).filter(a => a.status !== 'offline').length;
-  if (v.id === 'comics') cnt = (S()?.comics || []).filter(c => c.status === 'running').length;
   return `<button class="nav-item ${curView === v.id ? 'on' : ''}" onclick="switchView('${v.id}')">
     <span class="ic">${ic(v.ic)}</span><span class="txt">${v.label}</span>${cnt ? `<span class="cnt">${cnt}</span>` : ''}</button>`;
 }
 function switchView(id) {
   const v = VIEWS.find(x => x.id === id);
-  if (!v && id !== 'comic-detail') { console.warn('[reins] 未知视图', id); return; }   // 守卫：未知 id 直接忽略（漫剧详情是隐藏路由）
+  if (!v) { console.warn('[reins] 未知视图', id); return; }   // 守卫：未知 id 直接忽略
   curView = id;
-  if (id === 'comic-detail') {
-    // 隐藏路由：不进 VIEWS/侧栏，标题随当前漫剧（curComicId）动态生成
-    const c = S() && (S().comics || []).find(x => x.id === curComicId);
-    $('#view-title').textContent = c ? c.title : '漫剧';
-    $('#view-sub').textContent = c ? `共 ${(c.episodes || []).length} 集 · ${CM_STATUS[c.status] ? CM_STATUS[c.status].label : ''}` : '';
-  } else {
-    $('#view-title').textContent = v.label;
-    $('#view-sub').textContent = v.sub;
-  }
+  $('#view-title').textContent = v.label;
+  $('#view-sub').textContent = v.sub;
   renderNav(); render();
   $('#content').scrollTop = 0;
   if (id === 'nodes') hydrateNodes();
@@ -379,9 +369,6 @@ function render() {
   if (curView === 'kanban') el.innerHTML = viewKanban();
   else if (curView === 'list') el.innerHTML = viewList();
   else if (curView === 'deliveries') el.innerHTML = viewDeliveries();
-  else if (curView === 'video') { el.innerHTML = viewVideo(); hydrateVideo(); }
-  else if (curView === 'comics') el.innerHTML = viewComics();
-  else if (curView === 'comic-detail') el.innerHTML = viewComicDetail();
   else if (curView === 'nodes') el.innerHTML = viewNodes();
   else if (curView === 'agents') el.innerHTML = viewAgents();
   else if (curView === 'prompts') el.innerHTML = viewPrompts();
@@ -469,9 +456,8 @@ function viewKanban() {
 }
 
 function cardHTML(t) {
-  const ct = t.linkComicId ? comicById(t.linkComicId) : null;   // 漫剧联动卡：进度/失败态取漫剧实时状态
   const running = runs[t.id];
-  const pct = ct ? (ct.progress?.pct || 0) : running ? runPct(t.id) : 0;
+  const pct = running ? runPct(t.id) : 0;
   const assignee = t.pipeline?.on
     ? `<span class="assignee agent">🧭 项目经理</span>`
     : t.assignee
@@ -481,13 +467,11 @@ function cardHTML(t) {
         ? `<span class="assignee agent">☆ ${esc(t.assignee.name)}</span>`
         : `<span class="assignee human"><span class="av">${esc(t.assignee.name[0])}</span>${esc(t.assignee.name)}</span>`)
     : `<span class="assignee" style="color:var(--ink-faint)">未指派</span>`;
-  return `<div class="tcard" draggable="true" data-task="${t.id}" onclick="${ct ? `openComicDetail('${ct.id}')` : `openTask('${t.id}')`}">
+  return `<div class="tcard" draggable="true" data-task="${t.id}" onclick="openTask('${t.id}')">
     <div class="k"><span>${t.key}</span><span class="pri ${t.pri}">${t.pri}</span></div>
     <div class="t">${esc(t.title)}</div>
     <div class="row"><span class="ttag ${t.type}">${TYPE_LABEL[t.type] || t.type}</span>${assignee}</div>
     ${t.pipeline?.on ? pipeCardLine(t) : ''}
-    ${ct && ct.status === 'running' ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}
-    ${ct && ct.status === 'failed' ? `<div class="pr-chip" style="background:#fbe5e5;color:#b04848">✕ 生成失败 · 可续跑</div>` : ''}
     ${t.status === 'review' && t.pr ? `<div class="pr-chip">⇄ ${esc(t.pr)} · 待验收</div>` : ''}
     ${t.status === 'done' && t.pr ? `<div class="pr-chip" style="background:#e3f3ea;color:#3d8a5f">✓ ${esc(t.pr)} · 已归档</div>` : ''}
     ${running ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}
@@ -525,30 +509,21 @@ document.addEventListener('drop', e => {
 function setStatus(t, st) {
   if (t.status !== st) th(t, '⇄', STATUS_LABEL[t.status] + ' → ' + STATUS_LABEL[st]);
   t.status = st;
-  if (t.linkComicId) {
-    // 漫剧联动卡：不触发 Agent 自动执行与交付号；验收归档语义与普通任务一致
-    if (st === 'done') {
-      t.doneAt = now(); S().chart[6]++;
-      addActivity('🎬', t.key + ' 漫剧已验收归档');
-      toast('漫剧已归档', t.key + ' ' + esc(t.title), '🎬');
+  if (st === 'doing') {
+    if (t.pipeline?.on) {
+      if (!runs[t.id] && !['running', 'planning'].includes(t.pipeline.status)) startPipeline(t.id);
+    } else if (['agent', 'role'].includes(t.assignee?.kind)) {
+      if (!runs[t.id]) startRun(t.id, { byUser: true });
+    } else if (!t.assignee) {
+      t.assignee = { kind: 'human', name: '我' };
+      toast('已自动指派', t.key + ' 已指派给我');
     }
-  } else {
-    if (st === 'doing') {
-      if (t.pipeline?.on) {
-        if (!runs[t.id] && !['running', 'planning'].includes(t.pipeline.status)) startPipeline(t.id);
-      } else if (['agent', 'role'].includes(t.assignee?.kind)) {
-        if (!runs[t.id]) startRun(t.id, { byUser: true });
-      } else if (!t.assignee) {
-        t.assignee = { kind: 'human', name: '我' };
-        toast('已自动指派', t.key + ' 已指派给我');
-      }
-    }
-    if (st === 'review' && !t.pr && ['agent', 'role'].includes(t.assignee?.kind)) t.pr = '交付 #' + (S().deliverSeq++);
-    if (st === 'done') {
-      t.doneAt = now(); S().chart[6]++;
-      addActivity('✅', t.key + ' 已归档' + (t.pr ? ' · ' + t.pr : ''));
-      toast('任务完成', t.key + ' ' + esc(t.title), '✓');
-    }
+  }
+  if (st === 'review' && !t.pr && ['agent', 'role'].includes(t.assignee?.kind)) t.pr = '交付 #' + (S().deliverSeq++);
+  if (st === 'done') {
+    t.doneAt = now(); S().chart[6]++;
+    addActivity('✅', t.key + ' 已归档' + (t.pr ? ' · ' + t.pr : ''));
+    toast('任务完成', t.key + ' ' + esc(t.title), '✓');
   }
   save(); refreshViews();
   if (drawerTaskId === t.id) renderDrawer(t.id);
@@ -966,7 +941,6 @@ function viewInteg() {
         <div class="sync-log" id="jev-log" style="margin-top:12px"></div>`
         : `<div class="sync-log"><div><span style="color:#87919a">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
       </div>
-      ${comfyIntegCard()}
       </div>
       <div>
         <div class="integ-grid-mini">${roadmap.map(o => `<div class="mini-integ" style="opacity:.75">${o[0]}<span>${o[1]}</span></div>`).join('')}</div>
@@ -1035,217 +1009,6 @@ async function jevTest() {
 }
 
 
-/* ============ ComfyUI 视频生成 ============ */
-let comfyNodes = [];                        // 工作流解析出的文本节点：[{id, text, guess}]
-let comfySvc = { probing: false, ok: null };// 服务探活状态
-const comfyJobs = {};                       // id -> {id, prompt, negative, phase, at, endAt, video, error, promptId}
-const comfyCfgReady = () => !!(hookCfg.comfyWorkflow && hookCfg.comfyPosNode);
-/* 生成一条落一条：任务状态每次变化即写入 state 持久化（全局历史，最多留 50 条，重启不丢） */
-function comfyJobsSync() {
-  if (!state) return;
-  state.comfyJobs = Object.values(comfyJobs).sort((a, b) => a.at - b.at).slice(-50);
-  save();
-}
-
-/* —— 集成页配置卡片 —— */
-function comfyNodeOpts() {
-  let opts = comfyNodes.map(n => ({ v: n.id, l: '#' + n.id + ' · ' + (n.text || '').slice(0, 18) }));
-  // 已保存但未重新解析的节点也保留为可选项，避免下拉显示成「未选择」
-  for (const k of ['comfyPosNode', 'comfyNegNode']) {
-    const v = hookCfg[k];
-    if (v && !opts.find(o => o.v === v)) opts.push({ v, l: '#' + v + ' ·（已保存）' });
-  }
-  return opts.length ? opts : [{ v: '', l: '— 先选择工作流文件 —' }];
-}
-function comfyIntegCard() {
-  const cfg = hookCfg || {};
-  const wf = cfg.comfyWorkflow || '';
-  const opts = comfyNodeOpts();
-  return `
-      <div class="panel integ-card">
-        <div class="integ-brand">
-          <div class="lg" style="background:#12908a">${ic('play')}</div>
-          <div><h3>ComfyUI 视频生成</h3><span>本地文生视频 · Wan / LTX 等工作流</span></div>
-          <span class="status-pill ${wf ? 'idle' : 'offline'}" style="margin-left:auto">${wf ? '已配置' : '未配置'}</span>
-        </div>
-        <div class="integ-desc">把本机 ComfyUI（默认 127.0.0.1:8188）接入「视频」工作台：选择一个 ComfyUI 里「Save (API Format)」导出的工作流模板，指定正/负向提示词节点，即可在 Reins 内直接生成视频。</div>
-        ${window.reins ? `
-        <div class="f-row"><label>服务地址</label><input type="text" id="comfy-url" value="${esc(cfg.comfyUrl || 'http://127.0.0.1:8188')}" placeholder="http://127.0.0.1:8188"></div>
-        <div class="f-row"><label>工作流模板（API 格式 JSON）</label>
-          <div style="display:flex;gap:8px">
-            <input type="text" id="comfy-wf" value="${esc(wf)}" placeholder="未选择" readonly style="flex:1;background:var(--bg)">
-            <button class="btn btn-o" style="flex-shrink:0" onclick="comfyPickWf()">选择文件</button>
-          </div>
-        </div>
-        <div class="f-2col">
-          <div class="f-row"><label>正向提示词节点</label>${ds('comfy-pos', opts, cfg.comfyPosNode)}</div>
-          <div class="f-row"><label>负向提示词节点（可选）</label>${ds('comfy-neg', [{ v: '', l: '不注入' }, ...opts], cfg.comfyNegNode)}</div>
-        </div>
-        <div style="display:flex;gap:9px;margin-top:4px">
-          <button class="btn btn-p" onclick="comfySave()">保存配置</button>
-          <button class="btn btn-o" onclick="comfyTest()">测试连接</button>
-          <button class="btn btn-o" onclick="switchView('video')">打开视频页</button>
-        </div>
-        <div class="sync-log" id="comfy-log" style="margin-top:12px"></div>`
-        : `<div class="sync-log"><div><span style="color:#87919a">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
-      </div>`;
-}
-async function comfyPickWf() {
-  const p = await window.reins.comfyPick();
-  if (!p) return;
-  const log = $('#comfy-log');
-  const r = await window.reins.comfyInspect(p);
-  if (!r.ok) {
-    $('#comfy-wf').value = ''; comfyNodes = [];
-    log.innerHTML = '<div class="ln err">✗ ' + esc(r.error) + '</div>';
-    return;
-  }
-  $('#comfy-wf').value = p;
-  comfyNodes = r.nodes;
-  const opts = comfyNodes.map(n => ({ v: n.id, l: '#' + n.id + ' · ' + (n.text || '').slice(0, 18) }));
-  dsSet('comfy-pos', opts, r.pos);
-  dsSet('comfy-neg', [{ v: '', l: '不注入' }, ...opts], r.neg || '');
-  log.innerHTML = '<div class="ln ok">✓ 已识别 ' + r.nodes.length + ' 个文本节点'
-    + (r.saveNodes ? '、' + r.saveNodes + ' 个输出节点' : '（未检测到视频/图像输出节点）')
-    + '。确认正/负向节点后保存。</div>';
-}
-function comfySave() {
-  const url = $('#comfy-url').value.trim() || 'http://127.0.0.1:8188';
-  if (!/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
-  const wf = $('#comfy-wf').value.trim();
-  const pos = $('#comfy-pos').value, neg = $('#comfy-neg').value;
-  if (wf && !pos) { toast('缺少正向节点', '选择工作流文件后会自动识别，也可手动指定', '⚠'); return; }
-  window.reins.setSettings({ comfyUrl: url, comfyWorkflow: wf, comfyPosNode: pos, comfyNegNode: neg }).then(s => { if (s) hookCfg = { ...hookCfg, ...s }; });
-  toast('已保存', wf ? '「视频」页已就绪' : '已清空 ComfyUI 配置', '▶');
-  render();
-}
-async function comfyTest() {
-  const log = $('#comfy-log'); if (!log) return;
-  const url = $('#comfy-url').value.trim() || 'http://127.0.0.1:8188';
-  log.innerHTML = '<div class="ln act">▸ 正在连接 ' + esc(url) + '…</div>';
-  const r = await window.reins.comfyStatus({ comfyUrl: url });
-  log.innerHTML = r.ok
-    ? '<div class="ln ok">✓ 已连接：ComfyUI ' + esc(r.version) + ' · ' + esc(r.device) + (r.vram ? ' · ' + esc(r.vram) : '') + '</div>'
-    : '<div class="ln err">✗ 连接失败：' + esc(r.error) + '（确认 ComfyUI 已启动）</div>';
-}
-
-/* —— 视频工作台 —— */
-function fmtElapsed(ms) {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-  return h ? h + ':' + String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0') : m + ':' + String(ss).padStart(2, '0');
-}
-function comfySvcHtml() {
-  if (comfySvc.probing) return '<span class="cv-svc-pill">⟳ 正在探测 ComfyUI…</span>';
-  if (comfySvc.ok) return '<span class="cv-svc-pill ok">● ComfyUI 在线 · ' + esc(comfySvc.version) + '</span>';
-  if (comfySvc.ok === false) return '<span class="cv-svc-pill off">● ComfyUI 离线（' + esc(comfySvc.error) + '）· 启动后可继续排队任务</span>';
-  return '<span class="cv-svc-pill">● 未探测</span>';
-}
-async function hydrateVideo() {
-  if (!window.reins || !$('#cv-svc')) return;
-  comfySvc = { probing: true };
-  $('#cv-svc').innerHTML = comfySvcHtml();
-  comfySvc = await window.reins.comfyStatus();
-  if ($('#cv-svc')) $('#cv-svc').innerHTML = comfySvcHtml();
-}
-function viewVideo() {
-  const wf = hookCfg.comfyWorkflow || '';
-  const head = `<div class="view-head"><h2>视频</h2><p>${wf ? 'ComfyUI 工作流：' + esc(wf.split('/').pop()) : 'ComfyUI 本地视频生成'}</p></div>`;
-  if (!window.reins) return head + `<div class="panel" style="padding:40px;text-align:center;color:var(--ink-dim)">视频生成需要在 <b>Reins 桌面客户端</b>中使用。</div>`;
-  if (!comfyCfgReady()) return head + `
-    <div class="panel" style="padding:40px;text-align:center;color:var(--ink-dim)">
-      还没有配置视频工作流。<br>先装好 ComfyUI 并导出工作流模板，再到「集成」页完成接入。
-      <div style="margin-top:14px"><button class="btn btn-p" onclick="switchView('integ')">去配置</button></div>
-    </div>`;
-  const PH = { submit: ['已提交', 'ph-queue'], queue: ['排队中', 'ph-queue'], run: ['生成中', 'ph-run'], done: ['已完成', 'ph-done'], error: ['失败', 'ph-err'], cancel: ['已取消', 'ph-err'] };
-  const jobs = Object.values(comfyJobs).sort((a, b) => b.at - a.at);
-  const rows = jobs.map(j => {
-    const active = j.phase === 'submit' || j.phase === 'queue' || j.phase === 'run';
-    const [pl, pc] = PH[j.phase] || PH.submit;
-    return `<div class="cv-job">
-      <div class="cv-head">
-        <span class="cv-dot ${pc}"></span><b>${pl}</b>
-        <span class="cv-el" id="cv-el-${j.id}">${active || j.phase === 'done' || j.phase === 'cancel' ? fmtElapsed((j.endAt || now()) - j.at) : '—'}</span>
-        <span class="cv-prompt" title="${esc(j.prompt)}">${esc(j.prompt.slice(0, 60))}</span>
-        <span style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
-          ${active ? `<button class="btn btn-o btn-sm" onclick="cancelComfyVideo('${j.id}')">取消</button>` : ''}
-          ${j.video ? `<button class="btn btn-o btn-sm" onclick="copyComfyUrl('${j.id}')">复制链接</button>` : ''}
-        </span>
-      </div>
-      ${j.phase === 'queue' || j.phase === 'run' ? '<div class="cv-bar"><i></i></div>' : ''}
-      ${j.video ? `<video class="cv-video" controls preload="metadata" src="${esc(j.video.src || j.video.url)}"></video>` : ''}
-      ${j.error ? `<div class="cv-err">✗ ${esc(j.error)}</div>` : ''}
-    </div>`;
-  }).join('');
-  return head + `
-    <div style="max-width:760px;display:grid;gap:14px">
-      <div class="panel">
-        <div class="cv-svc" id="cv-svc">${comfySvcHtml()}</div>
-        <div class="f-row"><label>画面描述（正向提示词）</label><textarea id="cv-prompt" class="cv-ta" placeholder="例如：一只橘猫在海边奔跑，电影感镜头，日落逆光"></textarea></div>
-        <div class="f-row"><label>负向提示词（可选）</label><input type="text" id="cv-neg" placeholder="留空则沿用模板里的负向词"></div>
-        <div style="display:flex;gap:9px;align-items:center">
-          <button class="btn btn-p" onclick="submitComfyVideo()">${ic('play')}&nbsp;生成视频</button>
-          <span style="font-size:12px;color:var(--ink-dim)">本地生成较慢（几分钟到几十分钟），关窗驻留也不中断</span>
-        </div>
-      </div>
-      <div class="panel" style="padding:14px 16px">
-        <h3 style="margin:0 0 4px;font-size:14px">生成任务</h3>
-        <div class="cv-list">${rows || '<div style="color:var(--ink-dim);font-size:13px;padding:8px 0">暂无任务。描述画面后点「生成视频」。</div>'}</div>
-      </div>
-    </div>`;
-}
-function submitComfyVideo() {
-  const prompt = $('#cv-prompt').value.trim();
-  if (!prompt) { toast('提示词为空', '先描述要生成的画面', '⚠'); return; }
-  if (!comfyCfgReady()) { switchView('integ'); return; }
-  const negative = $('#cv-neg').value.trim();
-  const id = 'cv' + now() + rnd(100, 999);
-  comfyJobs[id] = { id, prompt, negative, phase: 'submit', at: now() };
-  comfyJobsSync();
-  window.reins.comfySubmit({ jobId: id, prompt, negative });
-  toast('已提交', '任务已交给 ComfyUI', '▶');
-  render();
-}
-async function cancelComfyVideo(id) {
-  const j = comfyJobs[id]; if (!j) return;
-  j.phase = 'cancel'; j.endAt = now();
-  comfyJobsSync();
-  await window.reins?.comfyCancel?.(id);
-  toast('已取消', '已从 ComfyUI 队列移除', '✕');
-  if (curView === 'video') render();
-}
-function copyComfyUrl(id) {
-  const j = comfyJobs[id]; if (!j?.video) return;
-  navigator.clipboard.writeText(j.video.url).then(
-    () => toast('已复制', '产物链接已复制到剪贴板', '⧉'),
-    () => toast('复制失败', '当前环境未授权剪贴板', '⚠'));
-}
-function handleComfyEvent(evt) {
-  const j = comfyJobs[evt.jobId]; if (!j) return;
-  if (evt.type === 'queued') { j.phase = 'queue'; j.promptId = evt.promptId; }
-  else if (evt.type === 'running') { if (j.phase !== 'run') j.phase = 'run'; else return; }
-  else if (evt.type === 'done') {
-    j.phase = 'done'; j.endAt = now(); j.video = evt.video || null;
-    toast('视频已生成', j.prompt.slice(0, 40), '▶');
-    addActivity('▶', '视频已生成：' + j.prompt.slice(0, 30) + '…');
-  } else if (evt.type === 'error') {
-    j.phase = 'error'; j.endAt = now(); j.error = evt.error;
-    toast('生成失败', String(evt.error || '').slice(0, 60), '⚠');
-  }
-  comfyJobsSync();
-  if (curView === 'video') render();
-}
-/* 秒级计时：只更新进行中任务的耗时，不整页重绘 */
-setInterval(() => {
-  if (curView !== 'video') return;
-  const t = now();
-  for (const j of Object.values(comfyJobs))
-    if (j.phase === 'submit' || j.phase === 'queue' || j.phase === 'run') {
-      const el = document.getElementById('cv-el-' + j.id);
-      if (el) el.textContent = fmtElapsed(t - j.at);
-    }
-}, 1000);
-
 /* ============ 概览 ============ */
 function viewDash() {
   const doing = S().tasks.filter(t => t.status === 'doing');
@@ -1286,7 +1049,6 @@ function viewDash() {
 /* ============ 抽屉：任务详情 ============ */
 function openTask(id) {
   const t = byId(id);
-  if (t?.linkComicId && comicById(t.linkComicId)) return openComicDetail(t.linkComicId);   // 漫剧联动卡直达详情页
   drawerTaskId = id; document.body.classList.add('drawer-open'); renderDrawer(id);
 }
 function closeDrawer() { drawerTaskId = null; document.body.classList.remove('drawer-open'); }
@@ -2655,947 +2417,8 @@ function discardDiff(id) {
     save(); refreshViews(); if (drawerOpenOn(id)) renderDrawer(id);
   });
 }
-/* ============ 漫剧工作流（REINS-126） ============
-   数据由渲染层持有（S().comics，随 save() 持久化）；执行在主进程的体检副本上，
-   comic/episode/shot 补丁事件增量应用（handleComicEvent），与任务抽屉的流式体验同构。
-   引擎契约见 services/comic.js：七阶段 bible→script→storyboard→image→video→voice→assemble。 */
-const CM_STAGES = [
-  { id: 'bible', label: '设定' },
-  { id: 'script', label: '剧本' },
-  { id: 'storyboard', label: '分镜' },
-  { id: 'image', label: '首帧' },
-  { id: 'video', label: '视频' },
-  { id: 'voice', label: '配音', optional: true },
-  { id: 'assemble', label: '合成' },
-];
-const CM_STATUS = {
-  draft: { label: '草稿', cls: 's-draft' },
-  running: { label: '生成中', cls: 's-running' },
-  paused: { label: '已暂停 · 可续跑', cls: 's-paused' },
-  failed: { label: '失败', cls: 's-failed' },
-  done: { label: '已完成', cls: 's-done' },
-};
-let curComicId = null;          // 详情页路由（隐藏视图 comic-detail，不进侧栏）
-const cmExpand = {};            // episodeId -> 是否展开镜头网格
-const cmSeqSeen = {};           // comicId -> 已应用的最大事件序号（乱序事件丢弃）
-let comicRenderEngine = null;   // 渲染引擎配置快照（新建表单 / 设置页显示用）
-let comicVoiceEngine = null;    // 配音引擎配置快照（可选 · 独立配置）
-let cmLogBuf = [];              // 详情页运行日志行 [cls, text, key?]；key 行为流式缓冲
-let cmShotCtx = null;           // 镜头预览模态上下文（复制提示词用）
-let cmPackCtx = null;           // 合成包模态上下文（复制/下载用）
-
-const comicsOf = () => (S()?.comics || []);
-const comicById = id => (S()?.comics || []).find(c => c.id === id);
-
-/* 渲染引擎配置缺口的前端口径（与主进程 renderConfigError 同口径 · 返工修复③）：
-   新建表单与设置摘要据此点名缺哪个字段（地址 / Key / 模型名），而不是笼统一句「未配置」；
-   配音模型为可选阶段，缺口不计。返回 '' 表示配置完整可用 */
-function cmRenderGapLabel(e) {
-  if (!e || (!e.baseURL && !e.apiKey)) return '渲染引擎未配置';
-  if (!e.baseURL) return '渲染引擎缺服务地址（Base URL）';
-  /* 本地 ComfyUI：无 Key、模型走内嵌工作流，地址在即配齐 */
-  if (e.provider === 'comfy') return '';
-  if (!e.apiKey) return '渲染引擎缺 API Key';
-  const miss = [];
-  if (!e.imageModel) miss.push('图像模型名');
-  if (!e.videoModel) miss.push('视频模型名');
-  if (miss.length) return '渲染引擎缺' + miss.join(' / ');
-  return '';
-}
-
-/* —— 通用迷你菜单（卡片 ⋯ / 详情 ⋯ / 剧集 ⋯ / 阶段节点共用；点外部或 Esc 关闭） —— */
-let cmMenuEl = null, cmMenuOpening = false;
-function cmMenuClose() { if (cmMenuEl) { cmMenuEl.remove(); cmMenuEl = null; } }
-function cmMenu(btn, items) {
-  cmMenuClose();
-  const el = document.createElement('div');
-  el.className = 'cm-menu';
-  el.innerHTML = items.map((it, i) => `<button type="button" data-i="${i}"${it.danger ? ' class="danger"' : ''}>${esc(it.label)}</button>`).join('');
-  document.body.appendChild(el);
-  const r = btn.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
-  el.style.left = Math.max(10, Math.min(r.right - w, window.innerWidth - w - 10)) + 'px';
-  el.style.top = (r.bottom + 6 + h > window.innerHeight - 10 ? r.top - h - 6 : r.bottom + 6) + 'px';
-  el.addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    const it = items[Number(b.dataset.i)];
-    cmMenuClose();
-    it && it.fn && it.fn();
-  });
-  cmMenuEl = el;
-  /* 打开菜单的这次点击还在冒泡途中：置标志让 document 关闭监听放行，
-     否则菜单在同一次派发里建好即被移除（点 ⋯ 毫无反应的根因）；
-     setTimeout(0) 在本次事件派发完毕后复位 */
-  cmMenuOpening = true;
-  setTimeout(() => { cmMenuOpening = false; }, 0);
-}
-document.addEventListener('click', e => { if (cmMenuEl && !cmMenuOpening && !e.target.closest('.cm-menu')) cmMenuClose(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') cmMenuClose(); });
-
-/* ============ 视图一：漫剧库 ============ */
-function viewComics() {
-  const cs = comicsOf();
-  if (!cs.length) return `<div class="view-head"><h2>漫剧</h2><p>从设定到成片的漫剧生产线</p></div>
-    <div class="panel" style="padding:40px;text-align:center;color:var(--ink-dim)">
-      还没有漫剧项目。新建一部，Reins 将从世界观设定一路生成到可下载的成片合成包。<br><br>
-      <button class="btn btn-p" onclick="openNewComicModal()">${ic('plus')} 新建漫剧</button>
-    </div>`;
-  const running = cs.filter(c => c.status === 'running').length;
-  return `<div class="view-head"><h2>漫剧</h2><p>共 ${cs.length} 部${running ? ' · ' + running + ' 部生成中' : ''}</p>
-      <span class="act"><button class="btn btn-p" onclick="openNewComicModal()">${ic('plus')} 新建漫剧</button></span></div>
-    <div class="cm-grid">${cs.map(cmCardHTML).join('')}</div>`;
-}
-function cmCardHTML(c) {
-  const ep0 = (c.episodes || [])[0];
-  const sh0 = ep0 && (ep0.shots || [])[0];
-  const img = sh0 && (sh0.coverUrl || sh0.imageUrl);
-  const st = CM_STATUS[c.status] || CM_STATUS.draft;
-  const running = c.status === 'running';
-  const pct = running ? (c.progress?.pct || 0) : 100;
-  /* data-* 标记供 cmSyncCard 定向刷新（返工修复②）：胶囊/进度条/文案就地更新，
-     封面 <img> 只在素材地址变化时换节点 —— 快速连续事件下封面不再反复重载闪烁 */
-  return `<div class="cm-card" data-cm="${c.id}" onclick="openComicDetail('${c.id}')">
-    <div class="cm-cover" style="aspect-ratio:${(c.aspect || '9:16').replace(':', '/')}">
-      ${img ? `<img src="${esc(img)}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<span class="ph">${ic('clapperboard')}</span>`}
-      <span class="cm-pill ${st.cls}" data-st="${c.status}"${c.status === 'failed' && c.progress?.note ? ` title="${esc(c.progress.note)}"` : ''}>${running ? '<span class="pulse"></span>' : ''}${st.label}</span>
-      ${running || c.status === 'failed' ? `<div class="prog${c.status === 'failed' ? ' fail' : ' doing'}" data-pct="${pct}" role="progressbar" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>` : ''}
-      <button class="cm-more" title="更多操作" onclick="event.stopPropagation();cmCardMenu(this,'${c.id}')">${ic('more-horizontal')}</button>
-    </div>
-    <div class="cm-card-txt" data-sig="${esc(cmCardTxtSig(c))}">${cmCardTxtHTML(c)}</div>
-  </div>`;
-}
-function cmCardTxtSig(c) { return [(c.episodes || []).length, c.shotsPer, c.aspect, c.updatedAt].join('|'); }
-function cmCardTxtHTML(c) {
-  return `<b>${esc(c.title)}</b>
-    <span>${(c.episodes || []).length} 集 · 约 ${c.shotsPer} 镜/集</span>
-    <span>${esc(c.aspect)} · ${fmtRel(c.updatedAt)}</span>`;
-}
-/* 库视图卡片定向刷新（REINS-126 返工修复②）：此前每个事件批整页 render()，
-   运行中每 120ms 重建全部卡片 <img>（封面闪烁、悬停态丢失）。改为就地更新：
-   胶囊换状态、进度条改宽度、文案按签名替换；结构变化（卡片增删）才回退整渲 */
-function cmSyncCard(c) {
-  const el = document.querySelector(`.cm-card[data-cm="${c.id}"]`);
-  if (!el) { render(); return; }
-  const st = CM_STATUS[c.status] || CM_STATUS.draft;
-  const running = c.status === 'running';
-  const pill = el.querySelector('.cm-pill');
-  if (pill && pill.dataset.st !== c.status) {
-    pill.dataset.st = c.status;
-    pill.className = 'cm-pill ' + st.cls;
-    pill.innerHTML = (running ? '<span class="pulse"></span>' : '') + st.label;
-    if (c.status === 'failed' && c.progress?.note) pill.setAttribute('title', c.progress.note);
-    else pill.removeAttribute('title');
-  }
-  const pct = running ? (c.progress?.pct || 0) : 100;
-  let prog = el.querySelector('.prog');
-  if (running || c.status === 'failed') {
-    const cls = 'prog' + (c.status === 'failed' ? ' fail' : ' doing');
-    if (!prog) el.querySelector('.cm-cover')?.insertAdjacentHTML('beforeend',
-      `<div class="${cls}" data-pct="${pct}" role="progressbar" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>`);
-    else if (prog.dataset.pct !== String(pct) || prog.className !== cls) {
-      prog.className = cls; prog.dataset.pct = String(pct); prog.setAttribute('aria-valuenow', String(pct));
-      const i = prog.querySelector('i'); if (i) i.style.width = pct + '%';
-    }
-  } else if (prog) prog.remove();
-  /* 封面：src 没变绝不重建 <img>（重节点 = 重网络/解码）；占位 → 图 的跃迁一次性换节点 */
-  const ep0 = (c.episodes || [])[0];
-  const sh0 = ep0 && (ep0.shots || [])[0];
-  const src = (sh0 && (sh0.coverUrl || sh0.imageUrl)) || '';
-  const img = el.querySelector('.cm-cover img');
-  if (src) {
-    if (img) {
-      if (img.getAttribute('src') !== src) { img.setAttribute('src', src); img.style.display = ''; }
-    } else el.querySelector('.cm-cover .ph')?.replaceWith(Object.assign(document.createElement('img'),
-      { src, alt: '', loading: 'lazy', onerror: function () { this.style.display = 'none'; } }));
-  }
-  const txt = el.querySelector('.cm-card-txt');
-  const tsig = cmCardTxtSig(c);
-  if (txt && txt.dataset.sig !== tsig) { txt.dataset.sig = tsig; txt.innerHTML = cmCardTxtHTML(c); }
-}
-function cmCardMenu(btn, id) {
-  cmMenu(btn, [
-    { label: '打开', fn: () => openComicDetail(id) },
-    { label: '重命名', fn: () => openComicRename(id) },
-    { label: '复制项目', fn: () => cmDuplicate(id) },
-    { label: '删除漫剧', danger: true, fn: () => confirmDeleteComic(id) },
-  ]);
-}
-function cmDuplicate(id) {
-  const c = comicById(id); if (!c) return;
-  const d = JSON.parse(JSON.stringify(c));
-  d.id = 'cp' + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 8);
-  d.title = (c.title + ' 副本').slice(0, 60);
-  d.status = 'draft'; d.progress = null; d.createdAt = d.updatedAt = now();
-  S().comics.unshift(d); syncComicTask(S(), d); save(); refreshViews();
-  toast('已复制', '「' + esc(d.title) + '」已创建', '⧉');
-}
-function openComicRename(id) {
-  const c = comicById(id); if (!c) return;
-  openModal(`<div class="modal-head"><h3>重命名漫剧</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div class="f-row" style="margin-bottom:0"><label>标题</label><input type="text" id="cr-title" value="${esc(c.title)}" maxlength="60"></div></div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="cmRename('${id}')">保存</button></div>`);
-  setTimeout(() => { const el = $('#cr-title'); el?.focus(); el?.select(); }, 60);
-}
-function cmRename(id) {
-  const c = comicById(id); if (!c) return;
-  const v = $('#cr-title').value.trim();
-  if (!v) { $('#cr-title').style.borderColor = 'var(--red)'; $('#cr-title').focus(); return; }
-  c.title = v; c.updatedAt = now(); syncComicTask(S(), c); save(); closeModal();
-  toast('已重命名', esc(v), '✎');
-  if (curView === 'comic-detail' && curComicId === id) switchView('comic-detail'); else refreshViews();
-}
-function confirmDeleteComic(id) {
-  const c = comicById(id); if (!c) return;
-  openModal(`<div class="modal-head"><h3>删除漫剧</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将永久删除「<b style="color:var(--ink)">${esc(c.title)}</b>」及其全部剧集、镜头产物与执行记录${c.status === 'running' ? '；正在执行的生成任务会被立即终止' : ''}。此操作不可撤销。</div></div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-danger" onclick="deleteComic('${id}')">确认删除</button></div>`);
-}
-async function deleteComic(id) {
-  const c = comicById(id); if (!c) { closeModal(); return; }
-  if (c.status === 'running' && window.reins) { try { await window.reins.comicCancel(id); } catch (e) { } }
-  S().comics = S().comics.filter(x => x.id !== id);
-  S().tasks = (S().tasks || []).filter(x => x.linkComicId !== id);   // 联动任务卡一并移除
-  delete cmSeqSeen[id];
-  addActivity('🗑', '删除了漫剧「' + c.title + '」');
-  save(); closeModal();
-  if (curComicId === id) { curComicId = null; switchView('comics'); } else refreshViews();
-  toast('已删除', '「' + esc(c.title) + '」已移除', '✕');
-}
-
-/* ============ 视图二：新建漫剧（模态） ============ */
-let ncmAspect = '9:16';
-function openNewComicModal() {
-  ncmAspect = '9:16';
-  const usable = (O().agents || []).filter(a => a.mode === 'api' && a.apiKey && a.status !== 'offline');
-  const writerOpts = usable.length
-    ? usable.map(a => ({ v: a.id, l: a.name + ' · ' + (a.model || providerLabel(a.provider)) }))
-    : [{ v: '', l: '暂无可用编剧 Agent', dis: true }];
-  const re = comicRenderEngine;
-  const reGap = cmRenderGapLabel(re);   // 逐字段缺口点名（返工③）：缺模型名也拦在创建前，而非启动才失败
-  openModal(`<div class="modal-head"><h3>新建漫剧</h3><span>设定 → 剧本 → 分镜 → 首帧 → 视频 → 配音 → 合成</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body">
-      <div class="f-row"><label>标题</label><input type="text" id="ncm-title" maxlength="60" placeholder="例如：都市逆袭短剧第一季"></div>
-      <div class="f-row"><label>题材 / 故事方向</label><textarea id="ncm-theme" style="min-height:56px" placeholder="例：都市逆袭、末世求生、甜宠日常……越具体，设定越准"></textarea></div>
-      <div class="f-row"><label>画风偏好</label><input type="text" id="ncm-style" maxlength="120" placeholder="例：电影感厚涂、高饱和国漫、黑白漫画"></div>
-      <div class="f-row"><label>画幅</label>${cmSegHTML()}</div>
-      <div class="f-2col">
-        <div class="f-row"><label>集数（1 – 24）</label>${cmStepHTML('ncm-eps', 6, 1, 24)}</div>
-        <div class="f-row"><label>每集镜头数（4 – 16）</label>${cmStepHTML('ncm-shots', 8, 4, 16)}</div>
-      </div>
-      <div class="f-2col">
-        <div class="f-row"><label>编剧引擎（API Agent）</label>${ds('ncm-writer', writerOpts, usable[0] ? usable[0].id : '')}</div>
-        <div class="f-row"><label>渲染引擎（图像 / 视频）</label>
-          <div class="cm-engine-line">${reGap
-            ? `<span class="warn">${ic('triangle-alert')} ${esc(reGap)}</span><a href="javascript:void 0" onclick="closeModal();switchView('settings')">去设置 →</a>`
-            : `<span class="ok">${ic('check')} ${esc(re.provider === 'comfy' ? '本地 ComfyUI · FLUX 首帧 + Wan2.2 图生视频（零消耗）' : re.provider === 'zhipu' ? '智谱 CogView · CogVideoX · 密钥已配置' : '自定义端点 · 密钥已配置')}</span>`}</div>
-        </div>
-      </div>
-      ${usable.length ? '' : `<div class="cm-hint">${ic('triangle-alert')} 暂无可用编剧 Agent，<a href="javascript:void 0" onclick="closeModal();switchView('agents')">去接入 →</a>（需 API 模型）</div>`}
-      <div class="set-banner" style="margin:2px 0 0">图像 / 视频走上方渲染引擎（本地 ComfyUI 零消耗）；配音为可选阶段，在「设置 → 配音引擎」单独配置（本地 TTS 免费），未配置时自动跳过。</div>
-    </div>
-    <div class="modal-foot">
-      <a class="lnk" style="margin-right:auto;font-size:12px;cursor:pointer" href="javascript:void 0" onclick="cmCreate(false)">仅创建草稿</a>
-      <button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="cmCreate(true)">${ic('play')} 创建并开始生成</button>
-    </div>`);
-  $('#modal').classList.add('cm-wide');
-  setTimeout(() => $('#ncm-title')?.focus(), 60);
-}
-function cmSegHTML() {
-  const items = [['9:16', '竖屏 9:16'], ['16:9', '横屏 16:9'], ['1:1', '方形 1:1']];
-  return `<div class="cm-seg">${items.map(([v, l]) => `<button type="button" class="${v === ncmAspect ? 'on' : ''}" data-v="${v}" onclick="cmSegPick(this)"><i class="ratio r-${v.replace(':', '-')}"></i>${l}</button>`).join('')}</div>`;
-}
-function cmSegPick(btn) {
-  ncmAspect = btn.dataset.v;
-  btn.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
-}
-function cmStepHTML(id, val, lo, hi) {
-  return `<div class="cm-step" data-lo="${lo}" data-hi="${hi}">
-    <button type="button" onclick="cmStep('${id}',-1)" aria-label="减少">−</button><b id="${id}">${val}</b><button type="button" onclick="cmStep('${id}',1)" aria-label="增加">＋</button></div>`;
-}
-function cmStep(id, d) {
-  const el = document.getElementById(id); const wrap = el?.closest('.cm-step'); if (!wrap) return;
-  const v = Math.min(Number(wrap.dataset.hi), Math.max(Number(wrap.dataset.lo), Number(el.textContent) + d));
-  el.textContent = v;
-}
-async function cmCreate(run) {
-  const title = $('#ncm-title').value.trim();
-  if (!title) { const el = $('#ncm-title'); el.style.borderColor = 'var(--red)'; el.focus(); return; }
-  if (!window.reins) { toast('浏览器预览模式', '漫剧生成需要在桌面客户端中使用', '⚠'); return; }
-  const r = await window.reins.comicCreate({
-    title,
-    theme: $('#ncm-theme').value.trim(),
-    style: $('#ncm-style').value.trim(),
-    aspect: ncmAspect,
-    episodesPer: Number($('#ncm-eps').textContent) || 6,
-    shotsPer: Number($('#ncm-shots').textContent) || 8,
-    writerAgentId: $('#ncm-writer').value || '',
-  });
-  if (!r || !r.ok) { toast('创建失败', (r && r.error) || '未知错误', '⚠'); return; }
-  S().comics.unshift(r.comic); syncComicTask(S(), r.comic); save();
-  addActivity('🎬', '创建了漫剧「' + r.comic.title + '」');
-  closeModal();
-  openComicDetail(r.comic.id);
-  if (run) cmRun(r.comic.id);
-  else toast('已创建', '「' + esc(r.comic.title) + '」草稿已就绪', '🎬');
-}
-
-/* ============ 视图三：漫剧详情 ============ */
-function openComicDetail(id) {
-  if (!comicById(id)) return;
-  curComicId = id;
-  cmLogBuf = [];
-  switchView('comic-detail');
-}
-function viewComicDetail() {
-  const c = comicById(curComicId);
-  if (!c) { curComicId = null; return viewComics(); }
-  return cmHeadHTML(c) + cmStagebarHTML(c) + `<div class="cm-detail">
-      <div class="cm-main">${cmEpListHTML(c)}</div>
-      <div class="cm-side">${cmBibleHTML(c)}${cmLogHTML(c)}</div>
-    </div>`;
-}
-
-/* —— 详情头（吸附）：状态 + 主操作 + 横贯进度条 ——
-   data-sig 签名（返工修复②）：快速连续事件下头部/阶段轨内容未变时零 DOM 写入，
-   不再每 120ms 重建一次按钮（悬停态丢失的根源） */
-function cmHeadSig(c) {
-  const p = c.progress || {};
-  return [c.status, p.stage || '', p.pct ?? 0, p.note || ''].join('|');
-}
-function cmHeadHTML(c) {
-  const st = CM_STATUS[c.status] || CM_STATUS.draft;
-  const p = c.progress;
-  const running = c.status === 'running';
-  const note = running && p ? [p.note, p.pct + '%'].filter(Boolean).join(' · ')
-    : (p && p.note && (c.status === 'paused' || c.status === 'failed') ? p.note : '');
-  let acts = '';
-  if (running) acts = `<button class="btn btn-danger" onclick="confirmCancelComic('${c.id}')">${ic('power')} 终止</button>`;
-  else if (c.status === 'done') acts = `<button class="btn btn-o" onclick="confirmRerunComic('${c.id}')">${ic('refresh-cw')} 重新生成</button>`;
-  else acts = `<button class="btn btn-p" onclick="cmRun('${c.id}')">${ic('play')} ${c.status === 'draft' ? '开始生成' : '继续生成'}</button>`;
-  return `<div class="cm-head" id="cm-head" data-sig="${esc(cmHeadSig(c))}">
-    <button class="cm-back" onclick="switchView('comics')" title="返回漫剧库">${ic('chevron-right')}</button>
-    <div class="cm-head-main">
-      <div class="cm-head-row"><b>${esc(c.title)}</b>
-        <span class="cm-pill ${st.cls}"${c.status === 'failed' && p?.note ? ` title="${esc(p.note)}"` : ''}>${running ? '<span class="pulse"></span>' : ''}${st.label}</span></div>
-      ${note ? `<span class="cm-head-note" title="${esc(note)}">${esc(note)}</span>` : ''}
-    </div>
-    <div class="cm-head-acts">${acts}
-      <button class="cm-more ghost" title="更多操作" onclick="cmDetailMenu(this,'${c.id}')">${ic('more-horizontal')}</button>
-    </div>
-    ${running ? `<div class="prog doing cm-prog-line" role="progressbar" aria-valuenow="${p?.pct || 0}"><i style="width:${p?.pct || 0}%"></i></div>` : ''}
-  </div>`;
-}
-function cmDetailMenu(btn, id) {
-  const c = comicById(id);
-  cmMenu(btn, [
-    /* 换绑编剧（Agent 余额耗尽/想换模型时免重建项目）：执行中不换，避免文字阶段中途变口径 */
-    ...(c && c.status !== 'running' ? [{ label: '切换编剧 Agent', fn: () => openComicWriterPick(id) }] : []),
-    { label: '重命名', fn: () => openComicRename(id) },
-    { label: '复制项目', fn: () => cmDuplicate(id) },
-    { label: '删除漫剧', danger: true, fn: () => confirmDeleteComic(id) },
-  ]);
-}
-/* 换绑编剧弹层：候选口径与新建弹层一致（API 模型 + 已配 Key + 非 offline），
-   当前绑定的 Agent 即便已失效也原样列出，便于看清「从哪换走」 */
-function openComicWriterPick(id) {
-  const c = comicById(id); if (!c) return;
-  const cur = c.writerAgentId ? agentById(c.writerAgentId) : null;
-  const usable = (O().agents || []).filter(a => a.mode === 'api' && a.apiKey && a.status !== 'offline');
-  const opts = usable.length
-    ? usable.map(a => ({ v: a.id, l: a.name + ' · ' + (a.model || providerLabel(a.provider)) }))
-    : [{ v: '', l: '暂无可用编剧 Agent', dis: true }];
-  const sel = usable.some(a => a.id === c.writerAgentId) ? c.writerAgentId : (usable[0] ? usable[0].id : '');
-  openModal(`<div class="modal-head"><h3>切换编剧 Agent</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body">
-      <div class="f-row"><label>当前编剧</label><div style="font-size:13px;color:var(--ink-dim)">${cur ? esc(cur.name + ' · ' + (cur.model || providerLabel(cur.provider))) : '未绑定'}</div></div>
-      <div class="f-row" style="margin-bottom:0"><label>切换为</label>${ds('cwp-writer', opts, sel)}</div>
-      <div class="cm-hint" style="margin-top:10px">只影响后续生成的设定 / 剧本 / 分镜文字阶段，已生成的内容不变。</div>
-    </div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="cmWriterPick('${id}')">切换</button></div>`);
-}
-function cmWriterPick(id) {
-  const c = comicById(id); if (!c) return;
-  const v = $('#cwp-writer').value;
-  if (!v) { toast('无法切换', '暂无可用编剧 Agent（需 API 模型）', '⚠'); return; }
-  c.writerAgentId = v; c.updatedAt = now(); save(); closeModal();
-  const a = agentById(v);
-  toast('编剧已切换', a ? `后续生成走「${a.name}」` : '', '✓');
-  render();
-}
-
-/* —— 阶段轨：完成度口径与引擎 _predicates 等价（产物在场即完成） —— */
-function cmStageStats(c) {
-  const eps = c.episodes || [];
-  const shots = eps.flatMap(e => e.shots || []);
-  const running = c.status === 'running';
-  const st = c.progress?.stage || '';
-  const voiceTotal = shots.filter(s => s.dialogue).length;   // 无台词镜头无需配音
-  const mk = (meta, done, total, hasErr) => ({
-    ...meta,
-    done, total,
-    state: done >= total && total > 0 ? 'done' : (running && st === meta.id) ? 'doing' : hasErr ? 'error' : 'todo',
-  });
-  const stats = [
-    mk(CM_STAGES[0], c.bible && (c.bible.characters || []).length ? 1 : 0, 1,
-      c.status === 'failed' && st === 'bible'),
-    mk(CM_STAGES[1], eps.filter(e => (e.shots || []).length > 0).length, eps.length,
-      c.status === 'failed' && st === 'script'),
-    mk(CM_STAGES[2], eps.filter(e => (e.shots || []).length > 0 && e.shots.every(s => s.imagePrompt)).length, eps.length,
-      c.status === 'failed' && st === 'storyboard'),
-    mk(CM_STAGES[3], shots.filter(s => s.imageUrl).length, shots.length,
-      shots.some(s => s.err && !s.imageUrl)),
-    mk(CM_STAGES[4], shots.filter(s => s.videoUrl).length, shots.length,
-      shots.some(s => s.err && s.imageUrl && !s.videoUrl)),
-    mk(CM_STAGES[5], shots.filter(s => s.audioUrl).length, voiceTotal,
-      shots.some(s => s.err && s.dialogue && !s.audioUrl)),
-    mk(CM_STAGES[6], eps.filter(e => e.package).length, eps.length,
-      c.status === 'failed' && st === 'assemble'),
-  ];
-  return stats;
-}
-function cmStagebarSig(c) { return cmStageStats(c).map(s => s.state + ':' + s.done + '/' + s.total).join(','); }
-function cmStagebarHTML(c) {
-  const stats = cmStageStats(c);
-  return `<div class="cm-stagebar" id="cm-stagebar" data-sig="${esc(cmStagebarSig(c))}">${stats.map((s, i) => `
-    <button class="cm-stage ${s.state}" title="${esc(s.label)}阶段：${s.total ? s.done + '/' + s.total + ' 完成' : '尚未开始'}${s.optional ? '（可选）' : ''}"
-      aria-label="${esc(s.label)}阶段${s.total ? ' ' + s.done + '/' + s.total + ' 完成' : '未开始'}" onclick="cmStageMenu(this,'${c.id}','${s.id}')">
-      <span class="dot">${s.state === 'done' ? ic('check') : s.state === 'error' ? '!' : s.state === 'doing' ? '<span class="pulse"></span>' : ''}</span>
-      <span class="lbl">${s.label}${s.optional ? '<sup>可选</sup>' : ''}</span>
-    </button>${i < stats.length - 1 ? `<span class="lnk${stats[i].state === 'done' ? ' done' : ''}"></span>` : ''}`).join('')}</div>`;
-}
-function cmStageMenu(btn, cid, stage) {
-  const label = (CM_STAGES.find(s => s.id === stage) || {}).label || stage;
-  cmMenu(btn, [{ label: '从此阶段重跑', fn: () => cmRerunStage(cid, stage) , danger: true}]);
-}
-function cmRerunStage(cid, stage) {
-  const c = comicById(cid); if (!c) return;
-  const label = (CM_STAGES.find(s => s.id === stage) || {}).label || stage;
-  openModal(`<div class="modal-head"><h3>重跑「${label}」阶段</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将强制重跑「<b style="color:var(--ink)">${label}</b>」阶段：该阶段已有产物会被覆盖或作废（重跑剧本会清空对应剧集的旧镜头与产物），并重新消耗 API 额度。继续？</div></div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="closeModal();cmRun('${cid}',{stage:'${stage}'},true)">重跑</button></div>`);
-}
-
-/* —— 左栏：剧集列表 + 镜头网格 —— */
-function cmEpListHTML(c) {
-  return `<div class="panel cm-ep-list">${(c.episodes || []).map(ep => cmEpRowHTML(c, ep)).join('')}</div>`;
-}
-function cmEpRowHTML(c, ep) {
-  const open = !!cmExpand[ep.id];
-  return `<div class="cm-ep-row" data-ep="${ep.id}">
-    ${cmEpHeadHTML(c, ep)}
-    <div class="cm-ep-body" ${open ? '' : 'hidden'}>${cmShotgridHTML(c, ep)}</div>
-  </div>`;
-}
-function cmEpHeadSig(c, ep) {
-  const sh = ep.shots || [];
-  return [ep.status, ep.err || '', ep.title || '', ep.synopsis || '', sh.length,
-    sh.filter(s => s.videoUrl).length, ep.package ? 'p' : ''].join('|');
-}
-function cmEpHeadHTML(c, ep) {
-  const label = `第 ${ep.n} 集` + (ep.title && ep.title !== `第 ${ep.n} 集` ? ' · ' + ep.title : '');
-  const st = ep.status === 'done' ? CM_STATUS.done : ep.status === 'running' ? CM_STATUS.running
-    : ep.status === 'failed' ? CM_STATUS.failed : CM_STATUS.draft;
-  const n = (ep.shots || []).length;
-  const dur = n ? ep.shots.reduce((s, x) => s + (x.duration || 0), 0) : 0;
-  const meta = [n ? n + ' 镜头' : '未拆镜头', dur ? '约 ' + dur + 's' : '', ep.package ? '合成包就绪' : '', ep.err || '']
-    .filter(Boolean).join(' · ');
-  return `<div class="cm-ep-head" data-sig="${esc(cmEpHeadSig(c, ep))}" onclick="cmToggleEp('${ep.id}')">
-    <span class="cm-caret${cmExpand[ep.id] ? ' open' : ''}">${ic('chevron-right')}</span>
-    <div class="cm-ep-info">
-      <b>${esc(label)}</b>
-      ${ep.synopsis ? `<span class="syn">${esc(ep.synopsis)}</span>` : ''}
-      ${meta ? `<span class="meta">${esc(meta)}</span>` : ''}
-    </div>
-    <span class="cm-pill ${st.cls}"${ep.status === 'failed' && ep.err ? ` title="${esc(ep.err)}"` : ''}>${ep.status === 'running' ? '<span class="pulse"></span>' : ''}${st.label}${ep.status === 'running' && n ? ' ' + Math.round(ep.shots.filter(s => s.videoUrl).length / n * 100) + '%' : ''}</span>
-    <button class="cm-more" title="本集操作" onclick="event.stopPropagation();cmEpMenu(this,'${c.id}','${ep.id}')">${ic('more-horizontal')}</button>
-  </div>`;
-}
-function cmToggleEp(id) {
-  cmExpand[id] = !cmExpand[id];
-  const row = document.querySelector(`.cm-ep-row[data-ep="${id}"]`); if (!row) return;
-  row.querySelector('.cm-caret')?.classList.toggle('open', !!cmExpand[id]);
-  const body = row.querySelector('.cm-ep-body'); if (body) body.hidden = !cmExpand[id];
-}
-function cmEpMenu(btn, cid, eid) {
-  const c = comicById(cid); const ep = c && c.episodes.find(e => e.id === eid); if (!ep) return;
-  cmMenu(btn, [
-    { label: '重跑本集', fn: () => cmRerunEpisode(cid, eid) },
-    ep.synopsis ? { label: '复制梗概', fn: () => navigator.clipboard?.writeText(ep.synopsis).then(() => toast('已复制', '第 ' + ep.n + ' 集梗概', '⧉')) } : null,
-    ep.package ? { label: '导出本集合成包', fn: () => openComicPackage(cid, eid) } : null,
-  ].filter(Boolean));
-}
-function cmRerunEpisode(cid, eid) {
-  const c = comicById(cid); const ep = c && c.episodes.find(e => e.id === eid); if (!ep) return;
-  openModal(`<div class="modal-head"><h3>重跑第 ${ep.n} 集</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将重新生成第 ${ep.n} 集的剧本并重渲其全部镜头（旧镜头与产物一并作废），会重新消耗 API 额度。其他集不受影响。继续？</div></div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="closeModal();cmRun('${cid}',{episodeId:'${eid}'},true)">重跑本集</button></div>`);
-}
-function cmShotgridHTML(c, ep) {
-  if (!(ep.shots || []).length) return `<div class="cm-shot-empty">尚未拆分镜头。${c.status === 'running' ? '剧本与分镜生成后会自动填充。' : '开始生成后，编剧引擎将先产出剧本并拆分镜头。'}</div>`;
-  return `<div class="cm-shotgrid">${ep.shots.map(s => `
-    <div class="cm-shot${s.err ? ' err' : ''}" data-shot="${s.id}" onclick="openComicShot('${c.id}','${ep.id}','${s.id}')">${cmShotInner(c, ep, s)}</div>`).join('')}</div>`;
-}
-/* 判断镜头卡在哪个渲染阶段失败（重跑按钮定位用）：缺首帧→image，否则缺视频→video */
-function cmShotFailedStage(s) { return !s.imageUrl ? 'image' : !s.videoUrl ? 'video' : 'voice'; }
-/* —— 稳定层签名（REINS-126 返工修复②）——
-   镜头卡拆 media / txt 两段渲染：media 段（<img>/角标/忙碌态）带签名，产物地址与
-   忙碌态没变就绝不重建 <img>——此前每个事件批整卡 innerHTML 重建，封面反复重载
-   闪烁；txt 段纯文本，签名无关、可整体替换（无重节点，代价可忽略） */
-function cmShotBusy(c, s) {
-  const stg = c.status === 'running' ? (c.progress?.stage || '') : '';
-  return ['image', 'video', 'voice'].includes(stg) && !s.err
-    && (stg === 'image' ? !s.imageUrl : stg === 'video' ? (s.imageUrl && !s.videoUrl) : (s.dialogue && !s.audioUrl))
-    ? stg : '';
-}
-function cmShotMediaSig(c, s) {
-  return [(s.coverUrl || s.imageUrl || ''), s.videoUrl ? 1 : 0, cmShotBusy(c, s), c.aspect].join('|');
-}
-function cmShotMediaHTML(c, s) {
-  const stg = cmShotBusy(c, s);
-  return `<div class="media" data-sig="${esc(cmShotMediaSig(c, s))}" style="aspect-ratio:${(c.aspect || '9:16').replace(':', '/')}">
-      ${s.imageUrl ? `<img src="${esc(s.coverUrl || s.imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<span class="ph">${ic('image')}</span>`}
-      <span class="idx">#${s.index}</span>
-      ${s.videoUrl ? `<span class="vico" title="视频已生成">${ic('film')}</span>` : ''}
-      ${stg ? `<div class="busy"><span class="spin">${ic('refresh-cw')}</span><i>${({ image: '首帧生成中…', video: '视频生成中…', voice: '配音生成中…' })[stg]}</i></div>` : ''}
-    </div>`;
-}
-function cmShotTxtHTML(c, ep, s) {
-  const stg = c.status === 'running' ? (c.progress?.stage || '') : '';
-  const mini = (name, done, doing) => `<span class="${done ? 'done' : doing ? 'doing' : 'off'}">${ic(name)}</span>`;
-  return `<div class="txt">
-      <span class="meta">${s.duration}s${s.camera ? ' · ' + esc(s.camera) : ''}</span>
-      ${s.desc ? `<p>${esc(s.desc)}</p>` : ''}
-      ${s.dialogue ? `<q>“${esc(s.dialogue)}”</q>` : ''}
-      <div class="mini">
-        ${mini('image', !!s.imageUrl, stg === 'image' && !s.imageUrl)}
-        ${mini('film', !!s.videoUrl, stg === 'video' && !s.videoUrl)}
-        ${s.dialogue ? mini('mic', !!s.audioUrl, stg === 'voice' && !s.audioUrl) : '<span class="off" title="无台词，无需配音">—</span>'}
-      </div>
-      ${s.err ? `<div class="shot-err">${ic('triangle-alert')}<span>${esc(s.err)}</span></div>
-        <button class="btn btn-o btn-sm" onclick="event.stopPropagation();cmRunShot('${c.id}','${ep.id}','${s.id}','${cmShotFailedStage(s)}')">${ic('refresh-cw')} 重跑此镜头</button>` : ''}
-    </div>`;
-}
-function cmShotInner(c, ep, s) { return cmShotMediaHTML(c, s) + cmShotTxtHTML(c, ep, s); }
-function cmRunShot(cid, eid, sid, stage) { cmRun(cid, { episodeId: eid, shotId: sid, stage }); }
-
-/* —— 镜头预览模态：大图 / 视频播放 + 提示词全文 + 单阶段重跑 —— */
-function openComicShot(cid, eid, sid) {
-  const c = comicById(cid); const ep = c && c.episodes.find(e => e.id === eid);
-  const s = ep && ep.shots.find(x => x.id === sid); if (!s) return;
-  cmShotCtx = { cid, eid, sid };
-  const ar = (c.aspect || '9:16').replace(':', '/');
-  const media = s.videoUrl
-    ? `<video class="cm-shot-media" style="aspect-ratio:${ar}" src="${esc(s.videoUrl)}"${s.imageUrl ? ` poster="${esc(s.imageUrl)}"` : ''} controls autoplay playsinline></video>`
-    : s.imageUrl
-      ? `<img class="cm-shot-media" style="aspect-ratio:${ar}" src="${esc(s.imageUrl)}" alt="镜头 ${s.index} 首帧">`
-      : `<div class="cm-shot-media empty">${ic('image')}<span>尚无首帧</span></div>`;
-  const retry = c.status !== 'running' ? `
-    <div class="cm-shot-retry">
-      ${!s.imageUrl ? `<button class="btn btn-o btn-sm" onclick="closeModal();cmRunShot('${cid}','${eid}','${sid}','image')">${ic('refresh-cw')} 重跑首帧</button>` : ''}
-      ${s.imageUrl && !s.videoUrl ? `<button class="btn btn-o btn-sm" onclick="closeModal();cmRunShot('${cid}','${eid}','${sid}','video')">${ic('refresh-cw')} 重跑视频</button>` : ''}
-      ${s.dialogue && !s.audioUrl ? `<button class="btn btn-o btn-sm" onclick="closeModal();cmRunShot('${cid}','${eid}','${sid}','voice')">${ic('refresh-cw')} 重跑配音</button>` : ''}
-    </div>` : '';
-  openModal(`<div class="modal-head"><h3>镜头 #${s.index}</h3><span>第 ${ep.n} 集 · ${s.duration}s${s.camera ? ' · ' + esc(s.camera) : ''}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body">
-      ${media}
-      ${s.dialogue ? `<div class="cm-shot-line">“${esc(s.dialogue)}”</div>` : ''}
-      ${s.desc ? `<div class="cm-shot-desc">${esc(s.desc)}</div>` : ''}
-      ${s.imagePrompt ? `<div class="f-row"><label>首帧提示词</label><div class="result-box cm-prompt">${esc(s.imagePrompt)}</div></div>` : ''}
-      ${s.motionPrompt ? `<div class="f-row"><label>动态提示词</label><div class="result-box cm-prompt">${esc(s.motionPrompt)}</div></div>` : ''}
-      ${s.err ? `<div class="cm-shot-err">${ic('triangle-alert')}<span>${esc(s.err)}</span></div>` : ''}
-      ${retry}
-    </div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="copyShotPrompts()">复制提示词</button>
-      <button class="btn btn-p" onclick="closeModal()">关闭</button></div>`);
-}
-function copyShotPrompts() {
-  if (!cmShotCtx) return;
-  const c = comicById(cmShotCtx.cid); const ep = c && c.episodes.find(e => e.id === cmShotCtx.eid);
-  const s = ep && ep.shots.find(x => x.id === cmShotCtx.sid); if (!s) return;
-  const txt = [
-    s.imagePrompt ? '【首帧】\n' + s.imagePrompt : '',
-    s.motionPrompt ? '【动态】\n' + s.motionPrompt : '',
-  ].filter(Boolean).join('\n\n');
-  if (!txt) { toast('无提示词', '该镜头尚未生成分镜提示词', '⚠'); return; }
-  navigator.clipboard?.writeText(txt).then(
-    () => toast('已复制', '镜头 #' + s.index + ' 的提示词', '⧉'),
-    () => toast('复制失败', '当前环境未授权剪贴板', '⚠'));
-}
-
-/* —— 右栏：设定卡 + 运行日志 —— */
-function cmBibleHTML(c) {
-  const b = c.bible;
-  const body = !b || !(b.characters || []).length
-    ? `<div class="cm-bible-empty">${ic('clapperboard')}<p>尚无设定。开始生成后，编剧引擎将先产出世界观与角色。</p></div>`
-    : `${b.logline ? `<p class="logline">${esc(b.logline)}</p>` : ''}
-      ${b.style ? `<div class="cm-chips">${b.style.split(/[,，、;；\s]+/).filter(Boolean).map(x => `<span class="cm-chip">${esc(x)}</span>`).join('')}</div>` : ''}
-      ${(b.characters || []).map(ch => `<div class="cm-char">
-        <div><b>${esc(ch.name)}</b><span class="role${/反派/.test(ch.role) ? ' villain' : /主角/.test(ch.role) ? ' lead' : ''}">${esc(ch.role || '配角')}</span></div>
-        <p>${esc(ch.look || '')}${ch.voice ? `<span class="voice">${ic('mic')} ${esc(ch.voice)}</span>` : ''}</p>
-      </div>`).join('')}
-      ${(b.scenes || []).length ? `<div class="cm-chips neutral">${b.scenes.map(s => `<span class="cm-chip" title="${esc(s.look || '')}">${esc(s.name)}</span>`).join('')}</div>` : ''}`;
-  return `<div class="panel cm-bible">
-    <div class="cm-panel-head">${ic('book-open')}<b>世界观设定</b>
-      <button class="btn btn-o btn-sm" style="margin-left:auto" onclick="cmRerunStage('${c.id}','bible')" title="强制重新生成设定">${ic('refresh-cw')} 重生成</button></div>
-    ${body}</div>`;
-}
-function cmLogRowHTML(cls, text, key) {
-  return `<div class="cm-log-row ${cls || ''}"${key ? ` data-key="${esc(key)}"` : ''}>${esc(text)}</div>`;
-}
-function cmLogHTML(c) {
-  if (!cmLogBuf.length && c.status !== 'running') return '';
-  return `<div class="panel cm-log" id="cm-log-panel">
-    <div class="cm-panel-head">${ic('list')}<b>运行日志</b>
-      <button class="cm-log-clear" title="清屏" onclick="cmLogClear()">${ic('trash-2')}</button></div>
-    <div class="cm-log-body" id="cm-log-body">${cmLogBuf.map(([cls, t, k]) => cmLogRowHTML(cls, t, k)).join('')}</div>
-  </div>`;
-}
-/* 批量落日志（REINS-126 返工修复②）：一批事件只做一次 DOM 插入与一次滚动。
-   此前批内 N 条 stage/note = N 次 insertAdjacentHTML + N 次强制回流；
-   同 key 的流式增量仍并进最后一行（保留原 delta 合并语义） */
-function cmLogAppendMany(rows) {
-  if (!rows || !rows.length) return;
-  const body = $('#cm-log-body');
-  let html = '';
-  for (const row of rows) {
-    const [cls, text, key] = row;
-    if (key) {
-      const last = cmLogBuf[cmLogBuf.length - 1];
-      if (last && last[2] === key) {   // 流式行：同 key 的增量并进最后一行，避免逐 token 换行
-        last[1] += text;
-        if (body) { const el = body.querySelector(`[data-key="${CSS.escape(key)}"]`); if (el) el.textContent = last[1]; }
-        continue;
-      }
-    }
-    cmLogBuf.push([cls, text, key]);
-    html += cmLogRowHTML(cls, text, key);
-  }
-  if (cmLogBuf.length > 400) cmLogBuf.splice(0, cmLogBuf.length - 400);
-  if (body && html) { body.insertAdjacentHTML('beforeend', html); body.scrollTop = body.scrollHeight; }
-}
-function cmLogAppend(cls, text, key) { cmLogAppendMany([[cls, text, key]]); }
-function cmLogClear() { cmLogBuf = []; const b = $('#cm-log-body'); if (b) b.innerHTML = ''; }
-
-/* ============ 合成包导出（模态） ============ */
-async function openComicPackage(cid, eid) {
-  const c = comicById(cid); const ep = c && c.episodes.find(e => e.id === eid); let pkg = ep && ep.package;
-  if (!pkg) return;
-  /* 导出前按当前镜头数据重建合成包（REINS-126 返工修复）：单镜头重跑/重生成后
-     不再拿到旧包——旧包的 ffmpeg concat 清单与分镜表会缺失已补齐的镜头 */
-  if (window.reins && window.reins.comicPackage && ep.shots && ep.shots.length) {
-    try {
-      const r = await window.reins.comicPackage(c, eid);
-      if (r && r.ok && r.package) { ep.package = pkg = r.package; save(); }
-    } catch (e) { /* 重建失败回退存量包，不阻塞导出 */ }
-  }
-  cmPackCtx = { title: c.title, n: ep.n, srt: pkg.srt || '', sh: pkg.ffmpegSh || '', md: pkg.shotlistMd || '' };
-  const dl = (kind, label, fn) => `<button class="btn btn-o btn-sm" onclick="${fn}">${label}</button>`;
-  openModal(`<div class="modal-head"><h3>第 ${ep.n} 集 · 合成包</h3>
-      <span>${(ep.shots || []).length} 镜头 · 约 ${pkg.durationSec}s${pkg.missing ? ` · <b style="color:var(--red)">缺 ${pkg.missing} 个镜头视频</b>` : ' · 全镜头就绪'}</span>
-      <button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body">
-      <div class="cm-pkg-sec">
-        <div class="cm-pkg-h"><b>字幕 ep.srt</b><span>按镜头时长切分的 SRT</span>
-          ${dl('', '复制', 'cmPackCopy(\'srt\')')}${dl('', '下载 .srt', 'cmPackDownload(\'srt\')')}</div>
-        <pre class="cm-pkg-pre">${esc(pkg.srt ? pkg.srt.split('\n').slice(0, 12).join('\n') + (pkg.srt.split('\n').length > 12 ? '\n…' : '') : '（本集无台词，字幕为空）')}</pre>
-      </div>
-      <div class="cm-pkg-sec">
-        <div class="cm-pkg-h"><b>合成脚本 ffmpeg.sh</b><span>下载后放同目录执行：下载镜头、拼接、烧字幕、混配音</span>
-          ${dl('', '复制', 'cmPackCopy(\'sh\')')}${dl('', '下载 .sh', 'cmPackDownload(\'sh\')')}</div>
-        <pre class="cm-pkg-pre">${esc(pkg.ffmpegSh.split('\n').slice(0, 10).join('\n'))}\n…</pre>
-      </div>
-      <div class="cm-pkg-sec" style="margin-bottom:0">
-        <div class="cm-pkg-h"><b>分镜表 shotlist.md</b><span>镜头/台词/景别/时长一览</span>
-          ${dl('', '复制', 'cmPackCopy(\'md\')')}${dl('', '下载 .md', 'cmPackDownload(\'md\')')}</div>
-        <div class="result-box cm-pkg-md">${mdToHtml(pkg.shotlistMd)}</div>
-      </div>
-    </div>
-    <div class="modal-foot"><button class="btn btn-p" onclick="closeModal()">关闭</button></div>`);
-  $('#modal').classList.add('cm-xwide');
-}
-function cmPackText(which) {
-  const p = cmPackCtx || {};
-  return which === 'srt' ? p.srt : which === 'sh' ? p.sh : p.md;
-}
-function cmPackCopy(which) {
-  const txt = cmPackText(which);
-  navigator.clipboard?.writeText(txt).then(
-    () => toast('已复制', which === 'srt' ? 'SRT 字幕' : which === 'sh' ? 'ffmpeg 脚本' : '分镜表', '⧉'),
-    () => toast('复制失败', '当前环境未授权剪贴板', '⚠'));
-}
-function cmPackDownload(which) {
-  const p = cmPackCtx || {};
-  const ext = which === 'srt' ? 'srt' : which === 'sh' ? 'sh' : 'md';
-  const mime = which === 'srt' ? 'text/plain' : which === 'sh' ? 'text/x-shellscript' : 'text/markdown';
-  const name = `${String(p.title || '漫剧').replace(/[\\/:*?"<>|\s]+/g, '-').slice(0, 40)}-第${p.n || 1}集.ep.${ext}`;
-  const blob = new Blob([cmPackText(which) || ''], { type: mime + ';charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast('已下载', name, '⇩');
-}
-
-/* ============ 任务启动 / 终止 / 事件应用 ============ */
-function cmRun(cid, scope = {}, force = false) {
-  const c = comicById(cid); if (!c) return;
-  if (!window.reins) { toast('浏览器预览模式', '漫剧生成需要在桌面客户端中使用', '⚠'); return; }
-  if (c.status === 'running') { toast('执行中', '该漫剧正在生成，请先终止或等待完成', '⚠'); return; }
-  const agent = c.writerAgentId ? agentById(c.writerAgentId) : null;
-  const payload = { comic: c, scope: force ? { ...scope, force: true } : scope };
-  if (agent && agent.mode === 'api') payload.writerAgent = agent;
-  window.reins.comicStart(payload).then(r => {
-    if (!r || !r.ok) {
-      const msg = (r && r.error) || '未知错误';
-      /* 预检缺口（返工③）：主进程逐字段错误全文在 toast 里放不下也不可行动，
-         改为模态展示 + 直达「设置 → 渲染引擎」配置入口 */
-      if (/渲染引擎/.test(msg)) cmStartFail(msg);
-      else toast('无法启动', msg, '⚠');
-      render(); return;
-    }
-    c.status = 'running';
-    c.progress = { stage: scope.stage || '', pct: c.progress?.pct || 0, note: scope.stage ? '启动中…' : '从断点续跑…' };
-    cmSeqSeen[c.id] = 0;
-    cmLogBuf = [];
-    save();
-    if (curView === 'comic-detail' && curComicId === c.id) render();
-    else renderNav();
-  }).catch(() => toast('无法启动', '主进程不可用', '⚠'));
-}
-function confirmCancelComic(cid) {
-  const c = comicById(cid); if (!c) return;
-  openModal(`<div class="modal-head"><h3>终止生成</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">终止后已完成的设定、剧本与镜头产物全部保留；再次「继续生成」会从断点续跑，不重复消耗额度。正在渲染中的镜头会回到待执行状态。</div></div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">继续生成</button>
-      <button class="btn btn-danger" onclick="cmCancel('${cid}')">终止</button></div>`);
-}
-async function cmCancel(cid) {
-  closeModal();
-  if (window.reins) { try { await window.reins.comicCancel(cid); } catch (e) { } }
-  // 状态翻转等 cancelled 事件回传；此处延迟对账兜底（事件丢失时也能恢复可操作态）
-  setTimeout(() => {
-    const c = comicById(cid);
-    if (c && c.status === 'running' && window.reins) {
-      window.reins.comicSnapshot(cid).then(s => {
-        if (!s || !s.running) { c.status = 'paused'; save(); render(); }
-      }).catch(() => { });
-    }
-  }, 1000);
-}
-function confirmRerunComic(cid) {
-  const c = comicById(cid); if (!c) return;
-  openModal(`<div class="modal-head"><h3>重新生成</h3><span>${esc(c.title)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div style="font-size:13px;color:var(--ink-dim)">将强制重跑全部阶段（设定、剧本、分镜与全部镜头渲染），已有产物会被覆盖，并重新消耗 API 额度。继续？</div></div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="closeModal();cmRun('${cid}',{},true)">全部重跑</button></div>`);
-}
-
-/* 启动预检失败弹层（REINS-126 返工修复③）：渲染引擎缺口的长文案改为模态承载——
-   错误全文不截断（toast 放不下），并给「去配置渲染引擎」直达入口一步到位 */
-function cmStartFail(msg) {
-  openModal(`<div class="modal-head"><h3>无法启动生成</h3><span>渲染引擎预检未通过</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body"><div class="cm-start-err">${ic('triangle-alert')}<div>${esc(msg)}</div></div></div>
-    <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">知道了</button>
-      <button class="btn btn-p" onclick="closeModal();switchView('settings');setTimeout(openRenderEngineModal,60)">去配置渲染引擎</button></div>`);
-}
-
-/* 主进程事件 → 渲染层增量应用（seq 递增，乱序丢弃）。
-   主进程按窗口把事件打包成 {type:'batch', events:[...]} 单条推送（终态立即冲刷）：
-   这里一次 IPC 只做一次落盘（REINS-126 返工修复）。
-   返工修复②（快速连续事件 DOM 稳定性）：批与批可能背靠背到达（120ms 窗口帧 +
-   终态冲刷），此前每批同步直写 DOM —— 每秒最多 ~8 轮 outerHTML 重建，悬停态丢失、
-   封面 <img> 反复重载闪烁、同帧多次强制回流。现在数据应用仍在批内即时完成
-   （seq / 落盘语义不变），DOM 收尾合并进同一动画帧：同帧多批 → 脏集合去重一次写入；
-   头部 / 阶段轨 / 集头 / 镜头 media 均带签名，内容未变零 DOM；库视图按卡定向刷新 */
-let cmSaveTimer = null;
-function cmSaveSoon() {
-  if (cmSaveTimer) return;   // 节流：窗口内的多次事件合并进同一次 pending 落盘（触发时序列化的是最新 state）
-  cmSaveTimer = setTimeout(() => { cmSaveTimer = null; save(); }, 250);
-}
-window.addEventListener('beforeunload', () => { if (cmSaveTimer) { clearTimeout(cmSaveTimer); cmSaveTimer = null; save(); } });
-
-/* —— DOM 收尾合帧调度器：脏集合 + 单 rAF 冲刷 —— */
-const cmDirtyNew = () => ({ cid: null, full: false, cards: new Set(), eps: new Set(), shots: new Set() });
-let cmDom = cmDirtyNew();
-let cmRaf = 0;
-function cmMark(mark) {
-  if (mark.cid) cmDom.cid = mark.cid;
-  if (mark.full) cmDom.full = true;
-  if (mark.cards) for (const x of mark.cards) cmDom.cards.add(x);
-  if (mark.eps) for (const x of mark.eps) cmDom.eps.add(x);
-  if (mark.shots) for (const x of mark.shots) cmDom.shots.add(x);
-  if (!cmRaf) cmRaf = requestAnimationFrame(cmFlushDom);
-}
-function cmFlushDom() {
-  cmRaf = 0;
-  const d = cmDom; cmDom = cmDirtyNew();   // 先取走再重置：冲刷期间新到的事件重新排队到下一帧
-  if (d.full) { render(); return; }        // 结构性变化（设定首产/日志面板缺位/卡片增删）整页重渲
-  if (curView === 'comics') { for (const id of d.cards) { const c = comicById(id); if (c) cmSyncCard(c); } return; }
-  if (curView !== 'comic-detail' || !d.cid) return;
-  const c = comicById(d.cid); if (!c || c.id !== curComicId) return;
-  const head = $('#cm-head'), bar = $('#cm-stagebar');
-  if (head && head.dataset.sig !== cmHeadSig(c)) head.outerHTML = cmHeadHTML(c);
-  if (bar && bar.dataset.sig !== cmStagebarSig(c)) bar.outerHTML = cmStagebarHTML(c);
-  for (const epId of d.eps) cmSyncEp(c, epId);
-  for (const sk of d.shots) { const i = sk.indexOf('\u0000'); if (i > 0) cmSyncShot(c, sk.slice(0, i), sk.slice(i + 1)); }
-}
-function handleComicEvent(frame) {
-  const list = frame && frame.type === 'batch' && Array.isArray(frame.events) ? frame.events : [frame];
-  const first = list.find(e => e && e.comicId);
-  const c = first && comicById(first.comicId); if (!c) return;
-  const statusBefore = c.status;
-  const viewing = curView === 'comic-detail' && curComicId === c.id;
-  const epOf = id => (c.episodes || []).find(e => e.id === id);
-  const epName = ep => ep ? `第 ${ep.n} 集` : '';
-  const pendLog = [];                                        // 批内日志先攒后一次落（返工修复②）
-  const log = (...a) => { if (viewing) pendLog.push(a); };
-  /* 批内聚合提示：每集/每镜头只保留最后一次补丁事件，收尾时定向刷新一次 */
-  const epEvts = new Map(), shotEvts = new Map();
-  let bibleArrived = false, terminal = false, curStage = '';
-  for (const evt of list) {
-    if (!evt || !evt.type) continue;
-    if (evt.seq) { if (evt.seq <= (cmSeqSeen[c.id] || 0)) continue; cmSeqSeen[c.id] = evt.seq; }
-    if (evt.stage) curStage = (CM_STAGES.find(s => s.id === evt.stage) || {}).label || '';
-    switch (evt.type) {
-      case 'comic':
-        Object.assign(c, evt.patch);
-        if (evt.patch && evt.patch.bible) bibleArrived = true;
-        break;
-      case 'episode': {
-        const ep = epOf(evt.episodeId); if (ep) Object.assign(ep, evt.patch);
-        epEvts.set(evt.episodeId, evt);
-        break;
-      }
-      case 'shot': {
-        const ep = epOf(evt.episodeId); const s = ep && ep.shots.find(x => x.id === evt.shotId);
-        if (s) Object.assign(s, evt.patch);
-        shotEvts.set(evt.episodeId + ':' + evt.shotId, evt);
-        if (!epEvts.has(evt.episodeId)) epEvts.set(evt.episodeId, { episodeId: evt.episodeId });   // 镜头变化也带动集头进度刷新
-        break;
-      }
-      case 'stage':
-        log('dim', `[${curStage}] ${evt.episodeId ? epName(epOf(evt.episodeId)) + ' · ' : ''}${evt.state === 'start' ? '开始' + (evt.count ? ' · ' + evt.count + ' 个镜头' : '') : '完成'}`);
-        break;
-      case 'delta': log('', evt.text, evt.stage + ':' + (evt.episodeId || '')); break;
-      case 'note':
-        log(/^✕/.test(evt.text) ? 'bad' : /^✓/.test(evt.text) ? 'ok' : 'dim',
-          (evt.episodeId ? epName(epOf(evt.episodeId)) + ' ' : '') + evt.text);
-        break;
-      case 'error':
-        toast('漫剧执行失败', String(evt.message).slice(0, 90), '⚠');
-        log('bad', '✕ ' + (curStage ? `[${curStage}] ` : '') + evt.message);
-        terminal = true;
-        break;
-      case 'done': {
-        const s = evt.summary || {};
-        const m = Math.floor((s.elapsedMs || 0) / 60000), sec = Math.round((s.elapsedMs || 0) % 60000 / 1000);
-        log('ok', `完成：${s.episodes || 0} 集 · ${s.shots || 0} 镜头${(s.failed || []).length ? ` · ${s.failed.length} 个镜头待重跑` : ''} · ${m}分${sec}秒`);
-        toast('漫剧完成', `${c.title} · ${s.shots || 0} 个镜头${(s.failed || []).length ? '，' + s.failed.length + ' 个待重跑' : ''}`, '🎬');
-        addActivity('🎬', `漫剧「${c.title}」生成完成（${s.episodes || 0} 集 / ${s.shots || 0} 镜头）`);
-        terminal = true;
-        break;
-      }
-      case 'cancelled': log('dim', '■ 已终止，已完成阶段保留，可续跑'); terminal = true; break;
-    }
-  }
-  cmLogAppendMany(pendLog);   // 一批事件一次日志 DOM 插入（返工修复②）
-  syncComicTask(S(), c);   // 漫剧状态 → 联动任务卡（看板列随事件流动）
-  if (terminal) save(); else cmSaveSoon();   // 终态立即落盘；过程态走节流
-  /* —— UI 收尾：状态翻转才重渲侧栏（角标）；DOM 变化合帧定向应用 —— */
-  if (statusBefore !== c.status) {
-    renderNav();
-    if (curView === 'comics') { render(); return; }   // 状态翻转低频（每轮 ≤2 次）：整渲一次让库头「N 部生成中」计数归真
-  }
-  if (curView === 'comics') { cmMark({ cards: [c.id] }); return; }   // 库视图：只定向刷新该卡
-  if (!viewing) return;
-  /* 结构性变化走整页重渲（设定首产 / 日志面板缺位）；其余定向更新合并到同一帧 */
-  if (bibleArrived || (!$('#cm-log-panel') && (c.status === 'running' || cmLogBuf.length))) {
-    cmMark({ full: true, cid: c.id }); return;
-  }
-  cmMark({ cid: c.id, eps: [...epEvts.keys()], shots: [...shotEvts.keys()].map(k => k.replace(':', '\u0000')) });
-}
-/* 剧集镜头序列签名：重跑剧本产出同数量全新镜头时，数量比对看不出变化、
-   ID 序列比对能（返工修复②：网格不再停留在过期镜头上） */
-function cmEpShotSig(ep) { return (ep.shots || []).map(s => s.id).join(','); }
-function cmSyncEp(c, epId) {
-  const ep = (c.episodes || []).find(e => e.id === epId); if (!ep) return;
-  const row = document.querySelector(`.cm-ep-row[data-ep="${epId}"]`); if (!row) return;
-  const head = row.querySelector('.cm-ep-head');
-  if (head && head.dataset.sig !== cmEpHeadSig(c, ep)) head.outerHTML = cmEpHeadHTML(c, ep);
-  const body = row.querySelector('.cm-ep-body');
-  if (body) {
-    const sig = cmEpShotSig(ep);
-    if (body.dataset.shots !== sig) { body.innerHTML = cmShotgridHTML(c, ep); body.dataset.shots = sig; }
-  }
-}
-function cmSyncShot(c, epId, shotId) {
-  const ep = (c.episodes || []).find(e => e.id === epId);
-  const s = ep && ep.shots.find(x => x.id === shotId);
-  const card = document.querySelector(`.cm-ep-row[data-ep="${epId}"] .cm-shot[data-shot="${shotId}"]`);
-  if (!card || !s) { cmSyncEp(c, epId); return; }
-  const media = card.querySelector(':scope > .media'), txt = card.querySelector(':scope > .txt');
-  if (!media || !txt) { card.innerHTML = cmShotInner(c, ep, s); }   // 结构不符（旧 DOM/异常）兜底整卡重建
-  else {
-    if (media.dataset.sig !== cmShotMediaSig(c, s)) media.outerHTML = cmShotMediaHTML(c, s);   // 产物/忙碌态变化才碰 <img>
-    txt.innerHTML = cmShotTxtHTML(c, ep, s);                                                  // 文本段无重节点，直接换
-  }
-  card.classList.toggle('err', !!s.err);
-}
-
-/* 应用重启 / 页面重载后的对账：running 档要么接上主进程活任务，要么收养为 paused */
-async function hydrateComics() {
-  if (!window.reins || !window.reins.comicSnapshot) return;
-  let dirty = false;
-  for (const org of state.orgs) for (const sp of org.spaces) {
-    for (const c of (sp.comics || [])) {
-      if (c.status !== 'running') continue;
-      try {
-        const snap = await window.reins.comicSnapshot(c.id);
-        if (snap && snap.running && snap.comic) Object.assign(c, snap.comic);   // 活任务：以主进程副本为准
-        else { const a = await window.reins.comicAdopt(c); if (a) Object.assign(c, a); }
-        syncComicTask(sp, c);   // 对账后同步联动任务卡列位
-        dirty = true;
-      } catch (e) { }
-    }
-  }
-  if (dirty) {
-    save();
-    if (curView === 'comics' || curView === 'comic-detail') render();
-    renderNav();
-  }
-}
-
-/* —— 看板融合（AC-5）：每个漫剧挂一张联动任务卡（task.linkComicId 双向定位） ——
-   漫剧状态单向同步任务状态（done→待验收，验收=原生拖拽到已归档）；
-   已归档的任务不被回流，除非漫剧重新启动生成；联动卡不触发 Agent 自动执行。 */
-const COMIC_TASK_ST = { draft: 'todo', running: 'doing', paused: 'todo', failed: 'todo', done: 'review' };
-function syncComicTask(sp, c) {
-  if (!sp || !c) return;
-  const t = (sp.tasks || []).find(x => x.linkComicId === c.id);
-  if (!t) {
-    sp.tasks.push({
-      id: 't' + sp.seq, key: 'REINS-' + sp.seq, linkComicId: c.id,
-      title: '漫剧 · ' + c.title, type: 'comic', pri: 'P1',
-      desc: c.theme || '', status: COMIC_TASK_ST[c.status] || 'todo', assignee: null, tags: [],
-      pr: null, result: null, thread: [], attachPrompt: null, comments: [], repoRoot: '',
-      runModel: '', createdAt: now(), doneAt: null,
-    });
-    sp.seq++;
-    return;
-  }
-  t.title = '漫剧 · ' + c.title;                                        // 重命名跟随
-  if (t.status === 'done' && c.status !== 'running') return;            // 已验收归档：不被回流
-  const want = COMIC_TASK_ST[c.status] || 'todo';
-  if (t.status !== want) t.status = want;
-}
-
 /* —— 开放集成：任务事件推送到用户配置的 Webhook（桌面客户端内由主进程发送） —— */
-let hookCfg = { webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto', comfyUrl: 'http://127.0.0.1:8188', comfyWorkflow: '', comfyPosNode: '', comfyNegNode: '' };
+let hookCfg = { webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto' };
 function notifyHook(event, task) {
   if (!window.reins || !hookCfg.webhookUrl) return;
   const key = event.split('.')[1];
@@ -3792,7 +2615,7 @@ function applyAllTriage() {
 
 /* ============ 模态 ============ */
 function openModal(html) { $('#modal').innerHTML = html; $('#modal-mask').classList.add('show'); }
-function closeModal() { $('#modal-mask').classList.remove('show'); $('#modal').classList.remove('cm-wide', 'cm-xwide'); }
+function closeModal() { $('#modal-mask').classList.remove('show'); }
 $('#modal-mask')?.addEventListener('click', e => { if (e.target.id === 'modal-mask') closeModal(); });
 
 function openNewTaskModal() {
@@ -4161,7 +2984,7 @@ function createPrompt() {
 function viewSettings() {
   return `<div class="view-head"><h2>设置</h2><p>模型与密钥 · 客户端偏好 · 数据</p></div>
     <div style="max-width:720px">
-      <div class="panel" id="agents-cfg-panel" style="margin-bottom:14px"><h3 class="set-h" style="margin-top:0">模型与密钥</h3><div id="agents-cfg">载入中…</div><div id="re-cfg"></div><div id="vo-cfg"></div></div>
+      <div class="panel" id="agents-cfg-panel" style="margin-bottom:14px"><h3 class="set-h" style="margin-top:0">模型与密钥</h3><div id="agents-cfg">载入中…</div></div>
       <div id="set-panel" class="panel">载入中…</div>
     </div>`;
 }
@@ -4180,8 +3003,6 @@ function renderAgentsCfg() {
 }
 async function hydrateSettings() {
   renderAgentsCfg();
-  hydrateRenderEngineCfg();
-  hydrateVoiceEngineCfg();
   const box = document.getElementById('set-panel'); if (!box) return;
   let s = null;
   if (window.reins) { try { s = await window.reins.getSettings(); } catch (e) { } }
@@ -4265,188 +3086,6 @@ async function setClient(key, val) {
   toast('设置已保存',
     key === 'launchAtLogin' ? (val ? '将在系统登录后自动启动' : '已取消开机自启') : (val ? '关闭窗口时将驻留菜单栏' : '关闭窗口即退出客户端'),
     '⚙');
-}
-
-/* —— 渲染引擎配置（漫剧图像/视频/配音；独立于 LLM Agent，存 settings.renderEngine） —— */
-const CM_RENDER_PRESETS = {
-  comfy: { label: '本地 ComfyUI（FLUX 首帧 · Wan2.2 图生视频 · 零 API 消耗）', baseURL: 'http://127.0.0.1:8188', imageModel: '', videoModel: '', local: true },
-  zhipu: { label: '智谱（CogView · CogVideoX）', baseURL: 'https://open.bigmodel.cn/api/paas/v4', imageModel: 'cogview-4', videoModel: 'cogvideox-3' },
-  custom: { label: '自定义（兼容端点）', baseURL: '', imageModel: '', videoModel: '' },
-};
-async function hydrateRenderEngineCfg() {
-  const box = document.getElementById('re-cfg'); if (!box) return;
-  if (!window.reins) {
-    box.innerHTML = `<h3 class="set-h">渲染引擎</h3><div class="set-row"><div><b>漫剧渲染引擎</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`;
-    return;
-  }
-  let e = null;
-  try { e = await window.reins.comicRenderGet(); } catch (err) { }
-  comicRenderEngine = e;
-  const preset = CM_RENDER_PRESETS[e?.provider || 'zhipu'];
-  const gap = cmRenderGapLabel(e);   // 完整体检（返工③）：缺模型名也算缺口，按钮与描述一并点名
-  const isComfy = e?.provider === 'comfy';
-  const pill = isComfy ? '<span class="mode-pill" style="background:#e8f1ef;color:#0c6259">本地</span>' : e?.provider === 'custom' ? '<span class="mode-pill api">自定义</span>' : '<span class="mode-pill api">智谱</span>';
-  const desc = isComfy
-    ? `${esc(e?.baseURL || '未配置地址')} · 首帧 FLUX.1-schnell / 视频 Wan2.2 图生视频（内嵌工作流） · 零 API 消耗`
-    : `${esc(e?.baseURL || '未配置地址')} · 图像 ${esc(e?.imageModel || '—')} / 视频 ${esc(e?.videoModel || '—')} · ${e?.apiKey ? '密钥已配置' : '<b style="color:#c05656">密钥未配置</b>'}${gap && e?.baseURL && e?.apiKey ? ` · <b style="color:#c05656">${esc(gap)}</b>` : ''}`;
-  box.innerHTML = `<h3 class="set-h">渲染引擎（漫剧 · 图像 / 视频）</h3>
-    <div class="set-row">
-      <div><b>${esc(preset.label)} ${pill}</b>
-        <div class="set-desc">${desc}</div></div>
-      <button class="btn btn-o btn-sm" onclick="openRenderEngineModal()">${gap ? '去配置' : '配置'}</button>
-    </div>`;
-}
-function openRenderEngineModal() {
-  const e = comicRenderEngine || { provider: 'zhipu', baseURL: '', apiKey: '', imageModel: '', videoModel: '' };
-  openModal(`<div class="modal-head"><h3>渲染引擎</h3><span>漫剧 · 图像 / 视频</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body">
-      <div class="f-2col">
-        <div class="f-row"><label>服务商预设</label>${ds('re-provider', [
-          { v: 'comfy', l: CM_RENDER_PRESETS.comfy.label },
-          { v: 'zhipu', l: CM_RENDER_PRESETS.zhipu.label },
-          { v: 'custom', l: CM_RENDER_PRESETS.custom.label },
-        ], e.provider || 'zhipu', 'reProviderChanged()')}</div>
-        <div class="f-row" id="re-key-row"><label>API Key（仅保存在本机）</label><input type="password" id="re-key" value="${esc(e.apiKey || '')}" placeholder="sk-…" autocomplete="off"></div>
-      </div>
-      <div class="f-row"><label id="re-baseurl-label">Base URL（API 根路径）</label><input type="text" id="re-baseurl" value="${esc(e.baseURL || '')}" placeholder="https://open.bigmodel.cn/api/paas/v4"></div>
-      <div class="f-2col" id="re-models-row">
-        <div class="f-row"><label>图像模型</label><input type="text" id="re-imgmodel" value="${esc(e.imageModel || '')}" placeholder="cogview-4"></div>
-        <div class="f-row"><label>视频模型</label><input type="text" id="re-vidmodel" value="${esc(e.videoModel || '')}" placeholder="cogvideox-3"></div>
-      </div>
-      <div class="set-banner" style="margin:2px 0 0">配音已独立为「配音引擎」单独配置（设置页下一项）；配置变更只影响之后启动的任务。</div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-o" onclick="reTest()">测试连接</button><span style="flex:1"></span>
-      <button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="reSave()">保存</button>
-    </div>`);
-  reProviderChanged();   // 按当前服务商应用字段显隐/文案
-}
-/* 切换预设带入默认地址与模型（与主进程 setRenderEngine 换服务商语义一致） */
-function reProviderChanged() {
-  const pv = $('#re-provider')?.value;
-  const p = CM_RENDER_PRESETS[pv]; if (!p) return;
-  const bu = $('#re-baseurl'); if (bu) bu.value = p.baseURL;
-  const im = $('#re-imgmodel'); if (im && p.imageModel) im.value = p.imageModel;
-  const vm = $('#re-vidmodel'); if (vm && p.videoModel) vm.value = p.videoModel;
-  /* 本地 ComfyUI：Key/模型名不需要（内嵌工作流），换文案并收起相关字段 */
-  const comfy = pv === 'comfy';
-  $('#re-key-row').style.display = comfy ? 'none' : '';
-  $('#re-models-row').style.display = comfy ? 'none' : '';
-  $('#re-baseurl-label').textContent = comfy ? 'ComfyUI 服务地址' : 'Base URL（API 根路径）';
-  if (bu) bu.placeholder = comfy ? 'http://127.0.0.1:8188' : 'https://open.bigmodel.cn/api/paas/v4';
-  const note = $('#re-comfy-note');
-  if (note) note.style.display = comfy ? '' : 'none';
-  if (note && comfy) note.textContent = '本地渲染：首帧 FLUX.1-schnell（GGUF）+ 镜头视频 Wan2.2-TI2V-5B 图生视频，工作流由 Reins 内嵌调度，全程零 API 消耗；需 ComfyUI 桌面版在线。';
-}
-function reCollect() {
-  return {
-    provider: $('#re-provider')?.value || 'zhipu',
-    baseURL: $('#re-baseurl')?.value.trim() || '',
-    apiKey: $('#re-key')?.value.trim() || '',
-    imageModel: $('#re-imgmodel')?.value.trim() || '',
-    videoModel: $('#re-vidmodel')?.value.trim() || '',
-  };
-}
-async function reSave() {
-  if (!window.reins) return;
-  const r = await window.reins.comicRenderSet(reCollect());
-  if (!r || !r.ok) { toast('保存失败', (r && r.error) || '未知错误', '⚠'); return; }
-  comicRenderEngine = r.engine;
-  closeModal(); hydrateRenderEngineCfg();
-  toast('已保存', '渲染引擎配置已更新（新任务生效）', '⚙');
-}
-async function reTest() {
-  if (!window.reins) { toast('浏览器模式', '请在客户端内测试', '⚠'); return; }
-  toast('测试中', '正在探测渲染引擎端点（不产生消耗）…', '');
-  const r = await window.reins.comicRenderTest(reCollect());
-  toast(r && r.ok ? '连接成功' : '连接失败', (r && r.message) || '', r && r.ok ? '✓' : '⚠');
-}
-
-/* —— 配音引擎配置（可选阶段 · 独立于渲染引擎，存 settings.voiceEngine；本地 TTS 零消耗） —— */
-const CM_VOICE_PRESETS = {
-  kokoro: { label: '本地 TTS（Kokoro 中文音色 · 零消耗）', baseURL: 'http://127.0.0.1:8884/v1', model: 'kokoro', voice: 'zf_001' },
-  custom: { label: '自定义（OpenAI 兼容 /audio/speech）', baseURL: '', model: '', voice: '' },
-};
-const CM_VOICE_HINT = 'Kokoro 中文音色：zf_003 清亮年轻 · zf_001 干练利落 · zf_017 成熟知性 · zf_049 从容舒缓 · zm_010 明亮青年 · zm_009 沉稳青年 · zm_029 低沉磁性 · zm_020 少年感';
-async function hydrateVoiceEngineCfg() {
-  const box = document.getElementById('vo-cfg'); if (!box) return;
-  if (!window.reins) {
-    box.innerHTML = `<h3 class="set-h">配音引擎（可选）</h3><div class="set-row"><div><b>漫剧配音引擎</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`;
-    return;
-  }
-  let e = null;
-  try { e = await window.reins.comicVoiceGet(); } catch (err) { }
-  comicVoiceEngine = e;
-  const on = !!(e && e.baseURL && e.model);
-  const preset = CM_VOICE_PRESETS[e?.preset || 'kokoro'];
-  const pill = on ? (e.preset === 'kokoro' ? '<span class="mode-pill" style="background:#e8f1ef;color:#0c6259">本地</span>' : '<span class="mode-pill api">自定义</span>') : '';
-  const desc = on
-    ? `${esc(e.baseURL)} · 模型 ${esc(e.model)} · 默认音色 ${esc(e.voice || '—')} · 每镜头按说话角色自动换音色`
-    : '未配置（配音阶段自动跳过）。配置本地 TTS 后全程零 API 消耗。';
-  box.innerHTML = `<h3 class="set-h">配音引擎（漫剧 · 可选）</h3>
-    <div class="set-row">
-      <div><b>${on ? esc(preset.label) : '未启用'} ${pill}</b>
-        <div class="set-desc">${desc}</div></div>
-      <button class="btn btn-o btn-sm" onclick="openVoiceEngineModal()">${on ? '配置' : '去配置'}</button>
-    </div>`;
-}
-function openVoiceEngineModal() {
-  const e = comicVoiceEngine || { preset: 'kokoro', baseURL: CM_VOICE_PRESETS.kokoro.baseURL, apiKey: '', model: 'kokoro', voice: 'zf_001' };
-  openModal(`<div class="modal-head"><h3>配音引擎</h3><span>漫剧 · 可选阶段（独立于渲染引擎）</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
-    <div class="modal-body">
-      <div class="f-2col">
-        <div class="f-row"><label>预设</label>${ds('vo-preset', [
-          { v: 'kokoro', l: CM_VOICE_PRESETS.kokoro.label },
-          { v: 'custom', l: CM_VOICE_PRESETS.custom.label },
-        ], e.preset || 'kokoro', 'voPresetChanged()')}</div>
-        <div class="f-row"><label>API Key（可选 · 本地免鉴权）</label><input type="password" id="vo-key" value="${esc(e.apiKey || '')}" placeholder="本地 TTS 留空" autocomplete="off"></div>
-      </div>
-      <div class="f-row"><label>服务地址（/audio/speech 所在根路径）</label><input type="text" id="vo-baseurl" value="${esc(e.baseURL || '')}" placeholder="http://127.0.0.1:8884/v1"></div>
-      <div class="f-2col">
-        <div class="f-row"><label>模型名</label><input type="text" id="vo-model" value="${esc(e.model || '')}" placeholder="kokoro"></div>
-        <div class="f-row"><label>默认音色</label><input type="text" id="vo-voice" value="${esc(e.voice || '')}" placeholder="zf_001"></div>
-      </div>
-      <div class="cm-hint">${CM_VOICE_HINT}</div>
-      <div class="set-banner" style="margin:2px 0 0">本地预设需先启动 Reins 自带 TTS 服务（~/reins-tts）；设定阶段会让编剧为每个角色从音色表挑音色，配音按说话角色自动切换。配置变更只影响之后启动的任务。</div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-o" onclick="voTest()">测试配音</button><span style="flex:1"></span>
-      <button class="btn btn-o" onclick="closeModal()">取消</button>
-      <button class="btn btn-p" onclick="voSave()">保存</button>
-    </div>`);
-}
-/* 切换预设带入默认值（与主进程 setVoiceEngine 换预设语义一致） */
-function voPresetChanged() {
-  const pv = $('#vo-preset')?.value;
-  const p = CM_VOICE_PRESETS[pv]; if (!p) return;
-  const bu = $('#vo-baseurl'), md = $('#vo-model'), vc = $('#vo-voice');
-  if (bu) bu.value = p.baseURL;
-  if (md) md.value = p.model;
-  if (vc) vc.value = p.voice;
-}
-function voCollect() {
-  return {
-    preset: $('#vo-preset')?.value || 'kokoro',
-    baseURL: $('#vo-baseurl')?.value.trim() || '',
-    apiKey: $('#vo-key')?.value.trim() || '',
-    model: $('#vo-model')?.value.trim() || '',
-    voice: $('#vo-voice')?.value.trim() || '',
-  };
-}
-async function voSave() {
-  if (!window.reins) return;
-  const r = await window.reins.comicVoiceSet(voCollect());
-  if (!r || !r.ok) { toast('保存失败', (r && r.error) || '未知错误', '⚠'); return; }
-  comicVoiceEngine = r.engine;
-  closeModal(); hydrateVoiceEngineCfg();
-  toast('已保存', r.engine.baseURL && r.engine.model ? '配音引擎已启用（新任务生效）' : '配音未启用（留空 = 跳过配音阶段）', '⚙');
-}
-async function voTest() {
-  if (!window.reins) { toast('浏览器模式', '请在客户端内测试', '⚠'); return; }
-  toast('测试中', '正在合成一句测试音频…', '');
-  const r = await window.reins.comicVoiceTest(voCollect());
-  toast(r && r.ok ? '配音服务在线' : '连接失败', (r && r.message) || '', r && r.ok ? '✓' : '⚠');
 }
 
 function exportData() {
@@ -4609,7 +3248,7 @@ function normalizeState(st) {
   if (!st || typeof st !== 'object') return null;
   if (!Array.isArray(st.orgs) || !st.orgs.length) return null;
   st.version = 3;
-  if (!Array.isArray(st.comfyJobs)) st.comfyJobs = [];   // 视频生成历史（全局机器级，不随组织/空间走）
+  delete st.comfyJobs;   // 漫剧/视频生成已下线：历史遗留的生成任务记录一并清除
   if (!st.orgs.some(x => x.id === st.activeOrgId)) st.activeOrgId = st.orgs[0].id;
   for (const org of st.orgs) {
     org.name = typeof org.name === 'string' && org.name.trim() ? org.name : '未命名组织';
@@ -4639,13 +3278,15 @@ function normalizeSpace(sp) {
   sp.members = (Array.isArray(sp.members) ? sp.members : []).map(m =>
     typeof m === 'string' ? { name: m, role: 'member' }
       : { name: typeof m?.name === 'string' && m.name.trim() ? m.name : '成员', role: ['owner', 'member', 'guest'].includes(m?.role) ? m.role : 'member' });
-  for (const k of ['iterations', 'epics', 'prompts', 'autos', 'activity', 'chart', 'comics']) if (!Array.isArray(sp[k])) sp[k] = [];
+  for (const k of ['iterations', 'epics', 'prompts', 'autos', 'activity', 'chart']) if (!Array.isArray(sp[k])) sp[k] = [];
+  delete sp.comics;   // 漫剧功能已下线：旧档的漫剧项目数据清除
   if (!sp.integ || typeof sp.integ !== 'object') sp.integ = {};
   sp.seq = Number.isFinite(sp.seq) ? sp.seq : 1;
   sp.deliverSeq = Number.isFinite(sp.deliverSeq) ? sp.deliverSeq : 1;
   sp.readAt = Number.isFinite(sp.readAt) ? sp.readAt : 0;
   sp.tasks = (Array.isArray(sp.tasks) ? sp.tasks : []).map(t => {
     if (!t || typeof t !== 'object') return null;
+    if (t.linkComicId || t.type === 'comic') return null;   // 漫剧联动任务卡随漫剧功能一并下线
     t.title = typeof t.title === 'string' && t.title.trim() ? t.title : '（无标题）';
     t.status = STATUS_FLOW.includes(t.status) ? t.status : 'todo';
     t.type = TYPE_LABEL[t.type] ? t.type : 'chore';
@@ -4669,14 +3310,6 @@ async function init() {
     }
   } catch (e) { console.error('[boot] 状态数据异常，回退初始数据', e); booted = false; }
   if (!booted) state = seed();
-  // 视频任务历史回填：重启前仍在执行的任务，轮询链路已断、终态不可知，如实标注（产物若已生成仍在 ComfyUI 输出目录）
-  for (const j of (state.comfyJobs || [])) {
-    if (!j || !j.id) continue;
-    if (j.phase === 'submit' || j.phase === 'queue' || j.phase === 'run') {
-      j.phase = 'error'; j.endAt = j.endAt || now(); j.error = 'Reins 重启时任务仍在执行，轮询已中断；若已生成完，产物在 ComfyUI 输出目录（output/video）';
-    }
-    comfyJobs[j.id] = j;
-  }
   save();
 
   // 分步容错：任何一步渲染失败都不阻断后续步骤，避免停在空白壳
@@ -4698,11 +3331,7 @@ async function init() {
 
   // 主进程执行事件 → 更新运行 UI
   window.reins?.onRunEvent(evt => handleRunEvent(evt));
-  window.reins?.onComfyEvent?.(evt => handleComfyEvent(evt));
-  window.reins?.onComicEvent?.(evt => handleComicEvent(evt));
   window.reins?.getSettings?.().then(s => { if (s) hookCfg = { ...hookCfg, ...s }; }).catch(() => { });
-  window.reins?.comicRenderGet?.().then(e => { comicRenderEngine = e; }).catch(() => { });
-  hydrateComics();
 
   $('#search').addEventListener('input', e => { filters.search = e.target.value; if (curView === 'kanban' || curView === 'list') render(); });
   document.addEventListener('keydown', e => {
