@@ -77,6 +77,7 @@ nav {
   a { transition: color .15s; &:hover { color: var(--ink); } }
 }
 .nav-cta { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+.nav-cta .gh svg { width: 15px; height: 15px; fill: currentColor; }
 
 // —— 按钮
 .btn {
@@ -394,5 +395,6 @@ footer { border-top: 1px solid var(--line); padding: 44px 0; background: var(--b
   h1 { font-size: 40px; }
   .cases, .feats, .steps, .integ-grid, .price-grid { grid-template-columns: 1fr; }
   .nav-links { display: none; }
+  .nav-cta .gh { padding: 9px 12px; .lbl { display: none; } }
   .integ-list { grid-template-columns: 1fr; }
 }
