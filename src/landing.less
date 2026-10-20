@@ -316,33 +316,6 @@ h2 { font-size: 38px; font-weight: 700; letter-spacing: -.4px; margin-top: 12px;
   span { margin-left: auto; font-size: 12px; color: var(--paper-dim); font-weight: 400; }
 }
 
-// —— 定价
-.price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 54px; max-width: 820px; }
-.plan {
-  background: #fff; border: 1px solid var(--paper-line); border-radius: @r-lg; padding: 34px;
-  h3 { font-size: 18px; }
-  .p {
-    margin: 14px 0 4px; font-size: 42px; font-weight: 700; letter-spacing: -1px;
-    small { font-size: 14px; color: var(--paper-dim); font-weight: 400; letter-spacing: 0; }
-  }
-  ul { list-style: none; margin: 20px 0 26px; }
-  li {
-    font-size: 14px; color: var(--paper-dim); padding: 6px 0 6px 26px; position: relative;
-    &::before { content: "✓"; position: absolute; left: 0; color: var(--accent-deep); font-weight: 700; }
-  }
-  &.hot {
-    border: 2px solid var(--accent); position: relative;
-    box-shadow: 0 22px 64px rgba(13, 148, 136, .16);
-    .hot-tag {
-      position: absolute; top: -13px; left: 30px;
-      background: linear-gradient(180deg, @brand-bright, var(--accent-deep));
-      color: @brand-ink; font-size: 12px; font-weight: 700;
-      padding: 4px 14px; border-radius: 999px;
-      box-shadow: 0 4px 12px rgba(13, 148, 136, .35);
-    }
-  }
-}
-
 // —— FAQ
 .faq {
   max-width: 760px; margin: 48px auto 0;
@@ -360,16 +333,6 @@ h2 { font-size: 38px; font-weight: 700; letter-spacing: -.4px; margin-top: 12px;
     &[open] summary::after { transform: rotate(45deg); }
     .a { padding: 0 24px 20px; font-size: 14.5px; color: var(--paper-dim); }
   }
-}
-
-// —— CTA
-.cta {
-  background:
-    radial-gradient(700px 320px at 50% 110%, rgba(13, 148, 136, .12), transparent 65%),
-    linear-gradient(180deg, var(--bg), #0d0a05);
-  text-align: center; padding: 116px 0;
-  h2 { font-size: 42px; }
-  p { color: var(--ink-dim); margin: 18px auto 36px; max-width: 460px; font-size: 16.5px; }
 }
 
 // —— 页脚
@@ -393,7 +356,7 @@ footer { border-top: 1px solid var(--line); padding: 44px 0; background: var(--b
 @media (max-width: 960px) {
   .hero-grid { grid-template-columns: 1fr; }
   h1 { font-size: 40px; }
-  .cases, .feats, .steps, .integ-grid, .price-grid { grid-template-columns: 1fr; }
+  .cases, .feats, .steps, .integ-grid { grid-template-columns: 1fr; }
   .nav-links { display: none; }
   .nav-cta .gh { padding: 9px 12px; .lbl { display: none; } }
   .integ-list { grid-template-columns: 1fr; }
