@@ -66,5 +66,18 @@
     return { ok: true, to: 'doing' };
   }
 
-  return { approve, reject, revoke, applyPipelineReset, PIPE_RESET, statusLabel };
+  /* 打回的应用层：把 reject() 的计划落到任务上（thread / 状态 / pr / 打回计数 / 流水线重置）。
+     客户端按钮与飞书指令共用这一份应用逻辑；调用方只保留各自的留痕文案与通知 */
+  function applyReject(task, plan) {
+    if (!task || !plan || !plan.ok) return false;
+    task.thread = task.thread || [];
+    task.thread.push({ role: 'user', content: plan.threadText });
+    task.status = plan.to;
+    task.pr = null;
+    task.rejections = plan.rejections;
+    if (plan.resetPipeline && task.pipeline) applyPipelineReset(task.pipeline);
+    return true;
+  }
+
+  return { approve, reject, revoke, applyReject, applyPipelineReset, PIPE_RESET, statusLabel };
 });

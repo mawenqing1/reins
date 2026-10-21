@@ -1273,13 +1273,10 @@ function handleFeishuCall(req) {
          （此前两处各写一份，飞书侧漏记打回次数，首过率口径曾分叉） */
       const v = TaskFlow.reject(t, reason, '飞书群');
       if (!v.ok) return { error: v.message };
-      t.thread = t.thread || [];
-      t.thread.push({ role: 'user', content: v.threadText });
+      TaskFlow.applyReject(t, v);   // 应用层同源（thread/状态/打回计数/流水线重置）
       t.comments.push({ who: '飞书', text: v.commentText, at: now() });
       th(t, '↩️', '飞书群验收打回：' + v.feedback.slice(0, 40));
-      if (v.resetPipeline) { TaskFlow.applyPipelineReset(t.pipeline); th(t, '🧭', v.pipelineTimeline); }
-      t.status = v.to; t.pr = null;
-      t.rejections = v.rejections;   // 打回计数与客户端同源（首过率口径）
+      if (v.resetPipeline) th(t, '🧭', v.pipelineTimeline);
       addActivity('↩️', t.key + ' 经飞书群打回，等待重做');
       notifyHook('task.rejected', t);
       notifyFeishu('task.rejected', t, { reason: v.feedback.slice(0, 300) });
@@ -1431,6 +1428,27 @@ function dashCostRow() {
   </div>`;
 }
 
+/* 概览·近 7 日花费柱状图（流水表逐日汇总；悬停看次数/未定价/计价中明细）。
+   与「近 7 日吞吐」同一套 .chart/.bar-w 视觉语言 */
+function dashCostChart() {
+  if (typeof window.ExecLog === 'undefined') return '';
+  const log = O().execLog || [];
+  if (!log.length) return '';
+  const buckets = ExecLog.daysBuckets(log, 7, Date.now());
+  const max = Math.max(...buckets.map(b => b.cost), 0.0001);
+  const wk = ['日', '一', '二', '三', '四', '五', '六'];
+  const bars = buckets.map((b, i) => {
+    const d = new Date(b.day + 'T00:00:00');
+    const label = i === buckets.length - 1 ? '今天' : '周' + wk[d.getDay()];
+    const tip = b.day + ' · ' + fmtMoney(b.cost) + ' · ' + b.runs + ' 次执行'
+      + (b.unpriced ? ' · ' + b.unpriced + ' 次未定价' : '') + (b.pending ? ' · ' + b.pending + ' 次计价中' : '');
+    const h = b.cost > 0 ? Math.max(10, Math.round(b.cost / max * 100)) : 2;
+    const num = b.cost > 0 ? fmtMoney(b.cost).replace('¥', '') : '';
+    return `<div class="bar-w ${i === buckets.length - 1 ? 'today' : ''}" title="${esc(tip)}"><span style="font-size:10px;font-family:var(--mono);color:var(--ink-faint)">${num}</span><div class="bar" style="height:${h}%"></div><span class="lbl">${label}</span></div>`;
+  }).join('');
+  return `<div class="dcc-wrap"><span style="font-size:12px;font-weight:600">近 7 日花费</span><div class="chart" style="height:64px">${bars}</div></div>`;
+}
+
 /* 概览·最近执行明细（流水表倒序 12 条：时间 / 任务 / Agent·模型 / 结果 / 耗时 / tokens / 花费） */
 function dashExecList() {
   if (typeof window.ExecLog === 'undefined') return '';
@@ -1451,6 +1469,7 @@ function dashExecList() {
     </div>`;
   }).join('');
   return `<div class="panel exec-list"><h3 style="font-size:14px;margin-bottom:8px">最近执行 <span style="font-weight:400;font-size:11px;color:var(--ink-faint)">逐次流水 · 共 ${log.length} 条（封顶 500）</span></h3>
+    ${dashCostChart()}
     <div class="xl-head"><span>时间</span><span>任务</span><span>Agent · 模型</span><span>结果</span><span>耗时</span><span>tokens</span><span>花费</span></div>
     ${rows}</div>`;
 }
@@ -1683,11 +1702,8 @@ function doReject(id) {
   /* 变更计划走共享迁移规则（taskflow.js），与飞书群 /reins reject 同一份判定源 */
   const r = TaskFlow.reject(t, $('#rj-text').value.trim());
   if (!r.ok) { toast('无法打回', esc(r.message), '⚠'); return; }
-  t.thread = t.thread || [];
-  t.thread.push({ role: 'user', content: r.threadText });
-  t.status = r.to; t.pr = null;
-  t.rejections = r.rejections;   // 首过率口径：打回后再次交付不算「一次通过」
-  if (r.resetPipeline) { TaskFlow.applyPipelineReset(t.pipeline); th(t, '🧭', r.pipelineTimeline); }
+  TaskFlow.applyReject(t, r);   // 应用层同源（thread/状态/打回计数/流水线重置）
+  if (r.resetPipeline) th(t, '🧭', r.pipelineTimeline);
   t.comments.push({ who: 'Reins', text: r.commentText, at: now() });
   th(t, '↩️', '验收打回：' + r.feedback.slice(0, 40));
   addActivity('↩️', t.key + ' 验收打回，等待重做');
@@ -4856,6 +4872,9 @@ async function init() {
   window.reins?.onScheduleFire?.(info => handleScheduleFire(info));
   /* 飞书群指令 → 主进程反向调用渲染层执行（任务状态在多空间内存态里，只有这里拿得到） */
   window.reins?.onFeishuCall?.(req => handleFeishuCall(req));
+  /* 就绪信号：控制台未就绪期间收到的飞书群指令在主进程排队，这里通知回放。
+     必须放在 onFeishuCall 注册之后——回放靠该监听器接住主进程的转发 */
+  window.reins?.rendererReady?.().catch(() => { });
   window.reins?.getSettings?.().then(s => { if (s) { hookCfg = { ...hookCfg, ...s }; feishuCfg = { ...feishuCfg, ...(s.feishu || {}) }; } }).catch(() => { });
 
   $('#search').addEventListener('input', e => { filters.search = e.target.value; if (curView === 'kanban' || curView === 'list') render(); });

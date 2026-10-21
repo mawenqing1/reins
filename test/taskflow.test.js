@@ -81,12 +81,31 @@ async function run() {
     ok(/const r = TaskFlow\.reject\(t, \$\('#rj-text'\)\.value\.trim\(\)\);/.test(SRC), '客户端打回走共享变更计划');
     ok(/TaskFlow\.reject\(t, reason, '飞书群'\)/.test(SRC), '飞书 reject 走共享变更计划');
     ok(/TaskFlow\.revoke\(t\)/.test(SRC), '飞书 revoke 走共享判定');
-    ok(/TaskFlow\.applyPipelineReset\(t\.pipeline\)/.test(SRC), '流水线重置走共享口径');
-    /* 飞书侧补上了打回计数（此前漏记，首过率分叉） */
-    ok(/t\.rejections = v\.rejections;.*首过率口径/s.test(SRC), '飞书打回计数与客户端同源');
+    /* 流水线重置口径已内聚进 applyReject（应用层），入口不再直呼 applyPipelineReset */
+    /* 飞书侧打回计数经 applyReject 同源（此前漏记导致首过率分叉），§6 已断言两入口接线 */
     /* 旧的内联重置代码不应再残留于这两个入口 */
     const mergeD = SRC.slice(SRC.indexOf('function doReject'), SRC.indexOf('function doReject') + 900);
     ok(!/pipeline\.status = 'idle'/.test(mergeD), 'doReject 内联流水线重置已移除');
+  }
+
+  /* ---------- 6. applyReject：应用层同源（thread/状态/计数/流水线重置一次落位） ---------- */
+  {
+    const mk = () => ({ key: 'REINS-4', status: 'review', thread: [], pr: '交付 #9', rejections: 0, pipeline: { on: true, status: 'running', stages: [{ id: 's' }], gate: { round: 2 }, reworkCtx: { qaReport: 'x' }, cur: 2, mode: 'm', round: 2, stageNo: 5 } });
+    const t = mk();
+    const plan = TaskFlow.reject(t, '改语气', '飞书群');
+    ok(TaskFlow.applyReject(t, plan) === true, '应用成功');
+    ok(t.status === 'todo' && t.pr === null && t.rejections === 1, '状态/pr/打回计数落位');
+    ok(t.thread.length === 1 && /【验收反馈】改语气（来自飞书群）/.test(t.thread[0].content), '反馈写入 thread');
+    ok(t.pipeline.status === 'idle' && t.pipeline.stages === null && t.pipeline.gate === null, '流水线重置落位');
+    ok(TaskFlow.applyReject(t, null) === false && TaskFlow.applyReject(null, plan) === false, '坏计划/坏任务安全拒绝');
+    const t2 = mk(); t2.pipeline = null;
+    TaskFlow.applyReject(t2, TaskFlow.reject(t2, 'x'));
+    ok(t2.status === 'todo', '无流水线任务照常应用');
+  }
+  /* 接线：两个入口都走 applyReject */
+  {
+    ok(SRC.includes('TaskFlow.applyReject(t, r);') && SRC.includes('TaskFlow.applyReject(t, v);'), '客户端与飞书打回都走 applyReject');
+    ok(!/t\.thread\.push\(\{ role: 'user', content: r\.threadText \}\)/.test(SRC), '客户端打回的内联应用已移除');
   }
 
   return n;

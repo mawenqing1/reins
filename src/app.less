@@ -1417,6 +1417,11 @@ label.pipe-toggle {
 // ============ 概览·最近执行明细（执行流水表） ============
 .exec-list {
   margin-bottom: 14px;
+  .dcc-wrap {
+    margin: 0 0 12px;
+    > span { display: block; margin-bottom: 4px; color: var(--ink-dim); }
+    .chart { padding: 0 6px; }
+  }
   .xl-head, .xl-row {
     display: grid; gap: 10px; align-items: center;
     grid-template-columns: 64px minmax(150px, 1.4fr) minmax(150px, 1.4fr) 72px 56px 76px 72px;

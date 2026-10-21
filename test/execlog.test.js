@@ -109,7 +109,7 @@ async function run() {
     ok(/ExecLog\.makeEntry\(/.test(SRC) && /ExecLog\.push\(org\.execLog, row\)/.test(SRC), 'accountRun 落流水');
     ok(/agentId: agent\.id, agentName: agent\.name, provider: agent\.provider/.test(SRC), 'run 实例携带 agentId（并行阶段归属）');
     ok(/agentById\(r\.agentId\) \|\| effAgentOf\(t0\)/.test(SRC), '流水线阶段完成按 run.agentId 记账');
-    ok(/t\.rejections = [rv]\.rejections;/.test(SRC), '打回计数（首过率口径，经 taskflow 共享计划）');
+    ok(/TaskFlow\.applyReject\(t, [rv]\);/.test(SRC), '打回计数经 taskflow.applyReject 应用（首过率口径同源）');
     ok(/firstPass: !\(t2\.rejections > 0\)/.test(SRC), '单任务交付带 firstPass');
     ok(/delivery: true, firstPass: !\(t\.rejections > 0\)/.test(SRC), '演示引擎交付入流水');
     ok(/st\.deliveries = \(st\.deliveries \|\| 0\) \+ 1;/.test(SRC), '交付级完成计 deliveries 样本');
@@ -118,6 +118,32 @@ async function run() {
     ok(/function dashExecList\(\)/.test(SRC), '概览最近执行明细');
     ok(/if \(usedTokens\) a\.tokens = \(a\.tokens \|\| 0\) \+ usedTokens;/.test(SRC) === false, '流水线 tokens 旧记账路径已移除（防双计）');
     ok(/<script src="assets\/execlog.js"><\/script>/.test(HTML), 'app.html 引入 execlog.js');
+  }
+
+  /* ---------- 9. daysBuckets：近 N 日逐日汇总（图表用） ---------- */
+  {
+    const nowMs = new Date(2026, 9, 21, 20, 0, 0).getTime();   // 10-21 晚
+    const d21 = '2026-10-21', d20 = '2026-10-20', d15 = '2026-10-15';
+    const log = [
+      { day: d21, ok: true, tokens: 100, priced: true, cost: 0.5 },
+      { day: d21, ok: false, tokens: 10, priced: true, cost: 0.1 },
+      { day: d20, ok: true, tokens: 50, priced: true, cost: 0.2 },
+      { day: d15, ok: true, tokens: 5, priced: true, cost: 9 },   // 超出 7 日窗口
+      { day: '2000-01-01', ok: true, tokens: 0, priced: true, cost: 99 },
+    ];
+    const b = ExecLog.daysBuckets(log, 7, nowMs);
+    eq(b.length, 7, '恰好 7 个桶');
+    eq(b[0].day, '2026-10-15', '最旧在前（含 7 日窗口边界当天）');
+    eq(b[6].day, d21, '最新在后（今天）');
+    ok(Math.abs(b[6].cost - 0.6) < 1e-9 && b[6].runs === 2, '今天两笔合计');
+    ok(Math.abs(b[5].cost - 0.2) < 1e-9, '昨天命中');
+    eq(b[0].cost, 9, '窗口首日（15 号）命中；14 号及更早不计');
+    ok(b.slice(1, 5).every(x => x.cost === 0 && x.runs === 0), '无执行日为 0 桶');
+    /* 跨月边界 */
+    const b2 = ExecLog.daysBuckets([], 7, new Date(2026, 10, 2).getTime());
+    eq(b2[0].day, '2026-10-27', '跨月：11-02 往前 7 天首日落在 10 月');
+    eq(b2[6].day, '2026-11-02', '跨月：末日正确');
+    ok(ExecLog.daysBuckets(null, 7, nowMs).length === 7, '空档安全');
   }
 
   return n;

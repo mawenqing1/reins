@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('reins', {
   feishuSync: () => ipcRenderer.invoke('reins:feishu:sync'),
   feishuReset: () => ipcRenderer.invoke('reins:feishu:reset'),
   /* 主进程 → 渲染层的反向调用（群指令执行需要渲染层的任务状态），按 id 回包 */
+  rendererReady: () => ipcRenderer.invoke('reins:renderer:ready'),
   onFeishuCall: (cb) => ipcRenderer.on('reins:feishu:call', (_e, req) => {
     Promise.resolve(cb(req)).then(data => ipcRenderer.send('reins:feishu:reply', { id: req.id, data }))
       .catch(err => ipcRenderer.send('reins:feishu:reply', { id: req.id, data: { error: String((err && err.message) || err) } }));

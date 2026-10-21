@@ -171,7 +171,49 @@ function createFeishuBridge(dep) {
   };
   function resetSeen() { seen = new Set(); }
 
-  /* 一轮轮询：拉增量消息 → 过滤人发的文本 → 解析指令 → 交宿主执行 → 回执卡片 */
+  /* ---------- 就绪排队：控制台未就绪时的指令回放 ----------
+     状态权威在渲染层（页面加载/重载期间指令执行不了）。此前未就绪只回一张错误卡，
+     水位照常推进——指令被消费掉，用户必须重发。现在 runCommand 报 notReady 时：
+     指令进待办队列 + 回「已排队」卡；渲染层就绪信号（notifyReady，宿主接线）后逐条
+     回放执行并回真实结果卡。去重靠 message_id（seenPush），回放不会被下一轮轮询重复执行 */
+  const pendingCmds = [];
+  const PENDING_MAX = 20;
+  const PENDING_MAX_TRIES = 3;
+  function queuedCard(cmdName) {
+    return feishu.card({
+      title: '⏳ 指令已排队 · /reins ' + cmdName,
+      theme: 'turquoise',
+      elements: [feishu.mdText('控制台正在启动，指令将在就绪后自动执行，结果另行回执。')],
+    });
+  }
+  /* 就绪回放：逐条重执行；仍报 notReady 则重新入队（有限次），超限回失败卡并放弃 */
+  async function notifyReady() {
+    if (!pendingCmds.length) return { ok: true, replayed: 0, requeued: 0, dropped: 0 };
+    const cfg = cfgOf(getSettings());
+    const batch = pendingCmds.splice(0, pendingCmds.length);
+    let replayed = 0, requeued = 0, dropped = 0;
+    for (const item of batch) {
+      let payload = null;
+      try { payload = await (d.runCommand ? d.runCommand(item.cmd, { message: item.message }) : null); }
+      catch (e) { payload = { error: '执行指令失败：' + ((e && e.message) || e) }; }
+      if (payload && payload.notReady) {
+        item.tries = (item.tries || 1) + 1;
+        if (item.tries < PENDING_MAX_TRIES) { pendingCmds.push(item); requeued++; continue; }
+        dropped++;
+        payload = { error: '控制台持续未就绪，请打开 Reins 客户端后重发指令' };
+      }
+      replayed++;
+      try {
+        await send(cfg, feishu.replyCard(item.cmd.cmd, payload || {}), {});
+      } catch (e) {
+        log('[feishu] 排队指令回执发送失败:', (e && e.message) || e);
+      }
+    }
+    if (replayed || requeued || dropped) log('[feishu] 就绪回放：执行 ' + replayed + ' / 重新排队 ' + requeued + ' / 放弃 ' + dropped);
+    return { ok: true, replayed, requeued, dropped };
+  }
+
+  /* 一轮轮询：拉增量消息 → 过滤人发的文本 → 解析指令 → 交宿主执行（未就绪转排队）→ 回执卡片 */
   async function pollOnce() {
     const cfg = cfgOf(getSettings());
     if (!cfg.enabled || !cfg.inbound || !appReady(cfg)) return { ok: false, skipped: true, error: '未开启群指令同步或应用未配置' };
@@ -194,15 +236,24 @@ function createFeishuBridge(dep) {
         } catch (e) {
           payload = { error: '执行指令失败：' + ((e && e.message) || e) };
         }
-        if (payload && payload.error && cmd.cmd !== 'new') handled.push({ cmd: cmd.cmd, error: payload.error });
+        let queued = false;
+        if (payload && payload.notReady) {
+          pendingCmds.push({ cmd, message: msg, tries: 1 });
+          if (pendingCmds.length > PENDING_MAX) pendingCmds.shift();
+          queued = true;
+          payload = { ok: true, queued: true };
+        }
+        if (queued) handled.push({ cmd: cmd.cmd, queued: true });
+        else if (payload && payload.error && cmd.cmd !== 'new') handled.push({ cmd: cmd.cmd, error: payload.error });
         else handled.push({ cmd: cmd.cmd, ok: payload ? payload.ok !== false : false });
         try {
-          await send(cfg, feishu.replyCard(cmd.cmd, payload || {}), {});
+          await send(cfg, queued ? queuedCard(cmd.cmd) : feishu.replyCard(cmd.cmd, payload || {}), {});
         } catch (e) {
           log('[feishu] 指令回执发送失败:', (e && e.message) || e);
         }
       }
-      /* 水位推进：拉到的最新消息时间与「当前时间」取较小值，防服务端时钟超前把后续消息跳过 */
+      /* 水位推进：拉到的最新消息时间与「当前时间」取较小值，防服务端时钟超前把后续消息跳过。
+         排队中的指令不挡水位——它们的去重靠 message_id，与轮询无關 */
       const nextAt = Math.min(r.nextStart || start, now());
       saveSettings({ feishu: { lastSyncAt: nextAt, lastError: '' } });
       return { ok: true, pulled: (r.items || []).length, handled };
@@ -278,6 +329,7 @@ function createFeishuBridge(dep) {
     EVENTS,
     cfgOf, notify, pushReport, test, pollOnce,
     startInbound, stopInbound, refresh, status, resetSeen,
+    notifyReady,   /* 渲染层就绪信号：回放排队中的群指令（宿主在 ready IPC 里接线） */
     /* 裸发群机器人：供「集成」页 Webhook 地址填了飞书机器人时复用（不要求开启飞书总开关） */
     sendRawWebhook: (url, body, opts) => feishu.sendWebhook(url, body, { secret: (opts && opts.secret) || '' }, { fetchImpl, now }),
     _enqueue: enqueue,

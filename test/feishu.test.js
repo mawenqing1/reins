@@ -417,6 +417,81 @@ async function run() {
     ok(/bot not in chat/.test(state.feishu.lastError), '最近错误写入设置，集成页可见');
   }
 
+  /* ---------- 10b. 桥：控制台未就绪 → 指令排队，就绪信号回放 ---------- */
+  {
+    feishu.clearAllTokens();
+    const state = { feishu: { enabled: true, appId: 'a', appSecret: 'b', chatId: 'oc_1', inbound: true, events: {}, lastSyncAt: 0, lastError: '' } };
+    const replies = [];
+    const sentCards = [];
+    let runCmd = async () => ({ error: 'Reins 控制台未就绪', notReady: true });   // 阶段1：页面加载中
+    const mkF = () => mkFetch([
+      TOKEN_OK,
+      { match: u => u.includes('/im/v1/messages?receive_id_type=chat_id'), reply: b => { replies.push(b); const c = JSON.parse(b.content); sentCards.push(c); return res(200, { code: 0, data: { message_id: 'om_r' + replies.length } }); } },
+      {
+        match: u => u.includes('container_id_type=chat'),
+        reply: () => res(200, {
+          code: 0, data: { items: [
+            { message_id: 'om_q1', create_time: '1800000000000', msg_type: 'text', sender: { sender_type: 'user' }, body: { content: JSON.stringify({ text: '/reins approve REINS-42' }) } },
+          ] },
+        }),
+      },
+    ]);
+    const bridge = createFeishuBridge({
+      getSettings: () => ({ feishu: state.feishu }),
+      saveSettings: p => { state.feishu = { ...state.feishu, ...(p.feishu || {}) }; },
+      runCommand: (...a) => runCmd(...a),
+      fetchImpl: mkF(),
+      now: () => 1800000100000,
+      log: () => { },
+    });
+
+    /* 阶段1：pollOnce 时渲染层未就绪 → 排队 + 回「已排队」卡（不是失败卡） */
+    const r1 = await bridge.pollOnce();
+    ok(r1.ok && r1.handled.length === 1 && r1.handled[0].queued === true, '未就绪指令标记 queued');
+    ok(sentCards.length === 1 && /已排队/.test(sentCards[0].header.title.content), '回的是「已排队」卡');
+    ok(state.feishu.lastSyncAt > 0, '水位照常推进（去重靠 message_id）');
+
+    /* 阶段2：就绪回放 → 正常执行 + 回真实结果卡 */
+    runCmd = async () => ({ ok: true, task: { key: 'REINS-42', title: 'T', status: 'done' }, action: 'approve' });
+    const rr = await bridge.notifyReady();
+    ok(rr.ok && rr.replayed === 1 && rr.requeued === 0, '回放执行 1 条');
+    ok(sentCards.length === 2 && /REINS-42|通过/.test(JSON.stringify(sentCards[1])), '回放后回结果卡');
+    const rr2 = await bridge.notifyReady();
+    ok(rr2.ok && rr2.replayed === 0, '队列清空后再就绪不重复执行');
+
+    /* 阶段3：持续未就绪 → 有限次重排队后放弃并回失败卡 */
+    runCmd = async () => ({ error: 'Reins 控制台未就绪', notReady: true });
+    const badBridge = createFeishuBridge({
+      getSettings: () => ({ feishu: { ...state.feishu, lastSyncAt: 1800000005000 } }),
+      saveSettings: () => { },
+      runCommand: (...a) => runCmd(...a),
+      fetchImpl: mkF(),
+      now: () => 1800000200000,
+      log: () => { },
+    });
+    const r2 = await badBridge.pollOnce();
+    ok(r2.ok && r2.handled[0].queued === true, '持续未就绪场景：再次排队');
+    await badBridge.notifyReady();   // tries=2 → 重新排队
+    await badBridge.notifyReady();   // tries=3 → 放弃 + 失败卡
+    const rr3 = await badBridge.notifyReady();
+    ok(rr3.ok && rr3.replayed === 0 && rr3.requeued === 0, '三次尝试后队列清空');
+    const failCard = sentCards[sentCards.length - 1];
+    ok(/持续未就绪/.test(JSON.stringify(failCard)), '放弃时回「持续未就绪」失败卡');
+  }
+
+  /* ---------- 10c. 主进程接线：notReady 标记与就绪 IPC ---------- */
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const MAIN = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+    const PRELOAD = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+    const SRC = fs.readFileSync(path.join(__dirname, '..', 'web', 'assets', 'app.js'), 'utf8');
+    ok(/notReady: true/.test(MAIN), 'runCommand 未就绪返回 notReady 标记');
+    ok(/reins:renderer:ready/.test(MAIN) && /notifyReady\(\)/.test(MAIN), '主进程就绪 IPC 接线回放');
+    ok(/rendererReady/.test(PRELOAD), 'preload 暴露 rendererReady');
+    ok(SRC.indexOf('onFeishuCall') < SRC.indexOf('rendererReady'), '渲染层在注册 onFeishuCall 之后才发就绪信号');
+  }
+
   /* ---------- 11. 每日摘要调度类型 ---------- */
   {
     const v = validateSchedule({ kind: 'digest', freq: 'daily', time: '18:00' });
@@ -472,7 +547,7 @@ async function run() {
     ok(/TaskFlow\.approve\(t\)/.test(SRC), 'approve 判定走 taskflow 共享规则（含只有待验收可归档的守卫）');
     ok(/undecided-diff/.test(SRC) && /需先在 Reins 客户端确认应用或放弃/.test(SRC), 'approve 拦住未裁决的代码变更（taskflow 共享守卫 + 客户端引导文案）');
     ok(/来自飞书群/.test(SRC), '打回留痕标明来自飞书');
-    ok(/TaskFlow\.applyPipelineReset\(t\.pipeline\)/.test(SRC), '流水线打回同样重置（与 doReject 同一共享口径）');
+    ok(/TaskFlow\.applyReject\(t, v\);/.test(SRC), '流水线打回同样重置（applyReject 应用层，与 doReject 同源）');
     const MAIN = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
     ok(/taskKey: cmd\.taskKey/.test(MAIN), '主进程把任务号透传给渲染层');
     ok(SRC.includes("kind === 'digest'") && SRC.includes('buildDigest'), '每日摘要生成接线');

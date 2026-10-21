@@ -520,7 +520,8 @@ const feishuBridge = feishuBridgeMod.createFeishuBridge({
   runCommand: async (cmd, ctx) => {
     const r = await rendererCall('command', { cmd: cmd.cmd, arg: cmd.arg, taskKey: cmd.taskKey || '', reason: cmd.reason || '', raw: cmd.raw, operator: operatorOfMessage(ctx && ctx.message) });
     if (r) return r;
-    return { error: 'Reins 控制台未就绪：请先打开客户端窗口再下发指令' };
+    /* notReady：渲染层没回包（页面加载/重载中）——桥会排队等就绪回放，不再让用户重发 */
+    return { error: 'Reins 控制台未就绪', notReady: true };
   },
 });
 /* 飞书消息发送人：历史消息接口默认不返回显示名，只带 open_id。
@@ -545,6 +546,10 @@ ipcMain.handle('reins:feishu:notify', async (_e, payload) => {
   return feishuBridge.notify(kind, p.task, { space: p.space, url: p.url, reason: p.reason, extra: p.extra });
 });
 /* 报告推送（站报 / 周报 / 每日摘要）：正文由渲染层生成，这里只负责发 */
+/* 渲染层就绪信号：飞书排队的群指令回放（页面加载完成后由渲染层在注册好监听器后调用） */
+ipcMain.handle('reins:renderer:ready', async () => {
+  try { return await feishuBridge.notifyReady(); } catch (e) { return { ok: false, error: e.message }; }
+});
 ipcMain.handle('reins:feishu:report', async (_e, payload) => {
   const p = payload && typeof payload === 'object' ? payload : {};
   return feishuBridge.pushReport(p.title, p.text, { meta: p.meta, theme: p.theme });

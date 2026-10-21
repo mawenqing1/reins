@@ -102,5 +102,19 @@
     return Math.round(f / d * 100);
   }
 
-  return { CAP, dayOf, splitUsage, makeEntry, push, sumDay, recent, firstPassRate };
+  /* 近 N 日逐日汇总（旧 → 新），图表用；nowMs 可注入便于单测跨日边界 */
+  function daysBuckets(log, n, nowMs) {
+    const days = Number.isFinite(+n) && +n > 0 ? Math.floor(+n) : 7;
+    const base = new Date(Number.isFinite(+nowMs) ? +nowMs : Date.now());
+    const out = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(base.getTime());
+      d.setDate(d.getDate() - i);
+      const key = dayOf(d.getTime());
+      out.push(Object.assign({ day: key }, sumDay(log, key)));
+    }
+    return out;
+  }
+
+  return { CAP, dayOf, splitUsage, makeEntry, push, sumDay, recent, firstPassRate, daysBuckets };
 });
