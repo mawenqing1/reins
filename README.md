@@ -1,16 +1,17 @@
-# Reins 驭码
+# Reins
 
 **AI Agent 任务协作平台** —— 你的 AI 同事，已经到岗。
 
 像给同事派活一样给 AI Agent 派任务：写代码、做调研、整资料、写文案、处理工单——把活儿说清楚，派出去，进度、过程、结果都在你眼前，验收你说了算。
 
-**这是能真跑的版本**：Agent 可配置为「真实 API」模式（OpenAI 兼容协议，支持智谱 GLM / DeepSeek / Kimi / 通义 / OpenAI / 自定义），流式执行、真实 token 计量、打回带反馈重跑；也内置零配置的「演示引擎」（本地模拟）。
+**这是能真跑的版本**：Agent 可配置为「真实 API」模式（OpenAI 兼容协议，支持智谱 GLM / DeepSeek / Kimi / 通义 / OpenAI / 硅基流动 / 自定义），流式执行、真实 token 计量、打回带反馈重跑；也内置零配置的「演示引擎」（本地模拟）。
 
 ## 快速开始
 
 ```bash
-cd xfw/reins
-npm install        # 首次（已装好可跳过）；会自动把 TypeScript 编译到 dist/
+git clone https://github.com/mawenqing1/reins.git
+cd reins
+npm install        # 安装依赖并自动把 TypeScript 编译到 dist/
 npm start          # 编译 LESS → 启动桌面客户端
 ```
 
@@ -19,8 +20,7 @@ npm start          # 编译 LESS → 启动桌面客户端
 - 源码全部为 **TypeScript**：主进程 / services / 云端节点 / 工具 / 测试编译到 `dist/`，渲染层编译到 `web/assets/*.js`（产物不入库）。改完代码跑 `npm run build`；`npm test` = 编译 + 全量回归
 - 样式源码全部为 **LESS**（`src/*.less`），`npm start` 会先编译再启动；改样式用 `npm run watch:css` 监听增量编译
 - 官网落地页：`web/index.html`（浏览器直接打开，或客户端菜单「帮助 → 产品官网落地页」）
-- 控制台：客户端窗口本体；浏览器打开 `web/app.html` 为降级模式（localStorage + 仅演示引擎）
-- 网络受限环境重装依赖时：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install`
+- 控制台：客户端窗口本体；浏览器打开 `web/app.html` 为降级模式（localStorage + 仅演示引擎，需先 `npm run build` 生成渲染层脚本）
 
 ## 说明
 
@@ -59,39 +59,43 @@ npm start          # 编译 LESS → 启动桌面客户端
 ## 目录结构
 
 ```
-xfw/reins/
-├── main.ts            # Electron 主进程（窗口/托盘/菜单/IPC）；源码全 TypeScript，编译到 dist/
-├── reins-node/        # 云端执行节点（零依赖单文件 server.ts + 部署文档）
-├── preload.ts         # contextBridge：设置、状态、执行引擎事件
-├── services/
-│   ├── store.ts       # 状态持久化（userData/reins-data.json，原子写+去抖）
-│   ├── runner.ts      # 真实执行引擎（OpenAI 兼容 /chat/completions SSE 流式、取消、连通测试）
-│   ├── feishu.ts      # 飞书协议层：tenant_access_token 缓存、卡片构造、群机器人加签、拉群消息、指令解析
-│   ├── feishu-bridge.ts # 飞书接线层：事件推送队列、报告推送、群指令轮询与回执、Webhook 协议适配
-│   ├── pricing.ts     # Token 成本估算：单价查表、usage 拆分、金额折算（纯函数，可单测）
-│   ├── update.ts      # 检查更新：语义化版本比较 + GitHub Releases 查询（fetch 可注入）
-│   ├── textstore.ts   # 大文本外置：超阈值正文落盘、state 只存引用（含路径安全校验、purgeRef 清理降级）
-│   └── integrity.ts   # 数据自检：引用盘点、缺失检测、孤儿目录与体积告警（纯函数，purged 豁免）
-├── package.json       # electron + less + typescript 依赖、electron-builder 打包配置
-├── tsconfig*.json     # 三套编译配置：node 侧 / 渲染层 UMD 共享模块 / 渲染层经典脚本
-├── dist/              # node 侧编译产物（不入库，npm install 自动生成）
-├── assets/            # 图标（icons/icon.icns、tray template 图标等）
-├── src/               # 样式源码（LESS，唯一维护入口）
-│   ├── _variables.less # 共享设计变量（品牌色/状态色/字体/圆角）
-│   ├── _mixins.less    # 共享 mixin（滚动条/省略号）
-│   ├── app.less        # 控制台样式
-│   └── landing.less    # 官网落地页样式
-├── tools/
-│   └── build-css.ts    # LESS 编译脚本（支持 --watch）
-└── web/               # 运行/打包资源（CSS 与 assets/*.js 为编译产物，勿手改）
-    ├── index.html     # 产品官网落地页
-    ├── app.html       # 控制台骨架
-    └── assets/
-    ├── app.css / landing.css  # 编译产物
-    ├── globals.d.ts # 渲染层经典脚本共享的全局声明（window.reins / ExecLog / ic…）
-    ├── execlog.ts  # 执行流水表纯函数（手写 UMD 壳 + 类型：浏览器 window.ExecLog / 单测 require）
-    ├── taskflow.ts # 任务状态迁移共享规则（UMD：客户端按钮与飞书群指令同一判定源）
-    └── app.ts     # 全部逻辑（状态/看板/执行引擎/自动化/集成/设置）；编译为同目录 app.js
+reins/
+├── main.ts              # Electron 主进程（窗口 / 托盘 / 菜单 / IPC）
+├── preload.ts           # contextBridge：向渲染层暴露最小客户端能力
+├── services/            # 业务逻辑层（纯 Node，可单测）
+│   ├── runner.ts        # 执行引擎：OpenAI 兼容 API 流式 / 本机 CLI 子进程 / ACP 会话 / 云端派发
+│   ├── acp.ts           # ACP 会话适配：权限请求自动放行、过程事件回传、会话恢复
+│   ├── http.ts          # 带超时与重试的 fetch 封装
+│   ├── pipeline.ts      # 流水线依赖编排：波次规划、上游产出合并
+│   ├── scheduler.ts     # 自动化调度：cron 解析、到点触发、错过补执行
+│   ├── git-remote.ts    # Git 交付：远程识别、推送前体检、PR 创建、PAT 探活
+│   ├── feishu.ts        # 飞书协议层：token 缓存、卡片构造、加签、拉群消息、指令解析
+│   ├── feishu-bridge.ts # 飞书接线层：事件推送队列、报告推送、群指令轮询与回执
+│   ├── pricing.ts       # Token 成本估算：单价查表、usage 拆分、金额折算
+│   ├── secure-keys.ts   # 密钥加密：系统钥匙串封装、后端不可用降级、解锁失败锁定
+│   ├── store.ts         # 状态持久化（原子写 + 去抖）
+│   ├── textstore.ts     # 大文本外置：超阈值正文落盘、state 只存引用
+│   ├── integrity.ts     # 数据自检：引用盘点、缺失检测、孤儿目录与体积告警
+│   └── update.ts        # 检查更新：语义化版本比较 + GitHub Releases 查询
+├── reins-node/          # 云端执行节点（零依赖单文件 server.ts + 部署文档）
+├── web/                 # 运行 / 打包资源
+│   ├── index.html       # 产品官网落地页
+│   ├── app.html         # 控制台骨架
+│   └── assets/
+│       ├── app.ts       # 渲染层全部逻辑（状态 / 看板 / 执行 / 自动化 / 集成 / 设置）
+│       ├── execlog.ts   # 执行流水表纯函数（UMD：浏览器全局 / 单测 require）
+│       ├── taskflow.ts  # 任务状态迁移共享规则（客户端按钮与飞书群指令同一判定源）
+│       ├── icons.ts     # 内联 SVG 图标库；brands.ts 为品牌图标
+│       ├── globals.d.ts # 渲染层经典脚本共享的全局声明
+│       └── *.js / *.css # 编译产物（不入库）
+├── src/                 # 样式源码（LESS，唯一维护入口）
+├── tools/               # 开发脚本：build-css（LESS 编译）、brand-electron（开发态品牌名）
+├── test/                # 零运行时依赖测试套件（`npm test`）
+├── docs/                # 飞书接入指南、迭代记录、UI 设计规范
+├── assets/              # 应用图标与托盘图标
+├── .github/             # CI 工作流与 Issue 模板
+├── tsconfig*.json       # 三套编译配置（node 侧 / 渲染层 UMD 共享模块 / 渲染层经典脚本）
+└── package.json         # 依赖与 electron-builder 打包配置
 ```
 
 ## 飞书接入
@@ -138,7 +142,7 @@ Agent 在隔离 worktree 里改完文件后，**改动只是工作区文件**—
 
 ## 数据层：大文本外置
 
-状态档 `reins-data.json` 每次保存是全量序列化，而流水线各阶段产出与交付正文会一直留在内存态里（实测单个跑过多轮的流水线任务，其 `pipeline` 就占 69K）。
+状态档 `reins-data.json` 每次保存是全量序列化，而流水线各阶段产出与交付正文会一直留在内存态里（一个跑过多轮的流水线任务，其 `pipeline` 字段可达数十 KB）。
 
 - 超过 **8KB** 的正文（阶段产出 / 交付正文 / 多轮对话 / 裁决依据）落盘到 `deliveries/text/<任务号>/`，state 里只留 `{__text, ref, bytes, preview}`
 - 界面预览用 `preview`（前 400 字），不读盘也能显示；要全文时再异步取回并缓存
@@ -148,18 +152,17 @@ Agent 在隔离 worktree 里改完文件后，**改动只是工作区文件**—
 - 删除任务时同步清理其交付目录；设置页另有「回收孤儿文件」处理历史残留（导入旧档、手工删任务）
 - **数据自检**：启动后静默体检一次（只在发现问题时提示），设置页可随时重扫——检查「引用是否都有对应文件」「孤儿目录」「磁盘占用」，正文缺失会精确指出是哪条任务的哪一段
 
-实测同一份数据从 220K 降到 116K；剩余部分是本来就在阈值内的小文本与其它常规字段。
 
 ## 打包分发（可选）
 
 ```bash
-npm run dist    # 需要先安装 electron-builder（Node ≥ 18）
+npm run dist    # 经 npx 调用 electron-builder（首次自动下载），产物在 release/
 ```
 
 已在 `package.json > build` 配置 mac（dmg/zip）、win（nsis/portable）、linux（AppImage/deb）。打包时含 `dist/`（编译产物）、`web/` 与 `assets/`，不含 node_modules 源码。
 
 ## 设计说明
 
-- **产品形态**：桌面客户端 = 控制台 + 本地执行节点。已落地「本机节点在线」「Agent 接入检测」「独立工作区执行」「托盘常驻」等概念；真实执行走 OpenAI 兼容 API（见上节），如需接入本机 CLI Agent，可在主进程扩展子进程管理与 CDP。
-- 任务/提示词/自动化等数据按**团队空间**隔离，空间可创建、切换、重命名、管理成员（管理员/成员/访客）与邀请；Agent 与密钥为本机全局配置，跨空间共享。
+- **产品形态**：桌面客户端 = 控制台 + 本地执行节点。已落地「本机节点在线」「Agent 接入检测」「独立工作区执行」「托盘常驻」等概念；执行引擎三条路径：OpenAI 兼容 API 流式调用、本机 CLI Agent 子进程 / ACP 会话（隔离 worktree 执行）、云端节点派发。
+- 任务/提示词/自动化等数据按**团队空间**隔离，空间可创建、切换、重命名、管理成员（管理员/成员/访客）与邀请；Agent 与密钥按组织隔离，组织内各空间共享。
 - 数据持久化：任务与空间数据存 `userData/reins-data.json`，客户端设置存 `userData/settings.json`；浏览器打开为降级模式（localStorage + 仅演示引擎）。

@@ -15,7 +15,6 @@ npm start          # 编译 LESS → 启动桌面客户端
 npm test           # 编译 + 全量回归（必须全绿再提交）
 ```
 
-网络受限环境：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install`
 
 ## TypeScript 规范
 
