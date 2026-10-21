@@ -42,8 +42,3 @@ interface Element {
 interface EventTarget {
   closest(selectors: string): any;
 }
-
-/* 已知隐患占位（勿模仿）：createSpace() 里引用了 `tpl`，但该名字既不是全局量、
-   函数参数，也没有任何外层闭包——运行时会 ReferenceError。为保持 TS 化过程
-   运行时行为零变化，这里先声明兜底，修复应改 app.ts 本身（下一提交处理）。 */
-declare const tpl: any;

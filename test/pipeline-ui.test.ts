@@ -76,6 +76,11 @@ async function run() {
   ok(SRC.includes("stageKeys.some(k => runs[k].mode === 'api')"), '真实引擎实例仍走主进程全停');
   ok(SRC.includes('clearTimeout(runs[k].timer)'), '取消时本地清停演示引擎定时器');
 
+  /* 9. createSpace 不再引用未定义的 tpl（历史存量 bug：点「创建」即 ReferenceError），
+     与演示数据种子路径同款：seedPrompts/seedAutos 无条件调用 */
+  ok(SRC.includes('prompts: seedPrompts(), autos: seedAutos()'), '创建空间走 seedPrompts/seedAutos');
+  ok(!/prompts: tpl/.test(SRC), '不再引用未定义标识符 tpl');
+
   return n;
 }
 

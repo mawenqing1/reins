@@ -2612,7 +2612,7 @@ function createSpace() {
     sprint: $('#ns-sprint').value.trim() || '未设置迭代',
     members: [{ name: '我', role: 'owner' }],
     seq: 1, deliverSeq: 1,
-    tasks: [], prompts: tpl === 'team' ? seedPrompts() : [], autos: tpl === 'team' ? seedAutos() : [],
+    tasks: [], prompts: seedPrompts(), autos: seedAutos(),
     chart: [0, 0, 0, 0, 0, 0, 0],
     integ: { jira: { connected: false, host: '', lastSync: 0 } },
     activity: [{ at: now(), icon: '✳', text: '创建了空间「' + name + '」' }],

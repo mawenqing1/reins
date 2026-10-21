@@ -11,6 +11,10 @@
 - CI 改为「TypeScript 编译门 + 全量测试」（Node 22，跳过 Electron 二进制下载提速）
 - electron-builder 输出目录改为 `release/`（与编译产物 `dist/` 区分），打包清单补入 `assets/`（托盘 / Dock 图标此前未进包）与 `dist/`
 
+### 修复
+
+- **「创建空间」按钮自基线起失效**：`createSpace()` 引用了不存在的标识符 `tpl`，点「创建」即 ReferenceError（既有空间均来自演示种子路径）。改为与种子路径同款的 `seedPrompts()/seedAutos()`，并补回归断言
+
 ### 已知限制
 
 - 类型收紧分步推进：node 侧 `strictNullChecks` 与渲染层 `app.ts` 的 `strict` 暂关（存量 14k 行的空值流收紧按重构立项），共享模块 execlog / taskflow 与全部新代码的公共签名已带类型
