@@ -11,6 +11,48 @@ const STORE_KEY = 'reins-state-v1';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+/* —— 大文本引用（state 瘦身）：超过 8KB 的正文由主进程外置到 deliveries/text/，
+   state 里存 {__text,ref,bytes,preview}。界面优先用 preview（不读盘就能显示摘要），
+   需要全文时再异步取回并重渲染。旧档的纯字符串不受影响。 —— */
+const isTextRef = v => !!(v && typeof v === 'object' && v.__text === true && typeof v.ref === 'string');
+/* 同步取「可显示文本」：引用给 preview，字符串原样。渲染路径一律走它，避免 [object Object] */
+const textOf = (v, limit) => {
+  if (isTextRef(v)) return String(v.preview || '');
+  const s = typeof v === 'string' ? v : (v == null ? '' : String(v));
+  const n = Number.isFinite(Number(limit)) ? Number(limit) : 0;
+  return n > 0 && s.length > n ? s.slice(0, n) + '…' : s;
+};
+/* 已外置文本的全文缓存，避免同一份正文反复读盘。
+   缓存键必须带 bytes：同一任务重跑时阶段 id 不变（stage-s1），ref 也就没变，
+   但正文已经换了——只用 ref 做键会一直返回上一轮的旧内容（实测复现）。
+   引用对象里的 bytes 就是写入时的字节数，正文一变缓存自然失效。 */
+const textCache = new Map();          // key = ref::bytes
+let textPending = new Set();          // key 同缓存键，防并发重复读
+const textKeyOf = v => isTextRef(v) ? v.ref + '::' + (Number(v.bytes) || 0) : '';
+/* 异步取全文：拿到后写入缓存并回调（用于预览弹窗、下载、喂给下游阶段） */
+async function textFull(v, onReady) {
+  if (!isTextRef(v)) return typeof v === 'string' ? v : '';
+  const key = textKeyOf(v);
+  if (textCache.has(key)) return textCache.get(key);
+  if (!window.reins?.textRead) return String(v.preview || '');
+  if (textPending.has(key)) return String(v.preview || '');   // 同一份并发请求只发一次
+  textPending.add(key);
+  try {
+    const r = await window.reins.textRead(v.ref).catch(() => null);
+    textPending.delete(key);
+    if (r && r.ok) {
+      textCache.set(key, r.text);
+      /* 缓存上限：正文可能很大，保留最近 50 份足够覆盖正常浏览，避免长会话吃内存 */
+      if (textCache.size > 50) textCache.delete(textCache.keys().next().value);
+      if (typeof onReady === 'function') onReady(r.text);
+      return r.text;
+    }
+    return String(v.preview || '');
+  } catch (e) { textPending.delete(key); return String(v.preview || ''); }
+}
+/* 引用摘要徽标：让用户知道「这里显示的是摘要，点开有全文」 */
+const textRefNote = v => isTextRef(v) ? `<span class="txt-ref" title="正文已外置（${(Number(v.bytes) / 1024).toFixed(0)}KB），点击预览可读全文">摘要 · ${(Number(v.bytes) / 1024).toFixed(0)}KB</span>` : '';
+
 /* —— 轻量 Markdown 渲染（零依赖，覆盖交付报告常用语法；先转义再生成受控标签，链接仅放行 http(s)） —— */
 function mdToHtml(src) {
   if (!src) return '';
@@ -383,7 +425,7 @@ function render() {
   else if (curView === 'agents') el.innerHTML = viewAgents();
   else if (curView === 'prompts') el.innerHTML = viewPrompts();
   else if (curView === 'autos') el.innerHTML = viewAutos();
-  else if (curView === 'integ') el.innerHTML = viewInteg();
+  else if (curView === 'integ') { el.innerHTML = viewInteg(); hydrateFeishu(); }
   else if (curView === 'settings') { el.innerHTML = viewSettings(); hydrateSettings(); }
   else el.innerHTML = viewDash();
 }
@@ -582,6 +624,7 @@ function viewAgents() {
         <div><b>${fmtTokens(a.tokens)}</b><span>tokens 消耗</span></div>
         <div><b>${a.status === 'working' ? '1' : '0'}</b><span>并发任务</span></div>
       </div>
+      ${agentQualityRow(a)}
       <div class="agent-foot">
         ${a.mode === 'api' ? `<button class="btn btn-o btn-sm" onclick="openAgentConfig('${a.id}')">配置</button>` : ''}
         <button class="btn btn-o btn-sm" onclick="toggleAgent('${a.id}')">${a.status === 'offline' ? '上线' : '离线'}</button>
@@ -599,6 +642,27 @@ function viewAgents() {
       <span class="act"><button class="btn btn-p" onclick="openAddAgentModal()">${ic('plus')} 接入 Agent</button></span></div>
     <div class="grid3">${empty}${cards}<div class="add-card" onclick="openAddAgentModal()"><span class="plus">${ic('plus')}</span>接入 Agent</div></div>
     ${viewRoles()}`;
+}
+
+/* Agent 质量与成本行：成功率 / 平均耗时 / 累计花费。
+   全部为 0 样本时不渲染（新接入的 Agent 不该显示一堆 0%）；未定价的金额单独注明次数，
+   避免用户以为「花费 ¥0＝免费」 */
+function agentQualityRow(a) {
+  const st = a.stats || {};
+  const rate = successRate(a.done, st.fail);
+  const avg = fmtAvgDuration(a);
+  const cost = Number(a.cost) || 0;
+  const unpriced = Number(st.unpriced) || 0;
+  const items = [];
+  if (rate !== null) {
+    const cls = rate >= 90 ? 'ok' : rate >= 70 ? 'warn' : 'bad';
+    items.push(`<span class="aq ${cls}" title="成功 ${a.done} 次 / 失败 ${st.fail || 0} 次">成功率 <b>${rate}%</b></span>`);
+  }
+  if (avg) items.push(`<span class="aq" title="按 ${st.runs || 0} 次执行取平均">均耗时 <b>${avg}</b></span>`);
+  if (cost > 0) items.push(`<span class="aq" title="按模型单价估算${unpriced ? '（另有 ' + unpriced + ' 次未定价未计入）' : ''}">花费 <b>${fmtMoney(cost)}</b>${unpriced ? ' <i>+' + unpriced + '次未计</i>' : ''}</span>`);
+  else if (unpriced > 0) items.push(`<span class="aq" title="该模型未在价格表中，设置里可补单价">花费 <b>未定价</b></span>`);
+  if (!items.length) return '';
+  return `<div class="agent-quality">${items.join('')}</div>`;
 }
 
 /* AI 角色：专用 Agent + 专属模型 + 独有提示词的打包预设，指派任务时直接选 */
@@ -899,21 +963,26 @@ function downloadWeekly() {
 }
 
 /* ============ 集成 ============ */
+/* 飞书配置（settings.feishu 的渲染层镜像）：读写都以主进程回包为准，失败如实提示 */
+let feishuCfg = { enabled: false, appId: '', appSecret: '', chatId: '', baseUrl: 'https://open.feishu.cn', webhookUrl: '', webhookSecret: '', events: { create: true, done: true, reject: true, fail: true }, inbound: false, inboundIntervalMs: 45000, lastSyncAt: 0, lastError: '' };
+let feishuStat = null;   // 主进程同步状态快照（status() 结果），打开集成页时刷新
+const FEISHU_EVENTS = [['create', '任务创建'], ['done', '完成归档'], ['reject', '验收打回'], ['fail', '执行失败 / 超时']];
 function viewInteg() {
   const cfg = hookCfg || {};
   const evs = [['create', '任务创建'], ['done', '完成归档'], ['reject', '验收打回']];
-  const roadmap = [['Linear', '双向同步 · 规划中'], ['TAPD', '双向同步 · 规划中'], ['GitHub Issues', '双向同步 · 规划中'], ['GitLab', '双向同步 · 规划中'], ['飞书项目', '双向同步 · 规划中'], ['Jira', '双向同步 · 规划中']];
+  const roadmap = [['Linear', '双向同步 · 规划中'], ['TAPD', '双向同步 · 规划中'], ['GitHub Issues', '双向同步 · 规划中'], ['GitLab', '双向同步 · 规划中'], ['Jira', '双向同步 · 规划中']];
   const engineSel = cfg.triageEngine || 'auto';
-  return `<div class="view-head"><h2>集成</h2><p>任务事件推送与分诊引擎</p></div>
+  return `<div class="view-head"><h2>集成</h2><p>任务事件推送、飞书双向同步与分诊引擎</p></div>
     <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:start">
       <div style="display:grid;gap:14px">
+      ${feishuCardHTML()}
       <div class="panel integ-card">
         <div class="integ-brand">
           <div class="lg" style="background:#cf8a3e">${ic('webhook')}</div>
           <div><h3>Webhook 开放接口</h3><span>任务事件实时推送到任意系统</span></div>
           <span class="status-pill ${cfg.webhookUrl ? 'idle' : 'offline'}" style="margin-left:auto">${cfg.webhookUrl ? '已配置' : '未配置'}</span>
         </div>
-        <div class="integ-desc">任务事件会以 JSON POST 发送到你指定的地址，群机器人、自动化平台或自建服务均可直接接收。</div>
+        <div class="integ-desc">任务事件会以 JSON POST 发送到你指定的地址，群机器人、自动化平台或自建服务均可直接接收。地址填飞书机器人时自动改用飞书卡片协议（加签密钥见上方飞书配置）。</div>
         ${window.reins ? `
         <div class="f-row"><label>推送地址（http:// 或 https://）</label><input type="text" id="wh-url" value="${esc(cfg.webhookUrl || '')}" placeholder="https://example.com/webhook"></div>
         <div class="f-row" style="flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap">
@@ -955,11 +1024,281 @@ function viewInteg() {
       <div>
         <div class="integ-grid-mini">${roadmap.map(o => `<div class="mini-integ" style="opacity:.75">${o[0]}<span>${o[1]}</span></div>`).join('')}</div>
         <div class="panel" style="margin-top:14px;font-size:13px;color:var(--ink-dim)">
-          <b style="color:var(--ink)">关于集成方式</b><br>Webhook 是最通用的集成方式，任何能接收 HTTP 的系统都能直接对接；决策模型负责分诊这类高频判断，不占用通用模型。双向同步（状态回写、评论互转）在规划中。
+          <b style="color:var(--ink)">关于集成方式</b><br>飞书用「自建应用 + 群机器人」双通道：应用负责发卡片、读群指令，机器人只做出站推送。Webhook 仍是通用兜底，任何能接收 HTTP 的系统都能对接；决策模型负责分诊这类高频判断，不占用通用模型。
         </div>
       </div>
     </div>`;
 }
+
+/* —— 飞书接入卡片：应用信息 / 群机器人 / 事件开关 / 群指令同步 —— */
+function feishuCardHTML() {
+  const f = feishuCfg || {};
+  const appReady = !!(f.appId && f.appSecret && f.chatId);
+  const badge = !f.enabled ? '未启用' : appReady ? '应用已配置' : f.webhookUrl ? '机器人已配置' : '待配置';
+  const badgeCls = !f.enabled ? 'offline' : (appReady || f.webhookUrl) ? 'idle' : 'offline';
+  const locked = !!hookCfg.__feishuLocked;
+  const st = feishuStat || {};
+  const ev = f.events || {};
+  const logRows = (st.recent || []).slice(0, 8).map(r =>
+    `<div class="ln ${r.ok ? 'ok' : 'err'}">${r.ok ? '✓' : '✗'} ${esc(r.label)}${r.via ? ' · ' + (r.via === 'app' ? '应用' : '机器人') : ''}${r.ok ? '' : ' — ' + esc(r.error || '')}</div>`
+  ).join('');
+  return `<div class="panel integ-card">
+    <div class="integ-brand">
+      <div class="lg" style="background:#3370ff">${ic('message-square')}</div>
+      <div><h3>飞书</h3><span>自建应用 + 群机器人 · 双向同步</span></div>
+      <span class="status-pill ${badgeCls}" style="margin-left:auto">${badge}</span>
+    </div>
+    <div class="integ-desc">任务事件、执行失败、站会/周报/每日摘要以卡片推送到飞书群；开启「读取群指令」后，群内 <code>/reins new 标题</code> 可直接在 Reins 建任务，<code>/reins status</code> 看进度。</div>
+    ${window.reins ? `
+    <label class="f-check" style="margin:0"><input type="checkbox" id="fs-enabled" ${f.enabled ? 'checked' : ''}> 启用飞书推送</label>
+    <div class="fs-group">
+      <div class="fs-group-title">自建应用（发卡片 + 读群指令）</div>
+      <div class="f-2col">
+        <div class="f-row"><label>App ID</label><input type="text" id="fs-appid" value="${esc(f.appId || '')}" placeholder="cli_xxxxxxxxxxxx"></div>
+        <div class="f-row"><label>App Secret</label><input type="password" id="fs-secret" value="${esc(secretOf(f.appSecret))}" placeholder="${secretLocked(f.appSecret) ? '重新填写以覆盖…' : '应用凭证里的 App Secret'}" autocomplete="off"></div>
+      </div>
+      <div class="f-2col">
+        <div class="f-row"><label>群 chat_id</label><input type="text" id="fs-chat" value="${esc(f.chatId || '')}" placeholder="oc_xxxxxxxxxxxx"></div>
+        <div class="f-row"><label>开放平台域名</label><input type="text" id="fs-base" value="${esc(f.baseUrl || 'https://open.feishu.cn')}" placeholder="https://open.feishu.cn"></div>
+      </div>
+      ${secretLocked(f.appSecret) || locked ? '<div class="set-desc" style="color:#c05656">' + ic('triangle-alert') + ' 应用密钥已加密但本机解锁失败：留空保存保留密文，重新填写则覆盖。</div>' : ''}
+    </div>
+    <div class="fs-group">
+      <div class="fs-group-title">群机器人（仅推送，无需应用审核）</div>
+      <div class="f-2col">
+        <div class="f-row"><label>Webhook 地址</label><input type="text" id="fs-hook" value="${esc(f.webhookUrl || '')}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…"></div>
+        <div class="f-row"><label>加签密钥（可选）</label><input type="password" id="fs-hooksecret" value="${esc(secretOf(f.webhookSecret))}" placeholder="机器人「加签」开关里的密钥" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="f-row" style="flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap">
+      ${FEISHU_EVENTS.map(([k, l]) => `<label class="f-check" style="margin:0"><input type="checkbox" id="fs-ev-${k}" ${ev[k] !== false ? 'checked' : ''}> ${l}</label>`).join('')}
+    </div>
+    <div class="f-2col" style="align-items:end">
+      <label class="f-check" style="margin:0"><input type="checkbox" id="fs-inbound" ${f.inbound ? 'checked' : ''}> 读取群指令（/reins new、status、list）</label>
+      <div class="f-row" style="margin:0"><label>同步间隔（秒）</label><input type="number" id="fs-interval" min="15" max="600" step="5" value="${Math.round((f.inboundIntervalMs || 45000) / 1000)}"></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:4px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="feishuSave()">保存配置</button>
+      <button class="btn btn-o" onclick="feishuTestBtn()">发送测试卡片</button>
+      <button class="btn btn-o" onclick="feishuSyncNow()">立即同步群消息</button>
+    </div>
+    <div class="set-desc" data-fs-status style="margin-top:2px">
+      同步状态：${st.inboundRunning ? '<b style="color:var(--accent)">运行中</b>' : (f.inbound ? '已开启（保存后启动）' : '未开启')}
+      ${st.lastSyncAt ? ' · 上次拉取 ' + fmtRel(st.lastSyncAt) : ''}
+      ${st.lastError ? '<br><span style="color:#c05656">最近错误：' + esc(st.lastError) + '</span>' : ''}
+    </div>
+    <div class="sync-log" id="fs-log" style="margin-top:10px">${logRows || '<div><span style="color:#87919a">尚无推送记录。</span></div>'}</div>`
+    : `<div class="sync-log"><div><span style="color:#87919a">浏览器预览模式下不可用，请在桌面客户端中配置。</span></div></div>`}
+  </div>`;
+}
+
+/* 读取主进程同步状态并重绘卡片里的日志/状态行（不整页刷新，避免输入框内容丢失） */
+async function hydrateFeishu() {
+  if (!window.reins) return;
+  try { feishuStat = await window.reins.feishuStatus(); } catch (e) { feishuStat = null; }
+  const card = document.querySelector('.integ-card .fs-group')?.closest('.integ-card');
+  if (!card) return;
+  /* 只替换状态行与日志，表单保持用户当前输入 */
+  const desc = card.querySelector('.set-desc[data-fs-status]') || null;
+  if (desc && feishuStat) {
+    const st = feishuStat;
+    desc.innerHTML = `同步状态：${st.inboundRunning ? '<b style="color:var(--accent)">运行中</b>' : (st.inbound ? '已开启（保存后启动）' : '未开启')}`
+      + (st.lastSyncAt ? ' · 上次拉取 ' + fmtRel(st.lastSyncAt) : '')
+      + (st.lastError ? '<br><span style="color:#c05656">最近错误：' + esc(st.lastError) + '</span>' : '');
+  }
+  const log = document.getElementById('fs-log');
+  if (log) {
+    const rows = (feishuStat && feishuStat.recent || []).slice(0, 8).map(r =>
+      `<div class="ln ${r.ok ? 'ok' : 'err'}">${r.ok ? '✓' : '✗'} ${esc(r.label)}${r.via ? ' · ' + (r.via === 'app' ? '应用' : '机器人') : ''}${r.ok ? '' : ' — ' + esc(r.error || '')}</div>`
+    ).join('');
+    log.innerHTML = rows || '<div><span style="color:#87919a">尚无推送记录。</span></div>';
+  }
+}
+
+/* 收集表单 → 保存（密钥留空且现值是密文时原样带回，与其它密钥表单同语义） */
+function feishuSave() {
+  const appSecret = secretPick($('#fs-secret').value, feishuCfg.appSecret);
+  const webhookSecret = secretPick($('#fs-hooksecret').value, feishuCfg.webhookSecret);
+  const baseUrl = ($('#fs-base').value || '').trim() || 'https://open.feishu.cn';
+  const webhookUrl = ($('#fs-hook').value || '').trim();
+  if (baseUrl && !/^https?:\/\//.test(baseUrl)) { toast('域名无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
+  if (webhookUrl && !/^https?:\/\//.test(webhookUrl)) { toast('Webhook 地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
+  const events = {};
+  for (const k of FEISHU_EVENTS.map(x => x[0])) events[k] = !!$('#fs-ev-' + k)?.checked;
+  const interval = Math.min(Math.max(Number($('#fs-interval')?.value) || 45, 15), 600) * 1000;
+  const patch = {
+    enabled: !!$('#fs-enabled')?.checked,
+    appId: ($('#fs-appid').value || '').trim(),
+    chatId: ($('#fs-chat').value || '').trim(),
+    baseUrl,
+    webhookUrl,
+    inbound: !!$('#fs-inbound')?.checked,
+    inboundIntervalMs: interval,
+    events,
+  };
+  /* 密钥：密文对象原样带回，字符串则覆盖（留空即清空明文密钥） */
+  if (appSecret !== undefined) patch.appSecret = appSecret;
+  if (webhookSecret !== undefined) patch.webhookSecret = webhookSecret;
+  window.reins.setSettings({ feishu: patch }).then(r => {
+    const s = settingsApplied(r);
+    if (!s) return;
+    hookCfg = { ...hookCfg, ...s, feishu: s.feishu || hookCfg.feishu };
+    feishuCfg = { ...feishuCfg, ...(s.feishu || {}) };
+    const okApp = !!(feishuCfg.appId && feishuCfg.appSecret && feishuCfg.chatId);
+    toast('飞书配置已保存', !feishuCfg.enabled ? '推送处于关闭状态' : okApp ? '事件将推送到飞书群' : feishuCfg.webhookUrl ? '将走群机器人推送' : '还缺应用信息或机器人地址', '⇄');
+    render();
+  });
+}
+
+async function feishuTestBtn() {
+  const log = $('#fs-log');
+  if (log) log.innerHTML = '<div class="ln act">▸ 正在发送测试卡片…</div>';
+  /* 用页面上的临时配置测试：先填后测，不必先保存（密钥留空时用已存的） */
+  const override = {
+    enabled: true,
+    appId: ($('#fs-appid')?.value || '').trim() || feishuCfg.appId,
+    appSecret: secretPick($('#fs-secret')?.value, feishuCfg.appSecret),
+    chatId: ($('#fs-chat')?.value || '').trim() || feishuCfg.chatId,
+    baseUrl: ($('#fs-base')?.value || '').trim() || feishuCfg.baseUrl,
+    webhookUrl: ($('#fs-hook')?.value || '').trim() || feishuCfg.webhookUrl,
+    webhookSecret: secretPick($('#fs-hooksecret')?.value, feishuCfg.webhookSecret),
+  };
+  const r = await window.reins.feishuTest(override).catch(e => ({ ok: false, error: e.message }));
+  if (log) {
+    log.innerHTML = r && r.ok
+      ? `<div class="ln ok">✓ 测试卡片已发送（${r.via === 'app' ? '自建应用' : '群机器人'}${r.note ? ' · ' + esc(r.note) : ''}），请到飞书群确认</div>`
+      : `<div class="ln err">✗ 发送失败：${esc((r && r.error) || '未知错误')}</div>`;
+  }
+  if (r && r.ok) toast('测试已发送', '请到飞书群查看卡片', '✓');
+  else toast('发送失败', esc((r && r.error) || ''), '⚠');
+}
+
+async function feishuSyncNow() {
+  const log = $('#fs-log');
+  if (log) log.innerHTML = '<div class="ln act">▸ 正在拉取群消息…</div>';
+  const r = await window.reins.feishuSync().catch(e => ({ ok: false, error: e.message }));
+  if (log) {
+    if (r && r.ok) {
+      const h = (r.handled || []).map(x => '· ' + x.cmd + (x.ok ? ' ✓' : ' ✗' + (x.error ? ' ' + esc(x.error) : ''))).join('\n');
+      log.innerHTML = `<div class="ln ok">✓ 已拉取 ${r.pulled || 0} 条消息，识别 ${(r.handled || []).length} 条指令</div>` + (h ? `<div class="ln">${h}</div>` : '');
+    } else {
+      log.innerHTML = `<div class="ln err">✗ 同步失败：${esc((r && r.error) || '未知错误')}</div>`;
+    }
+  }
+  hydrateFeishu();
+}
+
+/* —— 飞书群指令处理：主进程把群消息解析成指令后反过来调用这里（任务状态在渲染层） ——
+   返回结构化数据由主进程组装成回执卡片；未识别的指令返回 error 让群里看到用法提示 */
+function handleFeishuCall(req) {
+  const channel = req && req.channel;
+  const payload = (req && req.payload) || {};
+  if (channel !== 'command') return { error: '未知的主进程调用：' + channel };
+  const cmd = String(payload.cmd || '');
+  const arg = String(payload.arg || '').trim();
+  const spaceName = S() ? S().name : '';
+  if (cmd === 'status') {
+    const t = S().tasks || [];
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    return {
+      ok: true, space: spaceName,
+      doing: t.filter(x => x.status === 'doing').length,
+      todo: t.filter(x => x.status === 'todo').length,
+      review: t.filter(x => x.status === 'review').length,
+      doneToday: t.filter(x => x.doneAt && x.doneAt >= dayStart.getTime()).length,
+      recent: t.filter(x => x.status === 'done' && x.doneAt).sort((a, b) => b.doneAt - a.doneAt).slice(0, 5)
+        .map(x => x.key + ' ' + x.title),
+    };
+  }
+  if (cmd === 'list') {
+    const t = (S().tasks || []).filter(x => x.status !== 'done')
+      .sort((a, b) => String(a.pri).localeCompare(String(b.pri)));
+    return {
+      ok: true,
+      tasks: t.map(x => ({ key: x.key, title: x.title, status: x.status, pri: x.pri, assignee: x.assignee?.name || '' })),
+    };
+  }
+  if (cmd === 'new') {
+    /* 标题与描述用「|」或换行分开：/reins new 登录页改版 | 加验证码与错误提示 */
+    const [title0, ...rest] = arg.split(/\s*[|｜]\s*|\n/);
+    const title = String(title0 || '').trim();
+    if (!title) return { error: '请给出任务标题：/reins new 任务标题 | 可选描述' };
+    const task = {
+      id: 't' + S().seq, key: 'REINS-' + S().seq,
+      title: title.slice(0, 120), type: 'chore', pri: 'P2',
+      desc: String(rest.join('\n') || '').trim().slice(0, 2000), status: 'todo',
+      assignee: null, tags: ['飞书'], pr: null, result: null, thread: [], attachPrompt: null,
+      comments: [{ who: '飞书', text: '来自飞书群指令' + (payload.operator ? '（' + payload.operator + '）' : ''), at: now() }],
+      repoRoot: '', runModel: '', modelParams: null, createdAt: now(), doneAt: null,
+    };
+    S().tasks.push(task); S().seq++;
+    th(task, '🔗', '通过飞书群指令创建');
+    addActivity('🔗', '飞书群创建了 ' + task.key + ' ' + task.title);
+    save();
+    /* 群指令建的任务只在群里回执；不再反向推回飞书（否则群里会出现「自己创建自己」的重复卡片） */
+    refreshViews();
+    return { ok: true, task: { key: task.key, title: task.title, desc: task.desc } };
+  }
+  if (cmd === 'help') return { ok: true };
+  /* 群内审批（P2）：approve / reject / revoke 直接作用于任务，语义与客户端按钮一致。
+     这是「在飞书里点通过」的替代实现——飞书卡片按钮回调需要公网地址，
+     与轮询架构不兼容，故用同一条拉取通道承载审批动作。 */
+  if (cmd === 'approve' || cmd === 'reject' || cmd === 'revoke') {
+    const key = String(payload.taskKey || '').trim().toUpperCase();
+    if (!key) return { error: '请给出任务号：/reins ' + cmd + ' REINS-42' + (cmd === 'reject' ? ' 原因' : '') };
+    const t = S().tasks.find(x => String(x.key).toUpperCase() === key);
+    if (!t) return { error: '找不到任务 ' + key + '（当前空间：' + spaceName + '）' };
+    const reason = String(payload.reason || '').trim();
+    if (cmd === 'approve') {
+      if (t.status === 'done') return { error: key + ' 已归档，无需重复验收' };
+      if (t.status !== 'review') {
+        return { error: key + ' 当前是「' + (STATUS_LABEL[t.status] || t.status) + '」，只有待验收的任务才能通过（agent 执行完成后才是待验收）' };
+      }
+      /* 与客户端「归档」同一条路径：裁决未应用的代码变更 → 归档 → 留痕 → 推事件 */
+      if (t.delivery?.diff && t.delivery.diffState === 'pending') {
+        return { error: key + ' 还有未裁决的代码变更，需先在 Reins 客户端确认应用或放弃' };
+      }
+      th(t, '✅', '飞书群指令验收通过并归档');
+      setStatus(t, 'done');
+      addActivity('✅', t.key + ' 经飞书群验收通过，已归档');
+      notifyHook('task.done', t);
+      save(); refreshViews();
+      return { ok: true, task: { key: t.key, title: t.title, status: 'done' }, action: 'approve' };
+    }
+    if (cmd === 'reject') {
+      if (t.status === 'done') return { error: key + ' 已归档，无法打回（可在客户端重新打开任务）' };
+      const feedback = reason || '验收未通过，请按意见修改。';
+      t.thread = t.thread || [];
+      t.thread.push({ role: 'user', content: '【验收反馈】' + feedback + '（来自飞书群）' });
+      t.comments.push({ who: '飞书', text: '验收打回：' + feedback + '（来自飞书群）', at: now() });
+      th(t, '↩️', '飞书群验收打回：' + feedback.slice(0, 40));
+      /* 流水线任务打回要重置流水线，与客户端 doReject 保持一致 */
+      if (t.pipeline?.on) {
+        t.pipeline.status = 'idle'; t.pipeline.mode = ''; t.pipeline.stages = null;
+        t.pipeline.cur = 0; t.pipeline.round = 1; t.pipeline.stageNo = 0;
+        t.pipeline.gate = null; t.pipeline.reworkCtx = null;
+        th(t, '🧭', '流水线已重置：将带着验收意见重新拆解执行');
+      }
+      t.status = 'todo'; t.pr = null;
+      addActivity('↩️', t.key + ' 经飞书群打回，等待重做');
+      notifyHook('task.rejected', t);
+      notifyFeishu('task.rejected', t, { reason: feedback.slice(0, 300) });
+      save(); refreshViews();
+      return { ok: true, task: { key: t.key, title: t.title, status: 'todo' }, action: 'reject', reason: feedback };
+    }
+    /* revoke：撤回验收（待验收 → 回到处理中），用于误点通过前反悔或重新指派 */
+    if (t.status !== 'review' && t.status !== 'done') return { error: key + ' 当前不是待验收/已归档，无需撤回' };
+    if (t.status === 'done') return { error: key + ' 已归档；如需重做请用 /reins reject ' + key + ' 原因' };
+    t.status = 'doing';
+    th(t, '↩', '飞书群指令撤回验收，回到进行中');
+    addActivity('↩', t.key + ' 经飞书群撤回验收');
+    save(); refreshViews();
+    return { ok: true, task: { key: t.key, title: t.title, status: 'doing' }, action: 'revoke' };
+  }
+  return { error: '无法识别的指令：' + (arg || cmd) + '（发送 /reins help 查看用法）' };
+}
+
+
 function whSave() {
   const url = $('#wh-url').value.trim();
   if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
@@ -970,7 +1309,7 @@ function whSave() {
   window.reins.setSettings({ webhookUrl: url, webhookEvents: evs }).then(r => {
     const s = settingsApplied(r);
     if (!s) return;
-    hookCfg = { ...hookCfg, ...s };
+    hookCfg = { ...hookCfg, ...s, feishu: s.feishu || hookCfg.feishu };
     toast('已保存', url ? '事件将推送到 ' + esc(url.slice(0, 48)) : '已清空推送地址', '⇄');
     render();
   });
@@ -980,7 +1319,7 @@ async function whTest() {
   if (url && !/^https?:\/\//.test(url)) { toast('地址无效', '需以 http:// 或 https:// 开头', '⚠'); return; }
   if (url && url !== (hookCfg.webhookUrl || '')) {
     const s = settingsApplied(await window.reins.setSettings({ webhookUrl: url }));
-    if (s) hookCfg = { ...hookCfg, ...s };
+    if (s) hookCfg = { ...hookCfg, ...s, feishu: s.feishu || hookCfg.feishu };
   }
   const log = $('#wh-log'); log.innerHTML = '<div class="ln act">▸ 正在发送测试事件…</div>';
   const r = await window.reins.webhookTest();
@@ -999,7 +1338,7 @@ function jevSave() {
   window.reins.setSettings({ jevKey: secretPick(key, hookCfg.jevKey), jevUrl: url, jevModel: model, triageEngine: engine }).then(r => {
     const s = settingsApplied(r);
     if (!s) return;
-    hookCfg = { ...hookCfg, ...s };
+    hookCfg = { ...hookCfg, ...s, feishu: s.feishu || hookCfg.feishu };
     toast('已保存', key ? '分诊将优先使用 Jev' : '已清空 Jev 配置，分诊改用 API 模型', '⚖');
     render();
   });
@@ -1048,6 +1387,7 @@ function viewDash() {
       <div class="stat"><span class="ic" style="color:var(--done)">${ic('check')}</span><b>${doneToday.length}</b><span>今日归档</span></div>
       <div class="stat"><span class="ic" style="color:var(--accent)">${ic('bot')}</span><b>${working.length}/${online.length}</b><span>Agent 执行中 / 在线</span></div>
     </div>
+    ${dashCostRow()}
     <div class="grid2" style="margin-bottom:14px">
       <div class="panel"><h3 style="font-size:14px;margin-bottom:4px">近 7 日吞吐</h3><span style="font-size:12px;color:var(--ink-faint)">归档任务数 / 天</span><div class="chart">${bars}</div></div>
       <div class="panel"><h3 style="font-size:14px;margin-bottom:14px">Agent 负载</h3>${utilRows}</div>
@@ -1055,6 +1395,28 @@ function viewDash() {
     <div class="panel"><h3 style="font-size:14px;margin-bottom:6px">最近动态</h3>
       <ul class="feed">${S().activity.slice(0, 10).map(a => `<li><span class="fic">${gic(a.icon)}</span><div><div>${esc(a.text)}</div><div class="ft">${fmtRel(a.at)}</div></div></li>`).join('')}</ul>
     </div>`;
+}
+
+/* 概览·成本条：今日 / 累计花费 + 成功率总览。
+   今日口径按任务 doneAt 落在今天且能对上 Agent 的累计金额无法拆日（没存逐次明细），
+   所以这里展示「累计」与「今日 token 折算」两个不重叠的口径，避免给出经不起追问的数字 */
+function dashCostRow() {
+  const agents = O().agents || [];
+  if (!agents.length) return '';
+  const totalCost = agents.reduce((n, a) => n + (Number(a.cost) || 0), 0);
+  const unpriced = agents.reduce((n, a) => n + ((a.stats && Number(a.stats.unpriced)) || 0), 0);
+  const done = agents.reduce((n, a) => n + (Number(a.done) || 0), 0);
+  const fail = agents.reduce((n, a) => n + ((a.stats && Number(a.stats.fail)) || 0), 0);
+  const rate = successRate(done, fail);
+  const rateCls = rate === null ? '' : rate >= 90 ? 'ok' : rate >= 70 ? 'warn' : 'bad';
+  return `<div class="panel cost-bar">
+    <span class="cb-title">${ic('chart-column')} 成本与质量</span>
+    <span class="aq">累计花费 <b>${fmtMoney(totalCost)}</b></span>
+    <span class="aq">累计 tokens <b>${fmtTokens(agents.reduce((n, a) => n + (Number(a.tokens) || 0), 0))}</b></span>
+    ${rate !== null ? `<span class="aq ${rateCls}">整体成功率 <b>${rate}%</b></span>` : ''}
+    ${unpriced ? `<span class="aq" title="设置 → 模型与密钥 → 模型价格表 可补充单价">未定价执行 <b>${unpriced}</b> 次</span>` : ''}
+    <span class="cb-hint">金额按设置里的模型单价估算，与厂商账单口径可能略有差异</span>
+  </div>`;
 }
 
 /* ============ 抽屉：任务详情 ============ */
@@ -1092,7 +1454,7 @@ function renderPipelinePanel(t) {
       return `<div class="pp-stage ${s.state === 'done' ? 'done' : s.state === 'failed' ? 'failed' : cur ? 'cur' : 'todo'}">
         <span class="pp-ic">${icon}</span>
         <div class="pp-main"><b>${esc(s.name)}</b><span>${esc(role ? role.name : s.roleKey)}${s.state === 'failed' ? ' · 失败（可从断点重试）' : ''}${s.rework ? ' · 返工' : ''}${s.runs > 1 ? ' · 第 ' + s.runs + ' 次执行' : ''}${s.final ? ' · 终段' : ''}</span></div>
-      </div>${s.result ? `<details class="pp-res"><summary>阶段产出</summary><div class="result-box" style="margin:0">${mdToHtml(String(s.result).slice(0, 6000))}</div></details>` : ''}`;
+      </div>${s.result ? `<details class="pp-res"><summary>阶段产出</summary><div class="result-box" style="margin:0">${mdToHtml(textOf(s.result, 6000))}${textRefNote(s.result)}</div></details>` : ''}`;
     }).join('');
   }
   /* 并行波次甘特（简化版）：同波次阶段左右并列、波次间上下衔接，状态着色与阶段清单一致 */
@@ -1152,7 +1514,7 @@ function renderDrawer(id) {
     execHTML = `<div class="d-sec"><h4>验收</h4>
       <div class="review-box">
         <span class="pr">${esc(t.pr || '交付 #—')}</span>
-        ${t.result ? `<div class="result-box">${mdToHtml(t.result)}</div>`
+        ${t.result ? `<div class="result-box">${mdToHtml(textOf(t.result))}${textRefNote(t.result)}</div>`
         : `<p>执行已完成，请核对改动后验收</p>`}
         ${renderDiffPanel(t)}
         <div style="display:flex;gap:9px;margin-top:12px">
@@ -1164,7 +1526,7 @@ function renderDrawer(id) {
       ${t.thread?.length ? `<div class="thread-note">该任务已执行 ${t.thread.filter(m => m.role === 'assistant').length} 轮${t.acpSessionId ? '，打回重跑将恢复原会话（上下文延续）' : '，打回时 Agent 会结合此前的交付与反馈继续修改'}。</div>` : ''}</div>`;
   } else if (t.status === 'done' && t.pr) {
     execHTML = `<div class="d-sec"><h4>结果</h4><div class="done-box">${ic('check')} 已归档 <span class="pr">${esc(t.pr)}</span> · 完成于 ${t.doneAt ? fmtRel(t.doneAt) : '—'}</div>
-      ${t.result ? `<div class="result-box" style="margin-top:10px">${mdToHtml(t.result)}</div>` : ''}${renderDiffPanel(t, true)}</div>`;
+      ${t.result ? `<div class="result-box" style="margin-top:10px">${mdToHtml(textOf(t.result))}${textRefNote(t.result)}</div>` : ''}${renderDiffPanel(t, true)}</div>`;
   }
 
   $('#drawer').innerHTML = `
@@ -1296,6 +1658,7 @@ function doReject(id) {
   addActivity('↩️', t.key + ' 验收打回，等待重做');
   toast('已打回', t.key + ' 回到待处理，可重新指派执行', '↩');
   notifyHook('task.rejected', t);
+  notifyFeishu('task.rejected', t, { reason: feedback.slice(0, 300) });
   save(); closeModal(); refreshViews(); renderDrawer(id);
 }
 
@@ -1316,7 +1679,7 @@ function startApiRun(taskId, agent, opts) {
   const st = opts.stage || null;
   const runKey = st && st.id ? taskId + '#' + st.id : taskId;
   if (runs[runKey]) return;
-  const r = runs[runKey] = { mode: 'api', log: [], stream: '', model: agent.model, usage: null, done: false, stageId: st ? st.id : null, stageNo: st ? st.no : undefined };
+  const r = runs[runKey] = { mode: 'api', log: [], stream: '', model: agent.model, usage: null, done: false, stageId: st ? st.id : null, stageNo: st ? st.no : undefined, startedAt: Date.now() };
   r.log.push(['act', `▸ 装配任务上下文（${t.key} · ${TYPE_LABEL[t.type] || t.type}）`]);
   /* 流水线阶段上下文优先（编排器注入）；否则走任务卡附加的团队提示词 */
   const extra = opts.extraPrompt || (t.attachPrompt ? (S().prompts.find(p => p.id === t.attachPrompt)?.content || '') : '');
@@ -1405,7 +1768,10 @@ function handleRunEvent(evt) {
     }
     if (a) { a.status = 'idle'; a.done++; a.taskId = null; }
     const used = evt.usage?.total_tokens || 0;
-    if (a) a.tokens += used;
+    /* 质量与成本记账：耗时进样本、tokens 与金额按模型单价累加（未定价的只计 tokens 并留痕） */
+    if (a) {
+      accountRun(a, { ok: true, usage: evt.usage, model: r.model || a.model, provider: a.provider, ms: r.startedAt ? Date.now() - r.startedAt : 0 });
+    }
     r.log.push(['ok', `✓ 执行完成${used ? ' · tokens ' + used : ''}`]);
     r.log.push(['ok', `✓ ${t2.pr} 已生成 → 卡片移入「待验收」`]);
     th(t2, '🚀', `${t2.pr} 交付${used ? ' · ' + used + ' tokens' : ''}`);
@@ -1457,6 +1823,10 @@ function handleRunEvent(evt) {
       }
     }
     toast('执行失败', String(evt.message).slice(0, 60), '⚠');
+    /* 失败记账：喂成功率与 avg 耗时（失败往往比成功更快，混在一起算会低估正常耗时，故同记） */
+    if (t) accountFail(effAgentOf(t), { usage: evt.usage, model: r.model, provider: (effAgentOf(t) || {}).provider, ms: r.startedAt ? Date.now() - r.startedAt : 0 });
+    /* 飞书告警：超时与普通失败分开推送（超时通常是任务过大/模型过慢，处理方式不同） */
+    if (t) notifyFeishu(/超时|timeout/i.test(String(evt.message || '')) ? 'task.timeout' : 'task.failed', t, { reason: String(evt.message || '').slice(0, 300) });
     delete runs[runKey];
     save(); refreshViews();
     if (drawerTaskId === taskId) renderDrawer(taskId);
@@ -1515,6 +1885,11 @@ function deleteTask(id) {
   addActivity('🗑', '删除了 ' + t.key + ' ' + t.title);
   save(); closeModal(); closeDrawer(); refreshViews();
   toast('已删除', t.key + ' ' + esc(t.title), '✕');
+  /* 磁盘清理：deliveries/<KEY>/ 与 deliveries/text/<KEY>/ 不在 state 里，
+     不主动删就是永久残留（实测删过任务后仍留着整个交付目录） */
+  window.reins?.deliveryPurge?.(t.key).then(r => {
+    if (r && r.ok === false) toast('交付文件清理失败', r.error || '', '⚠');
+  }).catch(() => { });
 }
 
 /* ---- 演示引擎（本地模拟，零配置） ---- */
@@ -1609,7 +1984,7 @@ function startRun(taskId, opts = {}) {
     const st = opts.stage || null;
     const runKey = st && st.id ? taskId + '#' + st.id : taskId;
     if (runs[runKey]) return;
-    runs[runKey] = { mode: 'sim', steps: buildSteps(t), idx: 0, log: [], done: false, stageId: st ? st.id : null, stageNo: st ? st.no : undefined };
+    runs[runKey] = { mode: 'sim', steps: buildSteps(t), idx: 0, log: [], done: false, stageId: st ? st.id : null, stageNo: st ? st.no : undefined, startedAt: Date.now() };
     stepRun(runKey);
   }
   refreshViews();
@@ -1747,7 +2122,7 @@ function pipelineStageContext(t, st) {
   const prevSrc = (st.dependsOn && st.dependsOn.length && !p.serialChain)
     ? st.dependsOn.map(id => p.stages.find(x => x.id === id)).filter(s => s && s.result).sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0))
     : p.stages.slice(0, p.stages.indexOf(st)).filter(s => s.result);
-  if (prevSrc.length) parts.push('【前序阶段产出（已完成，是你的输入；勿重复劳动）】\n' + prevSrc.map(s => `—— ${s.name} ——\n${String(s.result).slice(0, 4000)}`).join('\n\n'));
+  if (prevSrc.length) parts.push('【前序阶段产出（已完成，是你的输入；勿重复劳动）】\n' + prevSrc.map(s => `—— ${s.name} ——\n${textOf(s.result, 4000)}`).join('\n\n'));
   if (p.reworkCtx) parts.push(`【测试打回 · 项目经理裁决】\n修改要求：${p.reworkCtx.feedback}\n\n测试报告：\n${String(p.reworkCtx.qaReport).slice(0, 3000)}`);
   if (st.final) parts.push('你是项目经理，做最终交付总结：按阶段汇总全流程（产品文档要点、开发改动、测试结论），给出验收建议与遗留风险。');
   else parts.push('【流水线约定】你是虚拟团队中本阶段的负责人，只产出本阶段交付物；你的产出会自动交给下一阶段。');
@@ -1916,13 +2291,16 @@ function pipeOutputSuspect(text) {
 async function pipelineGate(taskId, qa) {
   const t = byId(taskId); const p = t.pipeline;
   th(t, '⚖', '项目经理裁决测试结果 …');
+  /* 裁决要给项目经理看完整测试报告：正文外置后 state 里只有摘要，
+     这里先取回全文（取不到时退回摘要，裁决仍能进行） */
+  const qaReport = await textFull(qa.result);
   let verdict = null;
   const judge = pipelineJudgeAgent();
   if (judge && window.reins) {
-    const r = await window.reins.pipelineGate({ task: t, agent: judge, qaReport: String(qa.result || ''), round: p.round, maxRework: p.maxRework, prevFeedback: p.reworkCtx ? p.reworkCtx.feedback : '' }).catch(() => null);
+    const r = await window.reins.pipelineGate({ task: t, agent: judge, qaReport, round: p.round, maxRework: p.maxRework, prevFeedback: p.reworkCtx ? textOf(p.reworkCtx.feedback) : '' }).catch(() => null);
     if (r && r.ok) verdict = r.verdict;
   }
-  if (!verdict) verdict = pipeGateHeuristic(String(qa.result || ''));
+  if (!verdict) verdict = pipeGateHeuristic(qaReport);
   p.gate = { ...verdict, round: p.round, engine: judge ? judge.name : '自动判定' };
   if (verdict.action === 'pass') {
     th(t, '⚖', '裁决通过 · ' + verdict.reason);
@@ -1941,7 +2319,7 @@ async function pipelineGate(taskId, qa) {
   const first = p.stages.findIndex(s => verdict.targets.includes(s.roleKey));
   if (first < 0) { th(t, '⚖', '裁决未给出可打回阶段，按通过处理 · ' + verdict.reason); return pipelineDeliver(taskId); }
   p.round++;
-  p.reworkCtx = { feedback: verdict.feedback || '按测试报告逐条修复', qaReport: String(qa.result || '').slice(0, 6000) };
+  p.reworkCtx = { feedback: verdict.feedback || '按测试报告逐条修复', qaReport: String(qaReport).slice(0, 6000) };
   const tname = k => (ROLE_TEMPLATES.find(x => x.key === k) || {}).name || k;
   /* 精确清空（REINS-128）：只重跑目标 + 传递下游（其输入已变，产出必然过期）；
      兄弟分支已完成产出不再被误清。下游非目标阶段按普通重跑（不带返工标记）处理 */
@@ -1969,7 +2347,9 @@ function pipelineDeliver(taskId) {
   if (!role || !roleUsable(role)) {
     /* 项目经理不可用：系统直接聚合各阶段产出进入验收 */
     p.status = 'done';
-    t.result = p.stages.filter(s => s.result).map(s => `—— ${s.name} ——\n${s.result}`).join('\n\n');
+    /* 聚合各阶段产出：外置的阶段正文先用摘要（后端保存时会把这份聚合结果整体外置，
+       全文随各阶段文件留在正文库里，可从阶段面板单独取回） */
+    t.result = p.stages.filter(s => s.result).map(s => `—— ${s.name} ——\n${textOf(s.result)}`).join('\n\n');
     th(t, '📦', '流水线完成（项目经理不可用，已直接聚合各阶段产出）');
     return finishPipeline(taskId, { result: t.result });
   }
@@ -2444,7 +2824,7 @@ function previewDelivery(id) {
   const t = byId(id);
   openModal(`<div class="modal-head"><h3>${esc(t.title)}</h3><span>${esc(t.pr || t.key)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
-      <div class="result-box" style="max-height:44vh;overflow:auto">${mdToHtml(t.result || '（该交付无文本产出）')}</div>
+      <div class="result-box" style="max-height:44vh;overflow:auto">${mdToHtml(textOf(t.result) || '（该交付无文本产出）')}${textRefNote(t.result)}</div>
       ${t.delivery?.items?.length ? `<div style="font-size:12px;color:var(--ink-dim);margin:10px 0 4px">交付产物：${t.delivery.items.map(i => esc(i.name || i.file)).join(' · ')}
         ${t.delivery.items.some(i => i.kind === 'log') ? `　<button class="btn btn-o btn-sm" onclick="closeModal();viewSessionLog('${t.id}')">${ic('scroll-text')} 过程日志</button>` : ''}</div>` : ''}
       <div style="max-height:34vh;overflow:auto">${renderDiffPanel(t, true)}</div>
@@ -2476,18 +2856,24 @@ async function viewSessionLog(id) {
 }
 function copyDelivery(id) {
   const t = byId(id);
-  navigator.clipboard.writeText(t.result || '').then(
+  textFull(t.result).then(full => navigator.clipboard.writeText(full || '')).then(
     () => toast('已复制', t.key + ' 的交付物已复制到剪贴板', '⧉'),
     () => toast('复制失败', '当前环境未授权剪贴板', '⚠'));
 }
-function downloadDelivery(id) {
+/* 下载交付：必须取全文。用 textOf 只会下载到 400 字摘要——拿到一个"看起来正常、
+   其实残缺"的文件比报错更糟，所以这里 await 全文（取不到时才退回摘要并如实提示） */
+async function downloadDelivery(id) {
   const t = byId(id);
-  const blob = new Blob([t.result || ''], { type: 'text/markdown;charset=utf-8' });
+  const isRef = isTextRef(t.result);
+  const full = await textFull(t.result);
+  const truncated = isRef && full === String(t.result.preview || '');
+  const blob = new Blob([full], { type: 'text/markdown;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = t.key + '-' + String(t.title || '交付').replace(/[\\/:*?"<>|\s]+/g, '-').slice(0, 40) + '.md';
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast('已下载', a.download, '⇩');
+  if (truncated) toast('正文缺失，已下载摘要', '正文文件不在本机，只有前 ' + full.length + ' 字', '⚠');
+  else toast('已下载', a.download, '⇩');
 }
 
 function revealWt(id) {
@@ -2496,28 +2882,56 @@ function revealWt(id) {
   else toast('不可用', '浏览器预览模式下无法打开访达', '⚠');
 }
 
-/* —— Git 远程交付（REINS-128）：隔离工作区分支推送 + Pull Request 创建，交付闭环不再切终端 —— */
+/* —— Git 远程交付（REINS-128）：隔离工作区分支推送 + Pull Request 创建，交付闭环不再切终端 ——
+   交付闭环修复：Agent 的改动是 worktree 里的**工作区文件**，分支提交并未前进。
+   旧流程直接 push 会推出空分支且 git 返回 0（界面报成功、远程没代码）。
+   现在「推送」默认先在 worktree 内提交，再推；一键「提交并创建 PR」把三步串起来。 */
 function gitRemoteBlock(t) {
   if (!window.reins || !t.worktree) return '';
   const branch = 'reins/' + t.key;
   return `<div class="d-sec"><h4>远程交付</h4>
     <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-o btn-sm" onclick="gitPushTask('${t.id}')">⇧ 推送 ${esc(branch)}</button>
-      <button class="btn btn-o btn-sm" onclick="gitPRTask('${t.id}')">${ic('arrow-right-left')} 创建 PR</button>
+      <button class="btn btn-p btn-sm" onclick="gitDeliverTask('${t.id}')">${ic('arrow-right-left')} 提交并创建 PR</button>
+      <button class="btn btn-o btn-sm" onclick="gitPushTask('${t.id}')">⇧ 仅推送 ${esc(branch)}</button>
       ${t.prUrl ? `<a class="pr-link" href="${esc(t.prUrl)}" target="_blank" rel="noopener">PR #${esc(String(t.prNo ?? ''))} ↗</a>` : ''}
     </div>
     <div class="git-log" id="git-log"></div>
-    <div style="font-size:12px;color:var(--ink-faint);margin-top:6px">推送隔离工作区的 <b>${esc(branch)}</b> 分支到 origin；PR 支持 GitHub / Gitee，令牌在「设置 → Git 远程」配置（需 repo 读写权限）。</div>
+    <div style="font-size:12px;color:var(--ink-faint);margin-top:6px">推送前会把隔离工作区的改动提交到 <b>${esc(branch)}</b>（提交信息用任务号 + 标题），再推 origin；PR 支持 GitHub / Gitee，令牌在「设置 → Git 远程」配置（需 repo 读写权限）。</div>
   </div>`;
 }
 const gitLog = html => { const el = document.getElementById('git-log'); if (el) el.innerHTML = html; };
-async function gitPushTask(id) {
-  const t = byId(id); if (!t || !t.worktree || !window.reins) return;
-  gitLog('<span class="ln act">▸ 正在推送 reins/' + esc(t.key) + ' …</span>');
-  const r = await window.reins.gitPush({ cwd: t.worktree, branch: 'reins/' + t.key }).catch(e => ({ ok: false, message: e.message }));
-  gitLog(r.ok ? '<span class="ln ok">✓ ' + esc(r.message || '') + '</span>' : '<span class="ln err">✗ ' + esc(r.message || '') + '</span>');
-  if (r.ok) { th(t, '⇧', '分支 reins/' + t.key + ' 已推送到远程'); save(); if (drawerOpenOn(id)) renderDrawer(id); }
-  else toast('推送失败', String(r.message || '').slice(0, 60), '⚠');
+
+/* 交付结果 → 时间线 + 提示：四类失败（有未提交 / 无新提交 / 认证 / 网络）分别给可操作文案 */
+function gitResultEpisode(t, r, doneText) {
+  if (r.ok) {
+    const msg = String(r.message || '').slice(0, 120);
+    gitLog('<span class="ln ok">✓ ' + esc(msg) + '</span>');
+    th(t, '⇧', doneText || msg);
+    return true;
+  }
+  gitLog('<span class="ln err">✗ ' + esc(r.message || '') + '</span>');
+  const tip = r.kind === 'uncommitted' ? '点「提交并创建 PR」会自动提交后推送'
+    : r.kind === 'no-commits' ? '分支没有新提交：确认 Agent 是否真的改了文件'
+      : r.kind === 'auth' ? '检查「设置 → Git 远程」的令牌或改用 SSH 远程'
+        : r.kind === 'network' ? '检查网络 / 代理' : '';
+  if (tip) gitLog('<span class="ln">↳ ' + esc(tip) + '</span>');
+  toast(r.kind === 'no-commits' ? '无新提交' : '推送失败', String(r.message || '').slice(0, 60), '⚠');
+  return false;
+}
+
+/* 推送（默认先在 worktree 内提交 Agent 改动，避免推出空分支） */
+async function gitPushTask(id, opts) {
+  const t = byId(id); if (!t || !t.worktree || !window.reins) return false;
+  const o = opts || {};
+  gitLog('<span class="ln act">▸ 正在提交并推送 reins/' + esc(t.key) + ' …</span>');
+  const r = await window.reins.gitPush({
+    cwd: t.worktree, branch: 'reins/' + t.key,
+    commit: o.commit !== false,
+    message: t.key + ' ' + String(t.title || '').slice(0, 60),
+  }).catch(e => ({ ok: false, message: e.message }));
+  const ok = gitResultEpisode(t, r, '分支 reins/' + t.key + ' 已提交并推送到远程');
+  if (ok) { save(); if (drawerOpenOn(id)) renderDrawer(id); }
+  return ok;
 }
 async function gitPRTask(id) {
   const t = byId(id); if (!t || !t.worktree || !window.reins) return;
@@ -2525,6 +2939,9 @@ async function gitPRTask(id) {
   const info = await window.reins.gitRemote(t.worktree).catch(e => ({ ok: false, message: e.message }));
   if (!info.ok) { gitLog('<span class="ln err">✗ ' + esc(info.message || '') + '</span>'); toast('无法识别远程', String(info.message || '').slice(0, 60), '⚠'); return; }
   if (!info.supported) { gitLog('<span class="ln err">✗ 仅支持 GitHub / Gitee 托管，当前 origin：' + esc(info.origin?.url || '') + '</span>'); toast('不支持的托管平台', '', '⚠'); return; }
+  prModal(t, info);
+}
+function prModal(t, info) {
   const prov = info.origin.provider === 'gitee' ? 'Gitee' : 'GitHub';
   openModal(`<div class="modal-head"><h3>创建 PR</h3><span>${prov} · ${esc(info.origin.slug)}</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
@@ -2533,11 +2950,53 @@ async function gitPRTask(id) {
         <div class="f-row"><label>目标分支（base）</label><input type="text" id="pr-base" value="${esc(info.defaultBranch || 'main')}"></div>
       </div>
       <div class="f-row"><label>标题</label><input type="text" id="pr-title" value="${esc(t.key + ' ' + t.title)}"></div>
-      <div class="f-row"><label>描述</label><textarea id="pr-body" style="min-height:90px" placeholder="变更说明（默认带入交付摘要）">${esc(String(t.result || '').slice(0, 2000))}</textarea></div>
+      <div class="f-row"><label>描述</label><textarea id="pr-body" style="min-height:90px" placeholder="变更说明（默认带入交付摘要）">${esc(textOf(t.result, 2000))}</textarea></div>
       <div class="set-desc">令牌从「设置 → Git 远程」读取；分支需先推送到远程（重复开 PR 会自动找回既有链接）。</div>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="prCreate('${t.id}')">创建 PR</button></div>`);
+}
+
+/* 一键交付闭环：提交 worktree 改动 → 推送分支 → 创建 PR（任何一步失败都停在可解释的状态）。
+   PR 参数用默认值（源分支 reins/<KEY>、目标分支 origin 默认分支、标题任务号+标题、描述交付摘要），
+   需要改目标分支或描述时仍可走「创建 PR」单独入口。 */
+async function gitDeliverTask(id) {
+  const t = byId(id); if (!t || !t.worktree || !window.reins) return;
+  if (!t.result) { toast('尚无可交付内容', '任务还没有执行产出，先在看板上让 Agent 执行', '⚠'); return; }
+  const btn = document.querySelector('#git-log')?.previousElementSibling?.querySelector('.btn-p');
+  if (btn) { btn.disabled = true; const old = btn.innerHTML; btn.innerHTML = '交付中…'; setTimeout(() => { btn.disabled = false; btn.innerHTML = old; }, 60000); }
+
+  gitLog('<span class="ln act">▸ ① 提交隔离工作区改动并推送…</span>');
+  const pushed = await gitPushTask(id, { commit: true });
+  if (!pushed) return;
+
+  gitLog('<span class="ln act">▸ ② 识别远程仓库…</span>');
+  const info = await window.reins.gitRemote(t.worktree).catch(e => ({ ok: false, message: e.message }));
+  if (!info.ok || !info.supported) {
+    const why = !info.ok ? info.message : '仅支持 GitHub / Gitee 托管，当前 origin：' + (info.origin?.url || '');
+    gitLog('<span class="ln err">✗ 分支已推送，但无法创建 PR：' + esc(why || '') + '</span>');
+    toast('已推送，PR 未创建', String(why || '').slice(0, 60), '⚠');
+    return;
+  }
+  gitLog('<span class="ln act">▸ ③ 创建 PR…</span>');
+  const r = await window.reins.gitCreatePR({
+    cwd: t.worktree,
+    head: 'reins/' + t.key,
+    base: info.defaultBranch || 'main',
+    title: t.key + ' ' + t.title,
+    body: textOf(t.result, 4000),
+  }).catch(e => ({ ok: false, message: e.message }));
+  if (!r.ok) {
+    gitLog('<span class="ln err">✗ PR 创建失败：' + esc(r.message || '') + '</span>'
+      + '<span class="ln">↳ 分支已推送成功，可稍后用「创建 PR」重试或手动开 PR</span>');
+    toast('已推送，PR 失败', String(r.message || '').slice(0, 60), '⚠');
+    return;
+  }
+  if (r.url) { t.prUrl = r.url; t.prNo = r.number; }
+  th(t, '⇄', '交付完成：分支已推送' + (r.url ? '，PR ' + r.url : '（该分支已有打开的 PR）'));
+  gitLog('<span class="ln ok">✓ 交付闭环完成' + (r.url ? '：' + esc(r.url) : '（既有 PR 已找回）') + '</span>');
+  save(); renderDrawer(id);
+  toast(r.exists ? 'PR 已存在' : 'PR 已创建', r.url ? String(r.url).slice(0, 60) : '该分支已有打开的 PR', '⇄');
 }
 async function prCreate(id) {
   const t = byId(id); if (!t || !window.reins) return;
@@ -2624,15 +3083,103 @@ function discardDiff(id) {
   });
 }
 /* —— 开放集成：任务事件推送到用户配置的 Webhook（桌面客户端内由主进程发送） —— */
-let hookCfg = { webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto' };
+let hookCfg = { webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto', feishu: null };
 function notifyHook(event, task) {
-  if (!window.reins || !hookCfg.webhookUrl) return;
+  if (!window.reins) return;
   const key = event.split('.')[1];
-  if (hookCfg.webhookEvents && hookCfg.webhookEvents[key] === false) return;
-  window.reins.webhookSend({
-    event, at: new Date().toISOString(), space: S().name,
-    task: { key: task.key, title: task.title, status: task.status, pri: task.pri, deliver: task.pr || null },
-  }).then(r => { if (!r.ok) toast('Webhook 推送失败', r.error || ('HTTP ' + r.status), '⚠'); }).catch(() => { });
+  if (hookCfg.webhookUrl && (hookCfg.webhookEvents || {})[key] !== false) {
+    window.reins.webhookSend({
+      event, at: new Date().toISOString(), space: S().name,
+      task: { key: task.key, title: task.title, status: task.status, pri: task.pri, deliver: task.pr || null },
+    }).then(r => { if (!r.ok) toast('Webhook 推送失败', r.error || ('HTTP ' + r.status), '⚠'); }).catch(() => { });
+  }
+  /* 飞书通道：与 Webhook 并行（地址填飞书机器人时 Webhook 那一路也会自动转卡片，这里发的是同一事件的应用通道） */
+  notifyFeishu(event, task);
+}
+
+/* —— 执行记账：质量指标（成功/失败/耗时）+ 成本（tokens × 单价） ——
+   Agent 卡片原来只有「累计完成 / tokens」两个数，回答不了「这个 Agent 靠不靠谱、跑一天多少钱」。
+   现在每次执行结束都记一笔：成功数、失败数、耗时样本、累计金额（未定价的单独计数）。
+   金额走主进程统一计价（services/pricing.js），渲染层拿不到结果时降级只记 tokens。 */
+function accountRun(agent, info) {
+  if (!agent) return;
+  const i = info || {};
+  agent.stats = agent.stats || { fail: 0, durMs: 0, runs: 0, unpriced: 0 };
+  const st = agent.stats;
+  st.runs = (st.runs || 0) + 1;
+  if (i.ok === false) st.fail = (st.fail || 0) + 1;
+  if (Number.isFinite(i.ms) && i.ms > 0) st.durMs = (st.durMs || 0) + i.ms;
+  const tokensTotal = i.usage?.total_tokens || i.tokens || 0;
+  agent.tokens = (agent.tokens || 0) + tokensTotal;
+  /* 计价是异步 IPC：不阻塞执行完成后的渲染，回包再补金额并刷新 */
+  if (tokensTotal && window.reins?.priceEstimate) {
+    window.reins.priceEstimate({ usage: i.usage, model: i.model, provider: i.provider }).then(est => {
+      if (!est) return;
+      if (est.ok) {
+        agent.cost = Math.round(((agent.cost || 0) + est.cost) * 10000) / 10000;
+        agent.priced = (agent.priced || 0) + 1;
+      } else {
+        st.unpriced = (st.unpriced || 0) + 1;
+      }
+      save();
+      if (curView === 'agents' || curView === 'dash') refreshViews();
+    }).catch(() => { st.unpriced = (st.unpriced || 0) + 1; });
+  } else if (tokensTotal) {
+    st.unpriced = (st.unpriced || 0) + 1;
+  }
+}
+/* 失败记账：error 事件调用（用户主动终止不计失败） */
+function accountFail(agent, info) {
+  if (!agent) return;
+  accountRun(agent, Object.assign({ ok: false }, info || {}));
+}
+/* 金额显示：与主进程 pricing.fmtMoney 同口径（渲染层拿不到 require，重复一份轻实现） */
+function fmtMoney(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return '¥0';
+  if (n < 0.01) return '¥' + n.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  if (n < 1) return '¥' + n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+  if (n < 1000) return '¥' + n.toFixed(2).replace(/\.00$/, '');
+  if (n < 1e6) return '¥' + (n / 1000).toFixed(2).replace(/\.00$/, '') + 'k';
+  return '¥' + (n / 1e6).toFixed(2) + 'M';
+}
+/* 成功率：0 次执行返回 null（不显示 0%，那会被误读成"全失败"） */
+function successRate(done, fail) {
+  const d = Number(done) || 0, f = Number(fail) || 0, total = d + f;
+  if (!total) return null;
+  return Math.round((d / total) * 1000) / 10;
+}
+/* 平均耗时文案：durationMs 累计 / runs 样本 → 900ms / 30s / 2m15s */
+function fmtAvgDuration(agent) {
+  const st = (agent && agent.stats) || {};
+  const ms = Number(st.durMs) || 0;
+  const n = Number(st.runs) || 0;
+  if (!ms || !n) return null;
+  const avg = ms / n;
+  if (avg < 1000) return Math.round(avg) + 'ms';
+  if (avg < 60000) return (avg / 1000).toFixed(avg < 10000 ? 1 : 0) + 's';
+  const m = Math.floor(avg / 60000), s = Math.round((avg % 60000) / 1000);
+  return m + 'm' + (s ? s + 's' : '');
+}
+
+/* —— 飞书事件推送：kind 交给主进程映射成卡片（created / done / rejected / failed / timeout） ——
+   静默失败：飞书是旁路通知，不能让推送问题打断任务操作；错误由「集成」页的推送日志兜底展示 */
+function notifyFeishu(event, task, extra) {
+  const f = hookCfg.feishu;
+  if (!window.reins?.feishuNotify || !f || !f.enabled) return;
+  const kind = event === 'task.created' ? 'created' : event === 'task.done' ? 'done'
+    : event === 'task.rejected' ? 'rejected' : event === 'task.failed' ? 'failed'
+      : event === 'task.timeout' ? 'timeout' : '';
+  if (!kind) return;
+  window.reins.feishuNotify({
+    kind, space: S().name,
+    task: {
+      key: task.key, title: task.title, status: task.status, pri: task.pri,
+      pr: task.pr || null, assignee: task.assignee || null, assigneeName: task.assignee?.name || '',
+    },
+    reason: extra?.reason || '',
+    extra: extra?.extra || null,
+  }).catch(() => { });
 }
 
 /* —— 侧栏折叠（窄栏图标模式，⌘B） —— */
@@ -3238,6 +3785,10 @@ async function hydrateSettings() {
   box.innerHTML = settingsHTML(s, true);
   hydrateSchedules();
   hydrateSec();
+  hydratePrices();
+  /* 自检面板：已有报告先渲染（打开设置立刻可见），再后台刷新一次 */
+  renderIntegrityPanel();
+  runIntegrityCheck(false, { silent: true });
 }
 function settingsHTML(s, live) {
   const row = (id, label, desc, on) => `<div class="set-row"><div><b>${label}</b><div class="set-desc">${desc}</div></div>
@@ -3261,6 +3812,11 @@ function settingsHTML(s, live) {
       <div class="set-desc" style="margin:6px 0 0">429 / 5xx / 网络超时按 1s→2s→4s→8s 指数退避自动重试（429 优先遵循 Retry-After），重试节奏在任务流式输出区可见；仅作用于 API 通路，CLI / ACP / 云端不受影响。</div>
       <div style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="engineSave()">保存执行策略</button></div>
     </div>` : `<div class="set-row"><div><b>执行引擎</b><div class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</div></div></div>`}
+    <h3 class="set-h">模型价格表</h3>
+    <div class="set-row" style="display:block">
+      <div class="set-desc">按「元 / 百万 tokens」填写单价，用于把 token 折算成金额（概览与 Agent 卡片的花费）。留空表示未定价，该模型的执行只计 tokens、不计金额；同名模型会覆盖内置参考价。</div>
+      <div id="price-box" style="margin-top:8px">${window.reins ? '载入中…' : '<span class="set-desc">浏览器预览模式下不可用，请在桌面客户端中配置。</span>'}</div>
+    </div>
     <h3 class="set-h">自动化调度</h3>
     <div class="set-row" style="display:block">
       <div class="set-desc" style="margin-bottom:8px">按计划自动生成站报 / 周报并写入<b>当前空间</b>看板；应用重启自动恢复，休眠唤醒后 5 分钟窗口内补执行。</div>
@@ -3301,8 +3857,14 @@ function settingsHTML(s, live) {
     <h3 class="set-h">关于</h3>
     <div class="set-row"><div><b>Reins v1.0.0</b><div class="set-desc">Agent 任务协作工具${s.version ? ' · 客户端 ' + esc(s.version) : ''}<br>任务数据保存在本机（${window.reins ? 'userData/reins-data.json' : '浏览器 localStorage'}）</div></div></div>
     <h3 class="set-h">数据</h3>
-    <div class="set-row"><div><b>导出数据</b><div class="set-desc">导出全部空间与 Agent 配置为 JSON 备份</div></div>
-      <button class="btn btn-o btn-sm" onclick="exportData()">导出</button></div>
+    <div class="set-row" style="display:block">
+      <div><b>数据自检</b><div class="set-desc">检查「正文引用是否都有对应文件」「有没有可回收的孤儿目录」「磁盘占用」——外置正文后如果文件丢了，界面只会静默显示前 400 字摘要，靠这一步才能发现</div></div>
+      <div id="integrity-box" style="margin-top:10px">${window.reins ? '载入中…' : '<span class="set-desc">浏览器预览模式下不可用，请在桌面客户端中查看。</span>'}</div>
+    </div>
+    <div class="set-row"><div><b>导出数据</b><div class="set-desc">导出全部空间与 Agent 配置为 JSON 备份，<b>含全部交付正文</b>（外置的大文本会内联回来，可换机导入）</div></div>
+      <button class="btn btn-o btn-sm" data-export-btn onclick="exportData()">导出</button></div>
+    <div class="set-row"><div><b>清理交付文件</b><div class="set-desc" id="gc-desc">删除任务时其交付目录已同步清理；若导入过旧档或手工删过任务，可能残留孤儿目录，可在此回收</div></div>
+      <button class="btn btn-o btn-sm" onclick="runDeliveryGC()">回收孤儿文件</button></div>
     <div class="set-row"><div><b>导入数据</b><div class="set-desc">从 JSON 备份恢复（将覆盖当前数据）</div></div>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('import-file').click()">导入</button></div>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
@@ -3325,7 +3887,7 @@ function cloudSave() {
   window.reins.setSettings({ cloudUrl: url, cloudToken: token }).then(r => {
     const s2 = settingsApplied(r);
     if (!s2) return;   // 写盘失败已如实提示（返工①），不再弹「已保存」
-    hookCfg = { ...hookCfg, ...s2 };
+    hookCfg = { ...hookCfg, ...s2, feishu: s2.feishu || hookCfg.feishu };
     toast('已保存', url ? '云端节点：' + esc(url.slice(0, 44)) : '已清空云端节点', '☁');
     hydrateSettings();
   });
@@ -3363,7 +3925,7 @@ function engineSave() {
   window.reins.setSettings({ apiTimeoutMs: sec * 1000, apiRetries: retries, modelParams: mp }).then(r => {
     const s2 = settingsApplied(r);
     if (!s2) return;
-    hookCfg = { ...hookCfg, ...s2 };
+    hookCfg = { ...hookCfg, ...s2, feishu: s2.feishu || hookCfg.feishu };
     toast('执行策略已保存', `超时 ${Math.round((s2.apiTimeoutMs || 0) / 1000)}s · 重试 ${s2.apiRetries} 次 · temperature ${s2.modelParams?.temperature ?? '—'}`, '⚙');
   }).catch(() => toast('保存失败', '主进程不可达', '⚠'));
 }
@@ -3391,15 +3953,15 @@ async function hydrateSchedules() {
     return `
     <div class="sched-row${off ? ' off' : ''}">
       <div class="sr-main">
-        <b>${esc(sc.name)} <span class="sr-tag">${sc.kind === 'weekly' ? '周报' : '站报'}</span>${off ? '<span class="sr-tag">已暂停</span>' : ''}</b>
-        <div class="set-desc">${esc(schedFreqLabel(sc))} · ${off ? '<b style="color:var(--ink-dim)">暂停中（不触发）</b>' : '下次 ' + esc(fmtNextRun(sc.nextRun))}${!off && sc.webhook ? ' · 推送 Webhook' : ''}${!off && sc.lastRun ? ' · 上次运行 ' + fmtRel(sc.lastRun) : ''}</div>
+        <b>${esc(sc.name)} <span class="sr-tag">${sc.kind === 'weekly' ? '周报' : sc.kind === 'digest' ? '每日摘要' : '站报'}</span>${off ? '<span class="sr-tag">已暂停</span>' : ''}</b>
+        <div class="set-desc">${esc(schedFreqLabel(sc))} · ${off ? '<b style="color:var(--ink-dim)">暂停中（不触发）</b>' : '下次 ' + esc(fmtNextRun(sc.nextRun))}${!off && schedOut(sc) !== 'none' ? ' · 推送到' + ({ feishu: '飞书', webhook: 'Webhook', both: '飞书 + Webhook' })[schedOut(sc)] : ''}${!off && sc.lastRun ? ' · 上次运行 ' + fmtRel(sc.lastRun) : ''}</div>
       </div>
       <button class="btn btn-o btn-sm" onclick="schedRunNow('${sc.id}')">立即运行</button>
       <button class="btn btn-o btn-sm" onclick="openSchedModal('${sc.id}')">编辑</button>
       <button class="btn btn-o btn-sm btn-danger-o" onclick="schedRemove('${sc.id}')">删除</button>
       <label class="switch" title="${off ? '启用' : '暂停（期间不触发）'}"><input type="checkbox" ${off ? '' : 'checked'} onchange="schedToggle('${sc.id}',this.checked)"><i></i></label>
     </div>`;
-  }).join('') : '<div class="set-desc">还没有调度任务：新增后站报 / 周报将按计划自动生成。</div>';
+  }).join('') : '<div class="set-desc">还没有调度任务：新增后站报 / 周报 / 每日摘要将按计划自动生成。</div>';
 }
 async function schedToggle(id, on) {
   const r = await window.reins.scheduleToggle(id, on).catch(() => null);
@@ -3422,11 +3984,11 @@ async function schedRemove(id) {
 }
 function openSchedModal(id) {
   const sc = schedCache.find(x => x.id === id) || { kind: 'standup', name: '', freq: 'daily', time: '09:30', weekday: 5, cron: '0 9 * * 1-5', webhook: false };
-  openModal(`<div class="modal-head"><h3>${id ? '编辑调度' : '新增调度'}</h3><span>站报 / 周报定时生成</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
+  openModal(`<div class="modal-head"><h3>${id ? '编辑调度' : '新增调度'}</h3><span>站报 / 周报 / 每日摘要定时生成</span><button class="x" onclick="closeModal()">${ic('x')}</button></div>
     <div class="modal-body">
       <div class="f-2col">
         <div class="f-row"><label>调度名称</label><input type="text" id="sc-name" value="${esc(sc.name || '')}" placeholder="站报生成（留空按类型默认）"></div>
-        <div class="f-row"><label>类型</label>${ds('sc-kind', [{ v: 'standup', l: '站报（每日站会材料）' }, { v: 'weekly', l: '周报（近 7 天汇总）' }], sc.kind)}</div>
+        <div class="f-row"><label>类型</label>${ds('sc-kind', [{ v: 'standup', l: '站报（每日站会材料）' }, { v: 'weekly', l: '周报（近 7 天汇总）' }, { v: 'digest', l: '每日摘要（吞吐 + 告警）' }], sc.kind)}</div>
       </div>
       <div class="f-2col">
         <div class="f-row"><label>频率</label>${ds('sc-freq', [{ v: 'daily', l: '每日' }, { v: 'weekly', l: '每周' }, { v: 'cron', l: 'cron 表达式' }], sc.freq, 'schedSyncForm()')}</div>
@@ -3436,8 +3998,13 @@ function openSchedModal(id) {
         <div class="f-row" id="sc-week-row"><label>星期（每周频率用）</label>${ds('sc-week', WEEK_CN.map((w, i) => ({ v: String(i), l: '周' + w })), String(sc.weekday ?? 5))}</div>
         <div class="f-row" id="sc-cron-row"><label>cron（分 时 日 月 周）</label><input type="text" id="sc-cron" value="${esc(sc.cron || '0 9 * * 1-5')}" placeholder="30 9 * * 1-5"></div>
       </div>
-      <label class="f-check"><input type="checkbox" id="sc-webhook" ${sc.webhook ? 'checked' : ''}> 生成后推送到 Webhook（地址沿用「集成」页配置）</label>
-      <div class="set-desc" style="margin-top:6px">站报定时写入当前空间看板（已完成状态）；周报额外自动下载 Markdown。cron 为 5 字段标准表达式（分 时 日 月 周）。</div>
+      <div class="f-row"><label>生成后推送到</label>${ds('sc-out', [
+        { v: 'none', l: '只写看板（不推送）' },
+        { v: 'feishu', l: '飞书（自建应用 / 群机器人）' },
+        { v: 'webhook', l: 'Webhook（「集成」页配置的地址）' },
+        { v: 'both', l: '飞书 + Webhook' },
+      ], schedOut(sc))}</div>
+      <div class="set-desc" style="margin-top:6px">报告定时写入当前空间看板（已完成状态）；周报额外自动下载 Markdown。推送到飞书时以卡片发送（需在「集成」页启用飞书）。cron 为 5 字段标准表达式（分 时 日 月 周）。</div>
     </div>
     <div class="modal-foot"><button class="btn btn-o" onclick="closeModal()">取消</button>
       <button class="btn btn-p" onclick="schedSave('${id || ''}')">保存</button></div>`);
@@ -3464,7 +4031,8 @@ async function schedSave(id) {
     time: $('#sc-time')?.value.trim() || '',
     weekday: Number($('#sc-week')?.value ?? 5),
     cron: $('#sc-cron')?.value.trim() || '',
-    webhook: !!$('#sc-webhook')?.checked,
+    out: $('#sc-out')?.value || 'none',
+    webhook: ['webhook', 'both'].includes($('#sc-out')?.value || ''),
     enabled: editing ? editing.enabled : true,
   };
   const r = await window.reins.scheduleUpsert(sc).catch(e => ({ ok: false, errors: [e.message] }));
@@ -3474,15 +4042,22 @@ async function schedSave(id) {
   hydrateSchedules();
 }
 
-/* —— 调度触发（REINS-128）：主进程时间轮到点通知 → 渲染层生成站报/周报写入看板 —— */
+/* —— 调度触发（REINS-128）：主进程时间轮到点通知 → 渲染层生成站报/周报/每日摘要写入看板 —— */
+/* 推送去向：sc.out（none/webhook/feishu/both），未给时退回旧字段 sc.webhook 的布尔语义 */
+function schedOut(sc) {
+  if (sc && typeof sc.out === 'string') return sc.out;
+  return sc && sc.webhook ? 'webhook' : 'none';
+}
 function handleScheduleFire(info) {
   const sc = info && info.schedule; if (!sc) return;
   try {
+    const digest = sc.kind === 'digest';
     const weekly = sc.kind === 'weekly';
-    const text = weekly ? buildWeekly() : buildStandup();
+    const text = digest ? buildDigest() : weekly ? buildWeekly() : buildStandup();
     const d = new Date();
     const tag = info.manual ? '手动触发' : info.missed ? '补执行（休眠唤醒）' : '定时生成';
-    const title = (weekly ? '周报' : '站报') + ' · ' + S().name + ' · ' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    const label = digest ? '每日摘要' : weekly ? '周报' : '站报';
+    const title = label + ' · ' + S().name + ' · ' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
     const t = {
       id: 't' + S().seq, key: 'REINS-' + S().seq, title,
       type: 'writing', pri: 'P2', desc: tag + ' · ' + schedFreqLabel(sc),
@@ -3492,15 +4067,63 @@ function handleScheduleFire(info) {
     };
     S().tasks.unshift(t); S().seq++; S().chart[6]++;
     addActivity('⏰', title + '（' + schedFreqLabel(sc) + '）');
-    toast(weekly ? '周报已自动生成' : '站报已自动生成', t.key + ' 已写入看板 · 当前空间「' + S().name + '」', '⏰');
+    toast(label + '已自动生成', t.key + ' 已写入看板 · 当前空间「' + S().name + '」', '⏰');
     if (weekly) downloadReportMd(title, text);
-    if (sc.webhook && window.reins) {
-      /* 复用现有 webhook 通道，内容与手动生成的报告一致 */
-      window.reins.webhookSend({ event: weekly ? 'report.weekly' : 'report.standup', at: new Date().toISOString(), space: S().name, schedule: sc.name, report: text })
+    const out = schedOut(sc);
+    const event = digest ? 'report.digest' : weekly ? 'report.weekly' : 'report.standup';
+    if ((out === 'webhook' || out === 'both') && window.reins) {
+      /* 复用现有 webhook 通道，内容与手动生成的报告一致（地址是飞书机器人时主进程自动转卡片） */
+      window.reins.webhookSend({ event, at: new Date().toISOString(), space: S().name, schedule: sc.name, report: text })
         .then(r => { if (r && !r.ok) toast('Webhook 推送失败', r.error || ('HTTP ' + r.status), '⚠'); }).catch(() => { });
+    }
+    if ((out === 'feishu' || out === 'both') && window.reins?.feishuReport) {
+      window.reins.feishuReport({ title, text, meta: sc.name + ' · ' + schedFreqLabel(sc) + ' · ' + tag })
+        .then(r => { if (r && !r.ok && !r.skipped) toast('飞书推送失败', r.error || '', '⚠'); }).catch(() => { });
     }
     save(); refreshViews();
   } catch (e) { console.error('[schedule] 报告生成失败（不中断）', e); }
+}
+/* 每日摘要：一眼看清今天的吞吐、在途、验收队列与需要人介入的告警（失败/超时/阻塞） */
+function buildDigest() {
+  const d = new Date();
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const dayStart = t0.getTime();
+  const tasks = S().tasks;
+  const doneToday = tasks.filter(t => t.doneAt && t.doneAt >= dayStart);
+  const doing = tasks.filter(t => t.status === 'doing');
+  const review = tasks.filter(t => t.status === 'review');
+  const todo = tasks.filter(t => t.status === 'todo');
+  const who = t => t.assignee ? (t.assignee.kind === 'agent' ? '◆ ' + t.assignee.name : t.assignee.name) : '未指派';
+  /* 告警口径：时间线里最近一次「执行失败 / 超时」且之后没有成功归档的任务 */
+  const failed = tasks.filter(t => t.status !== 'done' && (t.history || []).some(h => /失败|超时/.test(h.text || '')));
+  const pipelinePaused = tasks.filter(t => t.pipeline?.on && t.pipeline.status === 'paused');
+  const tokensToday = O().agents.reduce((n, a) => n + (a.tokens || 0), 0);
+  return [
+    `# 每日摘要 · ${d.getMonth() + 1}月${d.getDate()}日`,
+    `> 空间「${S().name}」· 由自动化例程生成 · Reins`,
+    ``,
+    `## 今日完成（${doneToday.length}）`,
+    ...(doneToday.length ? doneToday.slice(0, 10).map(t => `- ${t.key} ${t.title} — ${who(t)}${t.pr ? ' · ' + t.pr : ''}`) : ['- 无']),
+    ``,
+    `## 在途（${doing.length}）`,
+    ...(doing.length ? doing.slice(0, 10).map(t => `- ${t.key} ${t.title} — ${who(t)}${runs[t.id] ? ' · ' + runPct(t.id) + '%' : ''}`) : ['- 无']),
+    ``,
+    `## 待验收（${review.length}）`,
+    ...(review.length ? review.slice(0, 10).map(t => `- ${t.key} ${t.title} — ${who(t)}`) : ['- 无']),
+    ``,
+    `## 待处理（${todo.length}）`,
+    ...(todo.length ? todo.slice(0, 10).map(t => `- [${t.pri}] ${t.key} ${t.title}`) : ['- 无']),
+    ``,
+    `## 需要关注`,
+    ...(failed.length ? failed.slice(0, 8).map(t => `- ⚠ ${t.key} ${t.title} — 最近执行失败/超时`) : []),
+    ...(pipelinePaused.length ? pipelinePaused.slice(0, 8).map(t => `- ⏸ ${t.key} ${t.title} — 流水线已暂停，可从断点继续`) : []),
+    ...(!failed.length && !pipelinePaused.length ? ['- 无异常'] : []),
+    ``,
+    `## Agent 台账`,
+    ...(O().agents.length ? O().agents.map(a => `- ${a.name}：累计完成 ${a.done || 0} 项 · tokens ${a.tokens >= 1e6 ? (a.tokens / 1e6).toFixed(1) + 'M' : Math.round((a.tokens || 0) / 1e3) + 'K'}`) : ['- 尚未接入 Agent']),
+    ``,
+    `> 累计 tokens ${tokensToday >= 1e6 ? (tokensToday / 1e6).toFixed(1) + 'M' : Math.round(tokensToday / 1e3) + 'K'}`,
+  ].join('\n');
 }
 function downloadReportMd(title, text) {
   const d = new Date();
@@ -3509,6 +4132,86 @@ function downloadReportMd(title, text) {
   a.href = URL.createObjectURL(blob);
   a.download = String(title).replace(/[\\/:*?"<>|\s]+/g, '-') + '-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.md';
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* —— 模型价格表（P1 成本估算）：内置参考价可编辑，用户覆盖写进 settings.modelPrices ——
+   只列「内置 + 已覆盖 + 当前在用模型」三类，避免把整张表铺成几十行输入框；
+   留空某一行 = 删除该覆盖（回落到内置价或未定价）。 */
+let priceCache = null;
+async function hydratePrices() {
+  const box = document.getElementById('price-box'); if (!box || !window.reins) return;
+  let t = null;
+  try { t = await window.reins.priceTable(); } catch (e) { t = null; }
+  if (!t) { box.innerHTML = '<span class="set-desc">价格表暂不可用。</span>'; return; }
+  priceCache = t;
+  const ov = t.overrides || {};
+  /* 当前在用的模型优先列出：用户改价十有八九是为了它 */
+  const inUse = O().agents.map(a => a.model).filter(Boolean);
+  const names = [...new Set([...inUse, ...Object.keys(ov), ...Object.keys(t.defaults || {})])];
+  const row = name => {
+    const cur = ov[name] || null;
+    const def = (t.defaults || {})[name];
+    const src = cur ? '自定义' : def ? '内置' : '未定价';
+    return `<div class="price-row">
+      <span class="pr-name" title="${esc(name)}">${esc(name)}${inUse.includes(name) ? '<i class="pr-use">在用</i>' : ''}</span>
+      <input type="number" min="0" step="0.01" class="pr-in" data-model="${esc(name)}" value="${cur ? esc(String(cur.in)) : (def ? esc(String(def.in)) : '')}" placeholder="输入价">
+      <input type="number" min="0" step="0.01" class="pr-out" data-model="${esc(name)}" value="${cur ? esc(String(cur.out)) : (def ? esc(String(def.out)) : '')}" placeholder="输出价">
+      <span class="pr-src">${src}</span>
+    </div>`;
+  };
+  box.innerHTML = `<div class="price-head"><span>模型</span><span>输入 元/1M</span><span>输出 元/1M</span><span>来源</span></div>
+    ${names.map(row).join('')}
+    <div class="price-add">
+      <input type="text" id="price-new-model" placeholder="补充模型名（如 glm-4.6）">
+      <input type="number" id="price-new-in" min="0" step="0.01" placeholder="输入价">
+      <input type="number" id="price-new-out" min="0" step="0.01" placeholder="输出价">
+      <button class="btn btn-o btn-sm" onclick="priceAddRow()">添加</button>
+      <button class="btn btn-p btn-sm" style="margin-left:auto" onclick="priceSave()">保存价格表</button>
+    </div>`;
+}
+/* 新增一行：把模型名与单价插进表格（保存时才落盘） */
+function priceAddRow() {
+  const name = ($('#price-new-model')?.value || '').trim();
+  const i = Number($('#price-new-in')?.value), o = Number($('#price-new-out')?.value);
+  if (!name) { toast('缺少模型名', '例如 glm-4.6 或 deepseek-chat', '⚠'); return; }
+  if (!Number.isFinite(i) || i < 0 || !Number.isFinite(o) || o < 0) { toast('单价无效', '填非负数字（元/1M tokens）', '⚠'); return; }
+  const box = document.getElementById('price-box');
+  const head = box.querySelector('.price-head');
+  const div = document.createElement('div');
+  div.className = 'price-row';
+  div.innerHTML = `<span class="pr-name" title=""><i class="pr-use">在用</i></span>
+    <input type="number" min="0" step="0.01" class="pr-in" value="${i}">
+    <input type="number" min="0" step="0.01" class="pr-out" value="${o}">
+    <span class="pr-src">自定义</span>`;
+  div.querySelector('.pr-name').title = name;
+  div.querySelector('.pr-name').insertAdjacentHTML('afterbegin', esc(name));
+  div.querySelector('.pr-in').dataset.model = name;
+  div.querySelector('.pr-out').dataset.model = name;
+  head.after(div);
+  $('#price-new-model').value = ''; $('#price-new-in').value = ''; $('#price-new-out').value = '';
+  toast('已加入', name + ' · 点「保存价格表」生效', '＋');
+}
+/* 保存：收集所有行，输入/输出都为数字且至少填了一项才写入覆盖表 */
+function priceSave() {
+  const ov = {};
+  document.querySelectorAll('#price-box .price-row').forEach(r => {
+    const model = r.querySelector('.pr-in')?.dataset.model || '';
+    const iRaw = r.querySelector('.pr-in')?.value, oRaw = r.querySelector('.pr-out')?.value;
+    if (!model) return;
+    const i = iRaw === '' ? NaN : Number(iRaw), o = oRaw === '' ? NaN : Number(oRaw);
+    /* 两个都空 = 用户想删除这条覆盖（回落内置/未定价）；只填一个视为填错，跳过并提示 */
+    if (iRaw === '' && oRaw === '') return;
+    if (!Number.isFinite(i) || !Number.isFinite(o) || i < 0 || o < 0) { toast('已跳过 ' + model, '输入/输出价需同时填写非负数字', '⚠'); return; }
+    ov[model] = { in: i, out: o };
+  });
+  window.reins.setSettings({ modelPrices: ov }).then(r => {
+    const s = settingsApplied(r);
+    if (!s) return;
+    hookCfg = { ...hookCfg, ...s };
+    toast('价格表已保存', Object.keys(ov).length ? Object.keys(ov).length + ' 个模型单价已生效' : '已清空覆盖，全部回落到内置参考价', '¥');
+    hydratePrices();
+    refreshViews();
+  });
 }
 
 /* —— 密钥安全存储状态（REINS-128）：safeStorage 可用性 / 明文盘点 / 降级确认 —— */
@@ -3563,18 +4266,160 @@ function gitTokensSave() {
   window.reins.setSettings({ gitTokens: tokens }).then(r => {
     const s2 = settingsApplied(r);
     if (!s2) return;
-    hookCfg = { ...hookCfg, ...s2 };
+    hookCfg = { ...hookCfg, ...s2, feishu: s2.feishu || hookCfg.feishu };
     toast('令牌已保存', 'GitHub / Gitee PAT 已更新（仅本机）', '⚙');
   }).catch(() => toast('保存失败', '主进程不可达', '⚠'));
 }
 
-function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+/* 导出备份：**必须把外置正文内联回来**。
+   大文本外置后 state 里只有 {__text,ref}，而正文文件在 userData/deliveries/text/ 下——
+   备份文件（单个 .json）不包含这个目录。若不内联，导出再导入就是"交付内容全丢、只剩 400 字摘要"，
+   而且用户会以为备份是完整的。导入侧同时兼容两种形态（见 importData）。 */
+async function exportData() {
+  const btn = document.querySelector('[data-export-btn]');
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '正在打包正文…'; }
+  let snapshot;
+  try {
+    snapshot = await inlineAllText(state);
+  } catch (e) {
+    snapshot = JSON.parse(JSON.stringify(state));   // 取正文失败也别阻断导出：至少结构可用
+    toast('部分正文未能打包', '备份仍会导出，但外置正文可能缺失：' + e.message, '⚠');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = old; }
+  }
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'reins-backup-' + new Date().toISOString().slice(0, 10) + '.json';
   a.click(); URL.revokeObjectURL(a.href);
-  toast('已导出', '备份文件已开始下载', '⇩');
+  toast('已导出', '备份已包含全部交付正文（可换机导入）', '⇩');
+}
+/* 导入兜底：把引用降级成 preview 字符串（返回处理处数）。
+   只用在「用户导入的是裸 state 文件、正文没跟着来」的场景——宁可显示摘要，
+   也不能让界面拿到指向不存在文件的引用对象 */
+function liftTextRefs(st) {
+  let n = 0;
+  const fix = (obj, field) => {
+    const v = obj && obj[field];
+    if (!isTextRef(v)) return;
+    obj[field] = String(v.preview || '');
+    n++;
+  };
+  for (const org of (st.orgs || [])) {
+    for (const sp of (org.spaces || [])) {
+      for (const t of (sp.tasks || [])) {
+        fix(t, 'result');
+        if (Array.isArray(t.thread)) t.thread.forEach(m => fix(m, 'content'));
+        const p = t.pipeline;
+        if (p && Array.isArray(p.stages)) p.stages.forEach(x => fix(x, 'result'));
+        if (p && p.reworkCtx) { fix(p.reworkCtx, 'qaReport'); fix(p.reworkCtx, 'feedback'); }
+        if (p && p.gate) fix(p.gate, 'evidence');
+      }
+    }
+  }
+  return n;
+}
+
+/* 孤儿交付文件回收：把「当前所有任务号」作为保留清单交主进程，其余目录删除。
+   放在设置页是为了让用户能自己处理历史残留（导入旧档、手工删任务都会留下） */
+async function runDeliveryGC() {
+  if (!window.reins?.deliveryGC) { toast('不可用', '请在桌面客户端中操作', '⚠'); return; }
+  /* 保留清单按「全部组织」取，不只是当前组织：否则切到别的组织时会把它们的交付目录当孤儿删掉 */
+  const keep = [...new Set((state.orgs || []).flatMap(o => (o.spaces || []).flatMap(sp => (sp.tasks || []).map(t => t.key))))];
+  const r = await window.reins.deliveryGC(keep).catch(e => ({ ok: false, error: e.message }));
+  const desc = document.getElementById('gc-desc');
+  if (!r || !r.ok) { toast('回收失败', (r && r.error) || '', '⚠'); return; }
+  const mb = (r.bytes / 1024 / 1024).toFixed(1);
+  const msg = r.removed ? `已清理 ${r.removed} 个孤儿目录，释放 ${mb}MB` : '没有需要清理的孤儿目录';
+  if (desc) desc.innerHTML = esc(msg) + (r.errors && r.errors.length ? `（${r.errors.length} 个失败）` : '');
+  toast(r.removed ? '已回收' : '无需回收', msg, '🗑');
+  runIntegrityCheck(true, { silent: true });
+}
+
+/* —— 数据自检（一致性体检）——
+   外置带来的新失败模式是「state 还在、正文文件没了」：不报错，只静默降级成 400 字摘要。
+   启动后跑一次，只在发现问题时打扰用户；设置页有面板可随时重扫并处置。 */
+let integrityReport = null;
+async function runIntegrityCheck(force, opts) {
+  const o = opts || {};
+  if (!window.reins?.integrityCheck) return null;
+  let r = null;
+  try { r = await window.reins.integrityCheck(!!force); } catch (e) { return null; }
+  if (!r) return null;
+  integrityReport = r;
+  renderIntegrityPanel();
+  if (!o.silent) return r;
+  /* 静默模式：只有「正文缺失」这种会造成数据不可逆的才主动弹，孤儿目录等放在设置页里让用户自己看 */
+  const missing = (r.refs && r.refs.missing) || [];
+  if (missing.length) {
+    toast('数据自检发现正文缺失', missing.length + ' 处内容只剩摘要（前 400 字），点「设置 → 数据自检」查看详情', '⚠');
+  }
+  return r;
+}
+/* 设置页面板：健康时一行绿字，有问题时按类型列出并给处置入口 */
+function renderIntegrityPanel() {
+  const box = document.getElementById('integrity-box');
+  if (!box) return;
+  const r = integrityReport;
+  if (!r) { box.innerHTML = '<div class="set-desc">尚未检查。</div>'; return; }
+  const miss = (r.refs && r.refs.missing) || [];
+  const orph = (r.orphans && r.orphans.dirs) || [];
+  const mb = ((Number(r.totalBytes) || 0) / 1024 / 1024).toFixed(1);
+  const head = `<div class="ig-head ${r.healthy && !orph.length ? 'ok' : 'warn'}">
+      ${r.healthy && !orph.length ? ic('circle-check') : ic('triangle-alert')}
+      <b>${esc(r.healthy ? (orph.length ? '正文完好，有可回收文件' : '数据自检通过') : '发现 ' + miss.length + ' 处正文缺失')}</b>
+      <span class="ig-meta">${(r.refs && r.refs.total) || 0} 处正文引用 · 占用 ${mb}MB · ${fmtRel(r.at)}</span>
+    </div>`;
+  const missHtml = miss.length ? `<div class="ig-sec">
+      <div class="ig-title">正文缺失（${miss.length}）</div>
+      <div class="set-desc">这些内容只剩前 400 字摘要，导出/下载会拿到不完整内容。常见原因：手工删过 deliveries、只拷了 reins-data.json 没带正文库。</div>
+      <div class="ig-list">${miss.slice(0, 12).map(m => `<div class="ig-item"><span class="ig-where">${esc(m.where || m.ref)}</span><span class="ig-ref">${esc(m.ref)}</span></div>`).join('')}
+        ${miss.length > 12 ? `<div class="ig-item"><span class="set-desc">…另有 ${miss.length - 12} 处</span></div>` : ''}</div>
+      <div class="ig-hint">处置：若之前导出过备份，用「导入数据」恢复；否则这部分内容无法自动找回。</div>
+    </div>` : '';
+  const orphHtml = orph.length ? `<div class="ig-sec">
+      <div class="ig-title">孤儿交付目录（${orph.length}，${((r.orphans.bytes || 0) / 1024 / 1024).toFixed(1)}MB）</div>
+      <div class="set-desc">任务已删除或来自旧存档，可安全回收。</div>
+      <div class="ig-list">${orph.slice(0, 12).map(n => `<div class="ig-item"><span class="ig-where">${esc(n)}</span></div>`).join('')}</div>
+      <div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="runDeliveryGC()">回收这 ${orph.length} 个目录</button></div>
+    </div>` : '';
+  box.innerHTML = head + missHtml + orphHtml +
+    `<div style="margin-top:10px;display:flex;gap:8px">
+      <button class="btn btn-o btn-sm" onclick="runIntegrityCheck(true).then(r=>r&&toast('自检完成', integritySummary(r),'✓'))">重新检查</button>
+      <button class="btn btn-o btn-sm" data-export-btn onclick="exportData()">导出备份（含正文）</button>
+    </div>`;
+}
+function integritySummary(r) {
+  const miss = ((r.refs && r.refs.missing) || []).length;
+  const orph = ((r.orphans && r.orphans.dirs) || []).length;
+  if (!miss && !orph) return ((r.refs && r.refs.total) || 0) + ' 处正文完好';
+  return [miss ? miss + ' 处正文缺失' : '', orph ? orph + ' 个孤儿目录' : ''].filter(Boolean).join(' · ');
+}
+
+/* 深拷贝 state 并把所有引用换成全文；单个正文缺失时保留 preview（不抛错、不阻断导出） */
+async function inlineAllText(st) {
+  const clone = JSON.parse(JSON.stringify(st));
+  const jobs = [];
+  const walkStr = (obj, field) => {
+    const v = obj && obj[field];
+    if (!isTextRef(v)) return;
+    jobs.push(textFull(v).then(full => { obj[field] = full || String(v.preview || ''); }));
+  };
+  for (const org of (clone.orgs || [])) {
+    for (const sp of (org.spaces || [])) {
+      for (const t of (sp.tasks || [])) {
+        walkStr(t, 'result');
+        if (Array.isArray(t.thread)) t.thread.forEach(m => walkStr(m, 'content'));
+        const p = t.pipeline;
+        if (p && Array.isArray(p.stages)) p.stages.forEach(x => walkStr(x, 'result'));
+        if (p && p.reworkCtx) { walkStr(p.reworkCtx, 'qaReport'); walkStr(p.reworkCtx, 'feedback'); }
+        if (p && p.gate) walkStr(p.gate, 'evidence');
+      }
+    }
+  }
+  await Promise.all(jobs);
+  return clone;
 }
 function importData(input) {
   const file = input.files[0]; if (!file) return;
@@ -3586,6 +4431,13 @@ function importData(input) {
       if (Array.isArray(data.orgs) && data.orgs.length) n = normalizeState(data);
       else if (Array.isArray(data.spaces) && data.spaces.length) n = normalizeState(toV3(data, '导入的组织'));
       if (!n) throw new Error('格式不符（需要 orgs 或 spaces 条目）');
+      /* 兼容两种备份形态：旧备份正文是字符串（原样保留）；新备份若仍含外置引用
+         （例如用户直接拷了 reins-data.json），把 preview 提升为正文，避免导入后
+         正文指向不存在的 text/ 路径而显示空白。真正的完整备份由 exportData 内联产出 */
+      const lifted = liftTextRefs(n);
+      if (lifted > 0) {
+        toast('备份含外置正文引用', lifted + ' 处正文只有摘要（完整备份请用「导出」重新生成）', '⚠');
+      }
       if (!confirm('导入将覆盖当前全部数据，继续？')) return;
       if (window.reins) await window.reins.stateSave(n, true);
       else localStorage.setItem(STORE_KEY, JSON.stringify(n));
@@ -3816,11 +4668,15 @@ async function init() {
   if (faults.length) toast('界面初始化遇到问题', '已尽量恢复，详见控制台', '⚠');
   updateNodePill(); setInterval(updateNodePill, 30000);
   boot('bell', () => renderBell());
+  /* 数据自检：启动后静默跑一次，只有发现问题才提示（正常情况不打扰） */
+  boot('integrity', () => setTimeout(() => runIntegrityCheck(true, { silent: true }), 2500));
 
   // 主进程执行事件 → 更新运行 UI；调度器触发 → 生成站报/周报写入看板
   window.reins?.onRunEvent(evt => handleRunEvent(evt));
   window.reins?.onScheduleFire?.(info => handleScheduleFire(info));
-  window.reins?.getSettings?.().then(s => { if (s) hookCfg = { ...hookCfg, ...s }; }).catch(() => { });
+  /* 飞书群指令 → 主进程反向调用渲染层执行（任务状态在多空间内存态里，只有这里拿得到） */
+  window.reins?.onFeishuCall?.(req => handleFeishuCall(req));
+  window.reins?.getSettings?.().then(s => { if (s) { hookCfg = { ...hookCfg, ...s }; feishuCfg = { ...feishuCfg, ...(s.feishu || {}) }; } }).catch(() => { });
 
   $('#search').addEventListener('input', e => { filters.search = e.target.value; if (curView === 'kanban' || curView === 'list') render(); });
   document.addEventListener('keydown', e => {

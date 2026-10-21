@@ -84,13 +84,118 @@ function pushBranch(cwd, opts) {
   if (branch === 'HEAD') return { ok: false, kind: 'detached', message: '推送失败：工作区处于 detached HEAD（游离头指针）状态，不在任何分支上。请先创建分支（git switch -c <分支名>）再推送' };
   if (!branch) return { ok: false, message: '缺少要推送的分支名' };
   const remote = String(o.remote || 'origin').trim();
+
+  /* 推送前体检（缺陷修复）：Agent 在 worktree 里改的是**工作区文件**，分支指向的提交
+     并没有前进——直接 push 会推出一个不含任何改动的空分支，且 git 仍返回 0。
+     这里先查「有没有未提交改动」和「相对上游有没有新提交」，两种情况都明确告知，
+     避免界面报成功而远程其实没拿到代码。opts.commit=true 时先自动提交再推。 */
+  const dirty = uncommittedSummary(cwd);
+  if (dirty.total > 0 && !o.commit) {
+    return {
+      ok: false, kind: 'uncommitted', dirty,
+      message: '分支 ' + branch + ' 里还有 ' + dirty.total + ' 个文件未提交：直接推送不会包含这些改动。请先提交（或勾选"自动提交后推送"）再推',
+    };
+  }
+  let commitMsg = '';
+  if (dirty.total > 0 && o.commit) {
+    const c = commitWorktree(cwd, { message: o.message });
+    if (!c.ok) return { ok: false, kind: 'commit', message: c.message, dirty };
+    commitMsg = c.message;
+  }
+
+  /* 相对上游没有新提交 → 别推了，如实说明（尤其避免"推成功但内容没变"的假象） */
+  const upstream = upstreamOf(cwd, branch, remote);
+  const ahead = commitsAhead(cwd, branch, upstream);
+  if (ahead === 0 && !commitMsg) {
+    return {
+      ok: false, kind: 'no-commits',
+      message: '分支 ' + branch + ' 相对 ' + (upstream || remote + '/' + branch) + ' 没有新提交，本次无需推送（Agent 的改动可能尚未提交）',
+    };
+  }
+
   const r = spawnSync('git', ['-C', cwd, 'push', '--set-upstream', remote, branch], { encoding: 'utf8', timeout: 10 * 60 * 1000 });
   if (r.status === 0) {
     const info = remoteInfo(cwd);
-    return { ok: true, branch, remote, origin: info.origin, message: '已推送 ' + branch + ' → ' + remote };
+    return {
+      ok: true, branch, remote, origin: info.origin, commit: commitMsg || null,
+      ahead: ahead > 0 ? ahead : undefined,
+      message: '已推送 ' + branch + ' → ' + remote + (commitMsg ? '（已自动提交 ' + dirty.total + ' 个文件）' : ''),
+    };
   }
   const cls = classifyPushError(r.stderr, r.stdout);
   return { ok: false, kind: cls.kind, message: '推送失败：' + (cls.hint || String(r.stderr || '').trim().slice(0, 240) || 'git 退出码 ' + r.status) };
+}
+
+/* ---------- 工作区提交（Agent 改动落成提交，push/PR 才有内容可带） ---------- */
+/* 未提交改动盘点：包含未跟踪文件；node_modules（worktree 里是符号链接）与 .reins-wt 自身排除，
+   与 buildDelivery 的 diffPathspec 保持同一口径，避免"提交了依赖"这种脏提交 */
+function uncommittedSummary(cwd) {
+  const out = { total: 0, modified: 0, untracked: 0, files: [] };
+  const r = spawnSync('git', ['-C', cwd, 'status', '--porcelain', '--untracked-files=normal'], { encoding: 'utf8', timeout: 30000 });
+  if (r.status !== 0) return out;
+  for (const line of String(r.stdout || '').split('\n')) {
+    if (!line.trim()) continue;
+    const flag = line.slice(0, 2).trim();
+    const file = line.slice(3).trim().replace(/^"|"$/g, '');
+    if (isIgnoredPath(file)) continue;
+    out.total++;
+    if (flag === '??') out.untracked++; else out.modified++;
+    if (out.files.length < 50) out.files.push(file);
+  }
+  return out;
+}
+
+/* worktree 里注入的依赖链接与隔离区自身不该进提交（与 runner.diffPathspec 同语义） */
+function isIgnoredPath(file) {
+  const f = String(file || '').replace(/\\/g, '/');
+  if (!f) return true;
+  if (f === 'node_modules' || f.startsWith('node_modules/')) return true;
+  if (f === '.reins-wt' || f.startsWith('.reins-wt/')) return true;
+  if (f.endsWith('/node_modules') || f.includes('/node_modules/')) return true;
+  return false;
+}
+
+/* 提交 messages 占位：任务号 + 标题；作者信息缺失时用环境变量兜底，
+   避免"git commit 报 missing user.email"这种对非 git 用户完全不可读的错误 */
+function commitWorktree(cwd, opts) {
+  const o = opts || {};
+  const message = String(o.message || '').trim() || 'Reins: 交付 Agent 改动';
+  const git = (...a) => spawnSync('git', ['-C', cwd, ...a], { encoding: 'utf8', timeout: 60000 });
+  const add = git('add', '-A', '--', '.', ':!node_modules', ':!.reins-wt');
+  if (add.status !== 0) {
+    return { ok: false, message: '暂存改动失败：' + String(add.stderr || '').trim().slice(0, 200) };
+  }
+  /* 环境变量兜底作者（不影响用户既有 git 配置，仅在未配置时生效） */
+  const env = { ...process.env };
+  if (!git('config', 'user.email').stdout.trim()) env.GIT_AUTHOR_EMAIL = env.GIT_COMMITTER_EMAIL = 'reins@localhost';
+  if (!git('config', 'user.name').stdout.trim()) env.GIT_AUTHOR_NAME = env.GIT_COMMITTER_NAME = 'Reins';
+  const commit = spawnSync('git', ['-C', cwd, 'commit', '-m', message], { encoding: 'utf8', timeout: 60000, env });
+  if (commit.status !== 0) {
+    const s = String(commit.stderr || '') + String(commit.stdout || '');
+    if (/nothing to commit|no changes added/i.test(s)) return { ok: false, message: '没有可提交的改动（工作区已干净）' };
+    return { ok: false, message: '提交失败：' + (String(commit.stderr || '').trim().slice(0, 200) || 'git 退出码 ' + commit.status) };
+  }
+  const head = git('rev-parse', '--short', 'HEAD');
+  return { ok: true, message, sha: String(head.stdout || '').trim() };
+}
+
+/* 当前分支的上游（origin/xxx）；没有上游返回空串 */
+function upstreamOf(cwd, branch, remote) {
+  const r = spawnSync('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', branch + '@{upstream}'], { encoding: 'utf8', timeout: 20000 });
+  if (r.status === 0 && String(r.stdout || '').trim()) return String(r.stdout).trim();
+  /* 尚未 set-upstream：用 remote 上的同名分支名作为比较基准（不存在时由 ahead 判定兜底） */
+  return remote && branch ? remote + '/' + branch : '';
+}
+
+/* 相对 upstream 领先的提交数；upstream 不存在（首次推送）时返回 -1 表示"无从比较，允许推送" */
+function commitsAhead(cwd, branch, upstream) {
+  if (!upstream) return -1;
+  const exists = spawnSync('git', ['-C', cwd, 'rev-parse', '--verify', '--quiet', upstream], { encoding: 'utf8', timeout: 20000 });
+  if (exists.status !== 0) return -1;   // 远程还没有这个分支：首次推送，放行
+  const r = spawnSync('git', ['-C', cwd, 'rev-list', '--count', upstream + '..' + branch], { encoding: 'utf8', timeout: 30000 });
+  if (r.status !== 0) return -1;
+  const n = parseInt(String(r.stdout || '0').trim(), 10);
+  return Number.isFinite(n) ? n : -1;
 }
 
 /* ---------- PR 创建 ---------- */
@@ -176,4 +281,7 @@ async function createPR(input) {
   return { ok: false, message: 'PR 创建失败：HTTP ' + resp.status + ' ' + text.slice(0, 200) };
 }
 
-module.exports = { parseRemoteUrl, remoteInfo, pushBranch, classifyPushError, buildPRRequest, createPR };
+module.exports = {
+  parseRemoteUrl, remoteInfo, pushBranch, classifyPushError, buildPRRequest, createPR,
+  commitWorktree, uncommittedSummary, isIgnoredPath, commitsAhead, upstreamOf,
+};

@@ -15,7 +15,22 @@
 const KIND_DEFAULTS = {
   standup: { name: '站报生成', freq: 'daily', time: '09:30' },
   weekly:  { name: '周报生成', freq: 'weekly', weekday: 5, time: '17:00' },
+  /* 每日摘要：任务概况 + 失败/超时告警汇总，写看板并可推飞书（与站报/周报同一条时间轮） */
+  digest:  { name: '每日摘要', freq: 'daily', time: '18:00' },
 };
+
+/* 推送去向：webhook（沿用「集成」页 Webhook 地址）/ feishu（飞书自建应用或群机器人）/
+   both（两边都发）/ none（只写看板，不推送） */
+const OUT_TARGETS = ['none', 'webhook', 'feishu', 'both'];
+function normalizeOut(input) {
+  if (OUT_TARGETS.includes(input)) return input;
+  if (input && typeof input === 'object') {
+    if (input.feishu && input.webhook) return 'both';
+    if (input.feishu) return 'feishu';
+    if (input.webhook) return 'webhook';
+  }
+  return 'none';
+}
 
 /* ---------- cron：解析与下次命中 ---------- */
 function expandField(field, lo, hi) {
@@ -137,8 +152,11 @@ function validateSchedule(input) {
     cron: parseCron(input.cron) ? String(input.cron).trim() : (dft.cron || '0 9 * * 1-5'),
     enabled: input.enabled === undefined ? true : !!input.enabled,
     webhook: !!input.webhook,
+    /* 推送去向（digest 等报告）：显式 out 优先，未给时沿用旧字段 webhook 的布尔语义 */
+    out: normalizeOut(input.out !== undefined ? input.out : (input.webhook ? 'webhook' : 'none')),
   };
   if (input.kind && !KIND_DEFAULTS[input.kind]) errors.push('未知调度类型：' + input.kind);
+  if (input.out !== undefined && !OUT_TARGETS.includes(input.out) && typeof input.out !== 'object') errors.push('推送去向非法：' + input.out);
   if (input.freq === 'cron' && !parseCron(input.cron)) errors.push('cron 表达式非法（需 5 字段：分 时 日 月 周）');
   if (input.time && !parseHHMM(input.time)) errors.push('时间格式应为 HH:MM');
   if (input.freq === 'weekly' && !(Number(input.weekday) >= 0 && Number(input.weekday) <= 6)) errors.push('星期取值 0-6（0=周日）');
@@ -258,4 +276,4 @@ function createScheduler(dep) {
   };
 }
 
-module.exports = { createScheduler, validateSchedule, nextRunOf, cronNext, parseCron, KIND_DEFAULTS };
+module.exports = { createScheduler, validateSchedule, nextRunOf, cronNext, parseCron, KIND_DEFAULTS, OUT_TARGETS, normalizeOut };

@@ -9,6 +9,15 @@ contextBridge.exposeInMainWorld('reins', {
   /* 任务数据持久化（主进程写盘；浏览器模式下渲染层自行降级 localStorage） */
   stateLoad: () => ipcRenderer.invoke('reins:state:load'),
   stateSave: (data, immediate) => ipcRenderer.invoke('reins:state:save', data, immediate),
+  /* 大文本取回（state 里存引用，全文落在 deliveries/text/ 下） */
+  textRead: (ref) => ipcRenderer.invoke('reins:text:read', ref),
+  /* 正文回写（恢复丢失的正文库） */
+  textWrite: (ref, text) => ipcRenderer.invoke('reins:text:write', { ref, text }),
+  /* 交付文件清理：删除任务时同步清理磁盘；孤儿目录回收 */
+  deliveryPurge: (key) => ipcRenderer.invoke('reins:delivery:purge', key),
+  deliveryGC: (keepKeys) => ipcRenderer.invoke('reins:delivery:gc', keepKeys),
+  /* 数据自检：引用完整性 / 孤儿目录 / 磁盘占用（force=true 强制重扫） */
+  integrityCheck: (force) => ipcRenderer.invoke('reins:integrity:check', force),
 
   /* 真实执行引擎 */
   providers: () => ipcRenderer.invoke('reins:providers'),
@@ -53,9 +62,26 @@ contextBridge.exposeInMainWorld('reins', {
   webhookSend: (payload) => ipcRenderer.invoke('reins:webhook:send', payload),
   webhookTest: () => ipcRenderer.invoke('reins:webhook:test'),
 
+  /* 飞书接入：事件卡片推送 / 报告推送 / 连通测试 / 群指令同步状态 */
+  feishuNotify: (payload) => ipcRenderer.invoke('reins:feishu:notify', payload),
+  feishuReport: (payload) => ipcRenderer.invoke('reins:feishu:report', payload),
+  feishuTest: (override) => ipcRenderer.invoke('reins:feishu:test', override),
+  feishuStatus: () => ipcRenderer.invoke('reins:feishu:status'),
+  feishuSync: () => ipcRenderer.invoke('reins:feishu:sync'),
+  feishuReset: () => ipcRenderer.invoke('reins:feishu:reset'),
+  /* 主进程 → 渲染层的反向调用（群指令执行需要渲染层的任务状态），按 id 回包 */
+  onFeishuCall: (cb) => ipcRenderer.on('reins:feishu:call', (_e, req) => {
+    Promise.resolve(cb(req)).then(data => ipcRenderer.send('reins:feishu:reply', { id: req.id, data }))
+      .catch(err => ipcRenderer.send('reins:feishu:reply', { id: req.id, data: { error: String((err && err.message) || err) } }));
+  }),
+
   /* Jev 决策模型：结构化分诊判断与连通测试 */
   jevTriage: (payload) => ipcRenderer.invoke('reins:jev:triage', payload),
   jevTest: (cfg) => ipcRenderer.invoke('reins:jev:test', cfg),
+
+  /* Token 成本估算：按 usage × 模型单价折算金额（价格表可在设置里覆盖） */
+  priceEstimate: (payload) => ipcRenderer.invoke('reins:price:estimate', payload),
+  priceTable: () => ipcRenderer.invoke('reins:price:table'),
 
   /* 隔离工作区：在访达中定位 */
   revealWorktree: (p) => ipcRenderer.invoke('reins:worktree:reveal', p),

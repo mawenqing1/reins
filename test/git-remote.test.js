@@ -74,10 +74,29 @@ async function run() {
       ok(info.origin === null && info.supported === false, '本地路径远程解析不出托管（origin=null）');
       ok(info.defaultBranch === 'main', '无 origin/HEAD 回退 main');
 
-      const p = pushBranch(fix.work, { branch: 'reins/K1' });
-      ok(p.ok && /reins\/K1/.test(p.message), '离线推送到本地 bare 成功');
+      /* 有未提交改动时：默认拒绝（说明会丢失改动），commit:true 才提交并推送。
+         这是原缺陷的核心防护——Agent 改的是工作区文件，直接 push 推的是不含改动的旧提交 */
+      fs.writeFileSync(path.join(fix.work, 'a.txt'), 'hello\nagent change');
+      fs.writeFileSync(path.join(fix.work, 'b.txt'), 'new file');
+      const dirty = pushBranch(fix.work, { branch: 'reins/K1' });
+      ok(!dirty.ok && dirty.kind === 'uncommitted', '有未提交改动时拒绝直接推送');
+      ok(dirty.dirty.total === 2 && dirty.dirty.untracked === 1, '未提交盘点含未跟踪文件');
+      ok(/a\.txt/.test(dirty.dirty.files.join(',')), '盘点列出具体文件');
+
+      const p = pushBranch(fix.work, { branch: 'reins/K1', commit: true, message: 'REINS-K1 交付' });
+      ok(p.ok && /reins\/K1/.test(p.message), '提交后离线推送到本地 bare 成功');
+      ok(!!p.commit, '返回提交信息');
       const ls = spawnSync('git', ['-C', fix.bare, 'branch', '--list'], { encoding: 'utf8' });
       ok(/reins\/K1/.test(ls.stdout), '远程确实收到分支');
+      /* 关键：远程分支里要有 Agent 的改动（这正是原缺陷丢失的内容） */
+      const shown = spawnSync('git', ['--git-dir', fix.bare, 'show', 'reins/K1:a.txt'], { encoding: 'utf8' });
+      ok(/agent change/.test(shown.stdout), '远程分支包含 Agent 修改的内容');
+      const tree = spawnSync('git', ['--git-dir', fix.bare, 'ls-tree', 'reins/K1', '--name-only'], { encoding: 'utf8' });
+      ok(/b\.txt/.test(tree.stdout), '远程分支包含 Agent 新建的文件');
+
+      /* 再推一次：已经没有新提交，不应再报成功 */
+      const again = pushBranch(fix.work, { branch: 'reins/K1' });
+      ok(!again.ok && again.kind === 'no-commits', '重复推送无新提交时如实告知');
       ok(!pushBranch(fix.work, {}).ok, '缺分支名报错');
 
       // 远程指到不存在路径 → 可操作错误（不出网）

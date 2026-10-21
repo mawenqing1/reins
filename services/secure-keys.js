@@ -116,11 +116,14 @@ function countSecrets(state) {
   return c;
 }
 
-/* ---------- 客户端设置（settings.json）：cloudToken / jevKey / gitTokens ----------
+/* ---------- 客户端设置（settings.json）：cloudToken / jevKey / gitTokens / feishu ----------
    gitTokens（任务卡 5 引入的 GitHub/Gitee PAT）同为密钥：按成员逐个加密，
-   对象结构保留、空串不动；解锁失败的成员保留密文对象原地（界面视同未配置） */
+   对象结构保留、空串不动；解锁失败的成员保留密文对象原地（界面视同未配置）
+   飞书接入（自建应用）的 appSecret 与群机器人加签 secret 同属密钥：作为
+   settings.feishu 的成员逐个加密，解锁失败保留密文并标记 __feishuLocked */
 const SETTING_SECRET_KEYS = ['cloudToken', 'jevKey'];
 const GIT_TOKEN_PROVIDERS = ['github', 'gitee'];
+const FEISHU_SECRET_FIELDS = ['appSecret', 'webhookSecret'];
 
 function sealSettings(settings, policy) {
   let sealed = 0, plaintext = 0;
@@ -143,6 +146,16 @@ function sealSettings(settings, policy) {
       else plaintext++;
     }
   }
+  const fs1 = settings.feishu;
+  if (fs1 && typeof fs1 === 'object' && !Array.isArray(fs1) && !isSealed(fs1)) {
+    for (const p of FEISHU_SECRET_FIELDS) {
+      const v = fs1[p];
+      if (isSealed(v) || typeof v !== 'string' || !v) continue;
+      const r = sealOne(v, policy);
+      if (r.sealed) { fs1[p] = r.value; sealed++; }
+      else plaintext++;
+    }
+  }
   return { state: settings, sealed, plaintext };
 }
 
@@ -162,6 +175,15 @@ function openSettings(settings) {
       const r = openOne(gt[p]);
       if (r.failed) failed++;   // 密文留在原地：PR 调用按"令牌无效"报错，界面提示重配
       else gt[p] = r.value;
+    }
+  }
+  const fs1 = settings.feishu;
+  if (fs1 && typeof fs1 === 'object' && !Array.isArray(fs1) && !isSealed(fs1)) {
+    for (const p of FEISHU_SECRET_FIELDS) {
+      if (!isSealed(fs1[p])) continue;
+      const r = openOne(fs1[p]);
+      if (r.failed) { settings.__feishuLocked = true; failed++; }   // 保留密文：界面视同未配置并提示重填
+      else fs1[p] = r.value;
     }
   }
   return { state: settings, failed };

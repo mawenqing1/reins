@@ -439,6 +439,20 @@ a { color: var(--accent); text-decoration: none; }
   b { font-size: 17px; font-weight: 700; display: block; font-family: @mono; }
   span { font-size: 11px; color: var(--ink-faint); }
 }
+/* 质量与成本行：成功率（按阈值着色）/ 平均耗时 / 累计花费 */
+.agent-quality {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  .aq {
+    font-size: 11px; color: var(--ink-dim);
+    background: #f5f6f8; border: 1px solid var(--line);
+    border-radius: 99px; padding: 2px 9px;
+    b { font-family: @mono; font-weight: 700; color: var(--ink); }
+    i { font-style: normal; color: var(--ink-faint); font-size: 10px; }
+    &.ok b { color: @st-done; }
+    &.warn b { color: @warn-ink; }
+    &.bad b { color: var(--red); }
+  }
+}
 .agent-foot { display: flex; gap: 8px; }
 
 .util {
@@ -514,6 +528,20 @@ a { color: var(--accent); text-decoration: none; }
   span { font-size: 12px; color: var(--ink-faint); }
 }
 .integ-desc { font-size: 13px; color: var(--ink-dim); }
+/* 飞书配置分组：应用 / 机器人两块用浅底描边分开，避免一屏十几个输入框糊成一片 */
+.fs-group {
+  background: #fafbfc; border: 1px solid var(--line); border-radius: @r-sm;
+  padding: 11px 12px 2px; display: flex; flex-direction: column;
+  .fs-group-title {
+    font-size: 11px; font-weight: 600; color: var(--ink-faint);
+    letter-spacing: .4px; margin-bottom: 8px;
+  }
+  .f-row { margin-bottom: 9px; }
+}
+.integ-desc code {
+  font-family: @mono; font-size: 11.5px; background: #eef0f3; color: var(--ink-dim);
+  border-radius: 4px; padding: 1px 5px;
+}
 .sync-log {
   background: #17191d; color: @side-ink; border-radius: @r-xs;
   padding: 12px 14px; font-family: @mono; font-size: 11px; line-height: 2;
@@ -1364,3 +1392,87 @@ label.pipe-toggle {
 }
 .pr-link { font-size: 12px; color: var(--accent); font-family: @mono; }
 .lnk { color: var(--accent); cursor: pointer; }
+
+// ============ 概览·成本条 ============
+.cost-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 9px;
+  padding: 12px 16px; margin-bottom: 14px;
+  .cb-title {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    .lic { width: 15px; height: 15px; color: @brand-deep; }
+  }
+  .aq {
+    font-size: 11.5px; color: var(--ink-dim);
+    background: #f5f6f8; border: 1px solid var(--line);
+    border-radius: 99px; padding: 3px 10px;
+    b { font-family: @mono; font-weight: 700; color: var(--ink); }
+    &.ok b { color: @st-done; }
+    &.warn b { color: @warn-ink; }
+    &.bad b { color: var(--red); }
+  }
+  .cb-hint { font-size: 11px; color: var(--ink-faint); margin-left: auto; }
+}
+
+// ============ 模型价格表 ============
+.price-head,
+.price-row,
+.price-add {
+  display: grid; gap: 8px; align-items: center;
+  grid-template-columns: minmax(120px, 1.5fr) 110px 110px 64px;
+}
+.price-head {
+  font-size: 11px; color: var(--ink-faint); padding: 0 2px 6px;
+  border-bottom: 1px solid var(--line); margin-bottom: 6px;
+}
+.price-row {
+  padding: 3px 2px;
+  &:hover { background: #fafbfc; }
+  .pr-name {
+    font-size: 12.5px; font-family: @mono; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    .pr-use {
+      font-style: normal; font-family: @sans; font-size: 10px; color: @brand-text;
+      background: var(--accent-soft); border-radius: 99px; padding: 1px 6px; margin-left: 6px;
+    }
+  }
+  input { padding: 5px 8px; font-size: 12px; font-family: @mono; border: 1px solid var(--line-strong); border-radius: @r-xs; }
+  .pr-src { font-size: 11px; color: var(--ink-faint); }
+}
+.price-add {
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  grid-template-columns: minmax(120px, 1.5fr) 110px 110px auto auto;
+  input { padding: 6px 9px; border: 1px solid var(--line-strong); border-radius: @r-xs; font-size: 12.5px; }
+}
+
+// ============ 大文本引用徽标（state 瘦身后的摘要提示） ============
+.txt-ref {
+  display: inline-block; margin-left: 8px; padding: 1px 8px;
+  font-size: 10.5px; font-family: @mono; color: var(--ink-faint);
+  background: #f2f4f6; border: 1px solid var(--line); border-radius: 99px;
+  vertical-align: middle; cursor: help;
+}
+
+// ============ 数据自检面板 ============
+.ig-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: @r-sm; border: 1px solid var(--line);
+  background: #f7f8fa; font-size: 13px;
+  .lic { width: 16px; height: 16px; flex: none; }
+  b { font-size: 13px; color: var(--ink); }
+  &.ok { background: #f2f7ee; border-color: #d5e4c8; .lic, b { color: @st-done; } }
+  &.warn { background: @warn-bg; border-color: @warn-line; .lic, b { color: @warn-ink; } }
+  .ig-meta { margin-left: auto; font-size: 11px; color: var(--ink-faint); font-family: @mono; }
+}
+.ig-sec {
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  .ig-title { font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .ig-list { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; max-height: 190px; overflow-y: auto; }
+  .ig-item {
+    display: flex; gap: 10px; align-items: baseline;
+    font-size: 11.5px; padding: 3px 8px; border-radius: @r-xs; background: #fafbfc;
+    .ig-where { color: var(--ink-dim); flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ig-ref { color: var(--ink-faint); font-family: @mono; font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+  .ig-hint { margin-top: 8px; font-size: 11.5px; color: var(--ink-faint); }
+}

@@ -8,6 +8,10 @@ const secureKeys = require('./services/secure-keys');
 const schedulerMod = require('./services/scheduler');
 const pipelineMod = require('./services/pipeline');
 const gitRemote = require('./services/git-remote');
+const feishuBridgeMod = require('./services/feishu-bridge');
+const pricing = require('./services/pricing');
+const textstore = require('./services/textstore');
+const integrity = require('./services/integrity');
 
 const isMac = process.platform === 'darwin';
 let mainWindow = null;
@@ -28,6 +32,16 @@ let tray = null;
      c) 渲染层把 settings:get 的返回整包回传（带 platform/version 只读信息），
         保留字段在 settings:set 一律剔除。 */
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+const defaultFeishu = {
+  enabled: false,                                  // 总开关（关闭时任何事件都不发）
+  appId: '', appSecret: '', chatId: '',            // 自建应用：发群 + 读群指令（应用需开 im:message 权限）
+  baseUrl: 'https://open.feishu.cn',               // 私有化/Lark 国际版可改为对应域名
+  webhookUrl: '', webhookSecret: '',               // 自定义群机器人：仅出站（secret 为「加签」密钥）
+  events: { create: true, done: true, reject: true, fail: true },   // 逐事件开关
+  inbound: false,                                  // 读取群内 /reins 指令（双向同步入口）
+  inboundIntervalMs: 45000,                        // 轮询间隔（15s–10min）
+  lastSyncAt: 0, lastError: '',                    // 水位与最近错误（同步状态卡展示）
+};
 const defaultSettings = {
   launchAtLogin: false, keepInTray: true, webhookUrl: '', webhookEvents: { create: true, done: true, reject: true }, cloudUrl: '', cloudToken: '', preventSleep: false,
   jevUrl: 'https://api.typesafe.ai/v1/systemone', jevKey: '', jevModel: 'jev-latest', triageEngine: 'auto',
@@ -38,6 +52,8 @@ const defaultSettings = {
   schedules: [],                 // 自动化调度任务（scheduler.js 管理，随档持久化）
   keyStorage: 'auto',            // 密钥存储策略：auto（可用即加密）/ plain（用户明确选择不加密）
   gitTokens: { github: '', gitee: '' },   // PR 创建用的托管平台 PAT
+  feishu: defaultFeishu,         // 飞书接入（自建应用 + 群机器人 + 群指令同步）
+  modelPrices: {},               // 用户覆盖的模型单价（元/1M tokens，{模型名:{in,out}}），空则用内置参考价
 };
 let settingsLastGood = null;   // 最近一次成功读到的整档；坏档/瞬时读失败时回退，防止后续写盘把配置抹平
 
@@ -53,6 +69,26 @@ function normalizeNewFields(s) {
   if (!Array.isArray(s.schedules)) s.schedules = [];
   if (s.keyStorage !== 'plain') s.keyStorage = 'auto';
   if (!s.gitTokens || typeof s.gitTokens !== 'object') s.gitTokens = { ...defaultSettings.gitTokens };
+  /* 飞书配置逐字段兜底：旧档没有 feishu 字段、或用户手工改档写坏类型时都能起得来 */
+  const f = s.feishu && typeof s.feishu === 'object' && !Array.isArray(s.feishu) ? s.feishu : {};
+  s.feishu = {
+    ...defaultFeishu, ...f,
+    events: { ...defaultFeishu.events, ...(f.events && typeof f.events === 'object' ? f.events : {}) },
+    inboundIntervalMs: Math.min(Math.max(Number(f.inboundIntervalMs) || defaultFeishu.inboundIntervalMs, 15000), 600000),
+    lastSyncAt: Number(f.lastSyncAt) || 0,
+  };
+  for (const k of ['appId', 'chatId', 'baseUrl', 'webhookUrl']) if (typeof s.feishu[k] !== 'string') s.feishu[k] = defaultFeishu[k];
+  /* 模型价格覆盖表：必须是「模型名 → {in,out} 数字」的普通对象，坏值逐项剔除（坏档不该拖垮计价） */
+  if (!s.modelPrices || typeof s.modelPrices !== 'object' || Array.isArray(s.modelPrices)) s.modelPrices = {};
+  else {
+    const clean = {};
+    for (const [k, v] of Object.entries(s.modelPrices)) {
+      if (!v || typeof v !== 'object') continue;
+      const i = Number(v.in), o = Number(v.out);
+      if (Number.isFinite(i) && i >= 0 && Number.isFinite(o) && o >= 0) clean[String(k).slice(0, 80)] = { in: i, out: o };
+    }
+    s.modelPrices = clean;
+  }
   return s;
 }
 function readSettings() {
@@ -87,21 +123,78 @@ function applySettings(s) {
 }
 
 ipcMain.handle('reins:settings:get', () => ({ ...readSettings(), platform: process.platform, version: app.getVersion() }));
+/* 嵌套对象的「浅合并」字段：渲染层可以只提交变动项（如 {feishu:{enabled:true}}），
+   不会把没提交的 feishu 字段整块覆盖成空值；events 再单独深合并一层 */
+const SETTINGS_MERGE_KEYS = new Set(['feishu', 'gitTokens', 'webhookEvents', 'modelParams']);
 ipcMain.handle('reins:settings:set', (_e, patch) => {
   /* 读-改-写保留字段剔除（返工修复①）：只接受普通客户端键，写失败如实返回，不假装成功 */
   const p = patch && typeof patch === 'object' ? patch : {};
   const s = readSettings();
   for (const k of Object.keys(p)) {
-    if (!SETTINGS_RESERVED.has(k)) s[k] = p[k];
+    if (SETTINGS_RESERVED.has(k)) continue;
+    const cur = s[k];
+    if (SETTINGS_MERGE_KEYS.has(k) && p[k] && typeof p[k] === 'object' && !Array.isArray(p[k])
+      && cur && typeof cur === 'object' && !Array.isArray(cur)) {
+      s[k] = { ...cur, ...p[k] };
+      if (p[k].events && typeof p[k].events === 'object' && cur.events && typeof cur.events === 'object') {
+        s[k].events = { ...cur.events, ...p[k].events };
+      }
+    } else s[k] = p[k];
   }
   try { writeSettings(s); } catch (e) { return { ok: false, error: '设置写入失败：' + e.message }; }
   applySettings(s);
+  /* 飞书配置变化即时生效：同步器重排、token 缓存作废（改群/换应用无需重启） */
+  try { feishuBridge.refresh(); } catch (e) { }
   return { ok: true, settings: s };
 });
 
 /* ---------- 任务数据（文件持久化） ----------
    落盘钩子加解密（REINS-128）：内存/渲染层恒为明文 apiKey，磁盘上只存
    safeStorage 密文（{__encrypted:true,data}）；后端不可用或用户选 plain 时明文透传 */
+/* 正文库根目录（deliveries 下的 text/）：超过阈值的阶段产出与交付正文落这里，
+   state 只留引用（见 services/textstore.js），避免每次保存序列化几 MB 正文 */
+const textRoot = () => path.join(app.getPath('userData'), 'deliveries');
+function writeTextRef(ref, text) {
+  const abs = textstore.resolveRef(textRoot(), ref);
+  if (!abs) throw new Error('非法正文引用：' + ref);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, text, 'utf8');
+  return abs;
+}
+/* 保存前置：把每个任务的大文本换成引用。就地改（渲染层传的是同一份对象引用，
+   改完它自己也持有引用，下一次保存不必重复写盘）；写盘失败保留原字符串 */
+function externalizeState(data) {
+  let moved = 0, saved = 0;
+  const walk = (task) => {
+    if (!task || typeof task !== 'object' || !task.key) return;
+    const swap = (holder, field, slot) => {
+      const v = holder[field];
+      if (typeof v !== 'string' || !v) return;
+      const before = Buffer.byteLength(v, 'utf8');
+      const r = textstore.toRef(v, task.key, slot, writeTextRef);
+      if (r !== v) { holder[field] = r; moved++; saved += before - textstore.bytesOf(r); }
+    };
+    swap(task, 'result', 'result');
+    if (Array.isArray(task.thread)) {
+      task.thread.forEach((m, i) => { if (m && typeof m === 'object') swap(m, 'content', 'thread-' + i); });
+    }
+    if (task.pipeline && Array.isArray(task.pipeline.stages)) {
+      task.pipeline.stages.forEach((s, i) => {
+        if (s && typeof s === 'object') swap(s, 'result', 'stage-' + (s.id || i));
+      });
+      if (task.pipeline.reworkCtx && typeof task.pipeline.reworkCtx === 'object') {
+        swap(task.pipeline.reworkCtx, 'qaReport', 'qa-report');
+        swap(task.pipeline.reworkCtx, 'feedback', 'rework-feedback');
+      }
+      if (task.pipeline.gate && typeof task.pipeline.gate === 'object') swap(task.pipeline.gate, 'evidence', 'gate-evidence');
+    }
+  };
+  for (const org of (data && data.orgs) || []) {
+    for (const sp of (org && org.spaces) || []) for (const t of (sp && sp.tasks) || []) walk(t);
+  }
+  return { moved, saved };
+}
+
 ipcMain.handle('reins:state:load', () => {
   const d = store.loadState();
   if (!d) return d;
@@ -111,9 +204,152 @@ ipcMain.handle('reins:state:load', () => {
 ipcMain.handle('reins:state:save', (_e, data, immediate) => {
   if (data && typeof data === 'object') {
     try { secureKeys.sealState(data, readSettings().keyStorage); } catch (e) { }
+    try { externalizeState(data); } catch (e) { console.error('[textstore] 正文外置失败（保留原值）:', e.message); }
+    invalidateIntegrity();
   }
   store.saveState(data, !!immediate);
   return true;
+});
+/* ---------- 交付文件清理 ----------
+   删除任务时，磁盘上的 deliveries/<KEY>/（报告、diff、过程日志）与
+   deliveries/text/<KEY>/（外置正文）不会被 state 带走——不清理就是永久残留。
+   另外「孤儿回收」：state 里已不存在的任务，其目录可以安全删除（用户可能删过任务、换过档） */
+const safeKeyDir = key => {
+  const k = String(key || '').replace(/[^\w.-]+/g, '_');
+  return k ? k : '';
+};
+ipcMain.handle('reins:delivery:purge', (_e, key) => {
+  const k = safeKeyDir(key);
+  if (!k) return { ok: false, error: '缺少任务号' };
+  const root = app.getPath('userData');
+  const targets = [path.join(root, 'deliveries', k), path.join(root, 'deliveries', 'text', k)];
+  let removed = 0;
+  for (const dir of targets) {
+    const abs = path.resolve(dir);
+    /* 只允许删 userData/deliveries 下的目录：防止 key 被篡改成 ../ 越界删库 */
+    if (!abs.startsWith(path.resolve(root, 'deliveries') + path.sep)) continue;
+    try {
+      if (fs.existsSync(abs)) { fs.rmSync(abs, { recursive: true, force: true }); removed++; }
+    } catch (e) { return { ok: false, error: '删除失败：' + e.message, removed }; }
+  }
+  invalidateIntegrity();
+  return { ok: true, removed };
+});
+/* 孤儿回收：传入「仍存在的任务号数组」，删掉 deliveries 下不在其中的目录（text/ 里的同名子目录同样处理） */
+ipcMain.handle('reins:delivery:gc', (_e, keepKeys) => {
+  const keep = new Set((Array.isArray(keepKeys) ? keepKeys : []).map(k => safeKeyDir(k)).filter(Boolean));
+  const base = path.join(app.getPath('userData'), 'deliveries');
+  const stats = { scanned: 0, removed: 0, bytes: 0, errors: [] };
+  const dirSize = dir => {
+    let n = 0;
+    const walk = p => {
+      let st = null;
+      try { st = fs.statSync(p); } catch (e) { return; }
+      if (st.isDirectory()) { for (const f of fs.readdirSync(p)) walk(path.join(p, f)); }
+      else n += st.size;
+    };
+    walk(dir);
+    return n;
+  };
+  /* 只扫两层：deliveries/<KEY>（交付产物）与 deliveries/text/<KEY>（外置正文）。
+     text/ 是正文库容器，不是一个任务目录——绝不能在顶层按 keep 清单判定它（会被整库删掉）。
+     故这里显式跳过容器目录，只对它的子目录做孤儿判断 */
+  const TEXT_DIR = 'text';
+  const sweepKeys = (dir, skip) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      if (skip && skip.has(ent.name)) continue;
+      stats.scanned++;
+      if (keep.has(ent.name)) continue;
+      const abs = path.join(dir, ent.name);
+      try {
+        stats.bytes += dirSize(abs);
+        fs.rmSync(abs, { recursive: true, force: true });
+        stats.removed++;
+      } catch (e) { stats.errors.push(ent.name + '：' + e.message); }
+    }
+  };
+  try {
+    sweepKeys(base, new Set([TEXT_DIR]));            // 顶层：跳过正文库容器
+    sweepKeys(path.join(base, TEXT_DIR), null);      // 正文库内：按 keep 判定
+  } catch (e) { stats.errors.push(e.message); }
+  return { ok: true, ...stats };
+});
+
+/* 正文回写：把渲染层持有的正文写回正文库（用于恢复——正文库被误删/迁移丢失时，
+   内存或备份里还有原文，可以原样写回）。ref 同样受安全校验约束 */
+ipcMain.handle('reins:text:write', (_e, payload) => {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  const abs = textstore.resolveRef(textRoot(), p.ref);
+  if (!abs) return { ok: false, error: '非法的正文引用' };
+  if (typeof p.text !== 'string') return { ok: false, error: '缺少正文内容' };
+  try {
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, p.text, 'utf8');
+    return { ok: true, bytes: Buffer.byteLength(p.text, 'utf8') };
+  } catch (e) { return { ok: false, error: '写入失败：' + e.message }; }
+});
+
+/* ---------- 数据自检（一致性体检） ----------
+   外置带来的新失败模式：state 还在、正文文件没了 → 静默降级成摘要，用户很难察觉。
+   这里做主进程侧的盘点：引用是否都有文件、有没有孤儿目录、磁盘占用多大。
+   结论缓存 30 秒，避免设置页反复打开时重复扫盘；force=true 可强制重扫 */
+let integrityCache = null;
+ipcMain.handle('reins:integrity:check', (_e, force) => {
+  if (!force && integrityCache && Date.now() - integrityCache.at < 30000) return integrityCache;
+  const base = path.join(app.getPath('userData'), 'deliveries');
+  const textBase = path.join(base, 'text');
+  /* state 走只读加载（不解密密钥、不改动任何东西） */
+  let state = null;
+  try { state = store.loadState(); } catch (e) { state = null; }
+  const refs = state ? integrity.collectRefs(state) : [];
+  const exists = ref => {
+    const abs = textstore.resolveRef(textRoot(), ref);
+    if (!abs) return false;                    // 路径不安全：等同缺失，且会被报告出来
+    try { return fs.statSync(abs).isFile(); } catch (e) { return false; }
+  };
+  const dirSize = dir => {
+    let n = 0;
+    const walk = p => {
+      let st = null;
+      try { st = fs.statSync(p); } catch (e) { return; }
+      if (st.isDirectory()) { for (const f of fs.readdirSync(p)) walk(path.join(p, f)); }
+      else n += st.size;
+    };
+    walk(dir);
+    return n;
+  };
+  let dirNames = [];
+  try { dirNames = fs.readdirSync(base, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name); } catch (e) { dirNames = []; }
+  const keepKeys = [];
+  for (const org of (state && state.orgs) || []) {
+    for (const sp of (org.spaces || [])) for (const t of (sp.tasks || [])) if (t && t.key) keepKeys.push(String(t.key));
+  }
+  const orphans = integrity.findOrphans(dirNames, keepKeys);
+  let orphanBytes = 0;
+  for (const n of orphans) orphanBytes += dirSize(path.join(base, n));
+  let textBytes = 0;
+  try { textBytes = dirSize(textBase); } catch (e) { textBytes = 0; }
+  const report = integrity.buildReport({ refs, exists, dirNames, keepKeys, orphanBytes });
+  /* 正文库体积并入总占用（引用里的 bytes 只是记录值，磁盘上可能有更早的残留） */
+  report.totalBytes = Math.max(report.totalBytes, textBytes + orphanBytes);
+  report.at = Date.now();
+  integrityCache = report;
+  return report;
+});
+/* 报告失效：任务增删/正文写入后让下次检查重扫（不需要精确，只是省一次扫盘） */
+function invalidateIntegrity() { integrityCache = null; }
+
+/* 正文取回：引用 → 全文。ref 只允许 deliveries/text/ 下，越界直接拒绝 */
+ipcMain.handle('reins:text:read', (_e, ref) => {
+  const abs = textstore.resolveRef(textRoot(), ref);
+  if (!abs) return { ok: false, error: '非法的正文引用' };
+  try {
+    const text = fs.readFileSync(abs, 'utf8');
+    return { ok: true, text: text.length > 600000 ? text.slice(-600000) : text };
+  } catch (e) { return { ok: false, error: '正文不存在或不可读：' + e.message }; }
 });
 
 /* ---------- 真实执行引擎 ---------- */
@@ -206,8 +442,17 @@ ipcMain.handle('reins:cloud:test', async (_e, url, token) => {
 });
 
 /* ---------- 开放集成：Webhook 推送（主进程发送，不受渲染层 CORS 限制） ---------- */
+/* 地址指向飞书自定义机器人时，把通用 payload 转成飞书卡片协议再发（机器人对纯 JSON
+   只显示一行乱码）；加签密钥取设置里的 feishu.webhookSecret。其它地址原样 POST */
 async function postWebhook(url, payload) {
+  const feishu = feishuBridgeMod.isFeishuHook(url);
+  const body = feishu ? feishuBridgeMod.webhookToFeishu(payload) : payload;
   try {
+    if (feishu) {
+      const s = readSettings();
+      const r = await feishuBridge.sendRawWebhook(url, body, { secret: (s.feishu && s.feishu.webhookSecret) || '' });
+      return { ok: true, status: r.status, viaFeishu: true, signed: r.signed, note: r.note };
+    }
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 10000);
     const resp = await fetch(url, {
@@ -236,6 +481,71 @@ ipcMain.handle('reins:webhook:test', async () => {
   });
 });
 
+/* ---------- 飞书接入：事件推送 + 群指令同步 ---------- */
+/* rendererCall：主进程 → 渲染层要数据（任务的创建 / 概览统计都由渲染层持有状态）。
+   用一次性事件回包实现「invoke 反向调用」，超时或窗口关闭都返回 null，不阻塞群消息流转 */
+let feishuCallSeq = 0;
+function rendererCall(channel, payload, timeoutMs) {
+  return new Promise(resolve => {
+    const win = mainWindow;
+    if (!win || win.isDestroyed() || !win.webContents) { resolve(null); return; }
+    const id = 'fc' + (++feishuCallSeq);
+    const done = r => { clearTimeout(timer); ipcMain.removeAllListeners('reins:feishu:reply'); resolve(r); };
+    const timer = setTimeout(() => done(null), timeoutMs || 8000);
+    ipcMain.once('reins:feishu:reply', (_e, reply) => { if (reply && reply.id === id) done(reply.data); });
+    try { win.webContents.send('reins:feishu:call', { id, channel, payload }); } catch (e) { done(null); }
+  });
+}
+
+const feishuBridge = feishuBridgeMod.createFeishuBridge({
+  log: (...a) => console.log(...a),
+  getSettings: () => readSettings(),
+  saveSettings: patch => {
+    /* 桥内回写（同步水位 / 最近错误）：走同一 read-改-写，失败不抛给调用方 */
+    const s = readSettings();
+    s.feishu = { ...s.feishu, ...(patch.feishu || {}) };
+    try { writeSettings(s); } catch (e) { console.error('[feishu] 设置回写失败:', e.message); }
+  },
+  /* 群指令执行：任务创建与统计口径都在渲染层（多空间状态），这里只做转发与兜底文案 */
+  runCommand: async (cmd, ctx) => {
+    const r = await rendererCall('command', { cmd: cmd.cmd, arg: cmd.arg, taskKey: cmd.taskKey || '', reason: cmd.reason || '', raw: cmd.raw, operator: operatorOfMessage(ctx && ctx.message) });
+    if (r) return r;
+    return { error: 'Reins 控制台未就绪：请先打开客户端窗口再下发指令' };
+  },
+});
+/* 飞书消息发送人：历史消息接口默认不返回显示名，只带 open_id。
+   不把裸 open_id 写进卡片（既不好读也泄露标识），统一留空由回执卡片兜底为「群成员」 */
+function operatorOfMessage() {
+  return '';
+}
+
+/* 事件推送（渲染层在任务状态流转后调用）：同一事件 30s 内同任务只发一次，防抖。
+   created 不参与去重：同一任务可能被不同入口重复创建提示，宁可多一张也不漏 */
+const feishuDedup = new Map();
+ipcMain.handle('reins:feishu:notify', async (_e, payload) => {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  const kind = String(p.kind || '');
+  const key = String((p.task && p.task.key) || '') + '|' + kind;
+  const t = Date.now();
+  if (kind !== 'created' && feishuDedup.get(key) && t - feishuDedup.get(key) < 30000) {
+    return { ok: false, skipped: true, error: '重复事件已忽略' };
+  }
+  if (kind !== 'created') feishuDedup.set(key, t);
+  if (feishuDedup.size > 200) feishuDedup.delete(feishuDedup.keys().next().value);
+  return feishuBridge.notify(kind, p.task, { space: p.space, url: p.url, reason: p.reason, extra: p.extra });
+});
+/* 报告推送（站报 / 周报 / 每日摘要）：正文由渲染层生成，这里只负责发 */
+ipcMain.handle('reins:feishu:report', async (_e, payload) => {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  return feishuBridge.pushReport(p.title, p.text, { meta: p.meta, theme: p.theme });
+});
+/* 连通测试：可用未保存的临时配置（页面先填后测），缺省读已存配置 */
+ipcMain.handle('reins:feishu:test', (_e, override) => feishuBridge.test(override || {}));
+/* 同步状态（集成页展示 + 手动同步） */
+ipcMain.handle('reins:feishu:status', () => feishuBridge.status());
+ipcMain.handle('reins:feishu:sync', async () => feishuBridge.pollOnce());
+ipcMain.handle('reins:feishu:reset', () => { feishuBridge.resetSeen(); feishuBridge.refresh(); return { ok: true }; });
+
 /* ---------- 自动化调度器（REINS-128）：持久化在 settings.schedules，主进程常驻时间轮 ---------- */
 const scheduler = schedulerMod.createScheduler({
   load: () => readSettings().schedules || [],
@@ -250,6 +560,8 @@ const scheduler = schedulerMod.createScheduler({
     try {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reins:schedule:fire', { schedule: sc, ...info });
     } catch (e) { }
+    /* digest（每日摘要）不需要看板内容生成，主进程直接可取：交给渲染层生成后再推飞书，
+       保证摘要口径与站报/周报同源（概览统计、失败清单都在渲染层内存态里） */
   },
 });
 ipcMain.handle('reins:schedule:list', () => scheduler.list());
@@ -266,6 +578,19 @@ ipcMain.handle('reins:git:pr', async (_e, p) => {
   const tokens = { ...(s.gitTokens || {}), ...((p && p.tokens) || {}) };
   return gitRemote.createPR({ ...(p || {}), tokens });
 });
+
+/* ---------- Token 成本估算：渲染层无法 require 主进程模块，计价口径经 IPC 统一 ----------
+   执行完成时渲染层同步算一次（一次 IPC 往返，不影响流式体验）；价格表在设置里可覆盖 */
+ipcMain.handle('reins:price:estimate', (_e, payload) => {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  const s = readSettings();
+  return pricing.estimateCost(p.usage, p.model, p.provider, s.modelPrices);
+});
+ipcMain.handle('reins:price:table', () => ({
+  defaults: pricing.DEFAULT_PRICES,
+  fallback: pricing.PROVIDER_FALLBACK,
+  overrides: readSettings().modelPrices || {},
+}));
 
 /* ---------- 流水线依赖编排（REINS-128）：并行波次 / 下游上下文合并 ----------
    渲染层无法 require 主进程模块，编排语义经 IPC 提供——执行器与甘特图共用同一结果 */
@@ -387,10 +712,13 @@ function migrateKeysOnDisk() {
 
 app.whenReady().then(() => {
   migrateKeysOnDisk();
+  /* 飞书群指令同步：配置齐全才启动（缺失时 scheduleInbound 自己空转返回），
+     窗口/调度器就绪后再起，避免首轮回执抢在页面加载前 */
+  try { feishuBridge.startInbound(); } catch (e) { console.error('[feishu] 同步器启动失败:', e.message); }
   /* 休眠唤醒/解锁：时间轮在休眠期停摆，唤醒立即对账——错过但落在 5 分钟补执行窗口内的照常触发 */
   try {
-    powerMonitor.on('resume', () => scheduler.wake());
-    powerMonitor.on('unlock-screen', () => scheduler.wake());
+    powerMonitor.on('resume', () => { scheduler.wake(); feishuBridge.refresh(); });
+    powerMonitor.on('unlock-screen', () => { scheduler.wake(); feishuBridge.refresh(); });
   } catch (e) { }
 });
 
