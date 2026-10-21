@@ -121,6 +121,39 @@ function hangStreamFetch(dispatchOk) {
   };
 }
 
+/* 真流式 fetch 桩（http 模块直通）：响应头一到即 resolve、数据块增量投递——
+   服务端 res.destroy() 时挂起的 read 以错误拒绝，驱动「已建连后断流」路径
+   （缓冲式 nodeFetch 会把断流吞进建连阶段，走不到客户端重连逻辑） */
+function streamFetch(url, init = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: init.method || 'GET', headers: init.headers }, res => {
+      const pending = [], buffered = [];
+      let ended = false, failed = null;
+      res.on('data', c => { const b = new Uint8Array(c); const p = pending.shift(); if (p) p.res({ done: false, value: b }); else buffered.push(b); });
+      res.on('end', () => { ended = true; for (const p of pending.splice(0)) p.res({ done: true }); });
+      res.on('error', e => { failed = e; for (const p of pending.splice(0)) p.rej(e); });
+      resolve({
+        status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300,
+        headers: { get: k => res.headers[String(k).toLowerCase()] || null }, text: async () => '',
+        body: { getReader: () => ({ read: () => {
+          if (buffered.length) return Promise.resolve({ done: false, value: buffered.shift() });
+          if (ended) return Promise.resolve({ done: true });
+          if (failed) return Promise.reject(failed);
+          return new Promise((res2, rej2) => pending.push({ res: res2, rej: rej2 }));
+        } }) },
+      });
+    });
+    req.on('error', reject);
+    if (init.signal) {
+      if (init.signal.aborted) { req.destroy(); return reject(abortErr()); }
+      init.signal.addEventListener('abort', () => { req.destroy(); reject(abortErr()); }, { once: true });
+    }
+    if (init.body) req.write(init.body);
+    req.end();
+  });
+}
+
 const mkTask = (id, extra) => Object.assign({ id, key: 'REINS-C', title: '云端任务', type: 'code', pri: 'P1', desc: '', thread: [] }, extra);
 const AGENT = { name: '云 CLI', mode: 'cli', cliId: 'claude-code' };
 
@@ -182,15 +215,23 @@ async function run() {
     } finally { await srv.close(); }
   }
 
-  /* 7. 云端：事件流断流看门狗 — 建连后长时间无字节 → 中止本地等待并如实报错 */
+  /* 7. 云端：事件流断流看门狗 — 建连后长时间无字节 → 先自动重连（默认 2 次），用尽才如实报错 */
   {
+    let sseHits = 0;
+    const fetchImpl = async (url, init = {}) => {
+      if (String(url).includes('/events')) sseHits++;
+      return hangStreamFetch(true)(url, init);
+    };
     const ev = [];
     await runCloudTask(mkTask('c4'), AGENT, '', e => ev.push(e), {
       cloud: { url: 'http://reins.invalid', token: 'ct' },
-      http: { stallMs: 120, timeoutMs: 5000, fetchImpl: hangStreamFetch(true) },
+      http: { stallMs: 120, timeoutMs: 5000, fetchImpl },
     });
     const err = ev.find(e => e.type === 'error');
     ok(!!err && /事件流超时/.test(err.message) && /无数据/.test(err.message), '断流看门狗超时报错');
+    ok(/已自动重连 2 次仍未恢复/.test(err.message), '重连用尽才报错，且次数如实');
+    ok(sseHits === 3, '共 3 次事件流连接（初始 + 2 次重连）');
+    ok(ev.some(e => e.type === 'note' && /自动重连续读/.test(e.text || '')), '每次重连留 note 痕迹');
     ok(!ev.some(e => e.type === 'cancelled'), '断流不是用户取消');
     ok(cancelTask('c4') === false, '结束后无在途句柄');
   }
@@ -213,6 +254,104 @@ async function run() {
     ok(ev.some(e => e.type === 'cancelled'), '用户取消收到 cancelled 事件');
     ok(!ev.some(e => e.type === 'error'), '取消不报错误事件');
     ok(cancelHit === 1, '取消同时通知云端节点（cancel POST 一次）');
+  }
+
+  /* 9. 云端：断流自动续读（节点 ≥1.1，事件带 seq）— 第一次连接发 1 条输出后断开，
+     重连回放缓冲 + 新输出 + done：输出不重屏、任务不丢 */
+  {
+    let sseHits = 0;
+    const srv = http.createServer((req, res) => {
+      if (req.method === 'POST' && req.url === '/run') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"ok":true}'); }
+      if (req.method === 'GET' && /\/events$/.test(req.url)) {
+        sseHits++;
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        if (sseHits === 1) {
+          res.write('data: ' + JSON.stringify({ t: 'out', text: 'A', seq: 1 }) + '\n\n');
+          /* 延迟断开：先让响应头与首条数据送达客户端（立即 destroy 会落在建连阶段，
+             被共享重试层内部重连消化——去重仍对，但走不到消费端重连的 note 留痕） */
+          setTimeout(() => { try { res.destroy(); } catch (e) { } }, 150);
+          return;
+        }
+        res.write('data: ' + JSON.stringify({ t: 'out', text: 'A', seq: 1 }) + '\n\n');   // 整段回放
+        res.write('data: ' + JSON.stringify({ t: 'out', text: 'B', seq: 2 }) + '\n\n');
+        res.write('data: ' + JSON.stringify({ t: 'done', code: 0, worktree: null, seq: 3 }) + '\n\n');
+        return res.end();
+      }
+      res.writeHead(404); res.end();
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    try {
+      const ev = [];
+      await runCloudTask(mkTask('c9'), AGENT, '', e => ev.push(e), {
+        cloud: { url: 'http://127.0.0.1:' + srv.address().port, token: 'ct' },
+        http: { timeoutMs: 5000, stallMs: 5000, fetchImpl: streamFetch },
+      });
+      const deltas = ev.filter(e => e.type === 'delta').map(e => e.text);
+      ok(deltas.join('') === 'AB', '重连续读：回放去重，输出 A→B 不重屏（实际 ' + deltas.join('') + '）');
+      ok(ev.some(e => e.type === 'done' && e.result === 'AB'), '断流后任务经重连正常完成');
+      ok(ev.some(e => e.type === 'note' && /自动重连续读/.test(e.text || '')), '重连留痕');
+      ok(!ev.some(e => e.type === 'error' || e.type === 'cancelled'), '续读全程无错误');
+      ok(sseHits === 2, '共 2 次连接（初始断开 + 1 次重连）');
+    } finally { await new Promise(r => srv.close(r)); }
+  }
+
+  /* 10. 云端：旧节点（事件无 seq）断流续读 — 按「已消费条数」跳过回放前缀，同样不重屏 */
+  {
+    let sseHits = 0;
+    const srv = http.createServer((req, res) => {
+      if (req.method === 'POST' && req.url === '/run') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"ok":true}'); }
+      if (req.method === 'GET' && /\/events$/.test(req.url)) {
+        sseHits++;
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        if (sseHits === 1) {
+          res.write('data: ' + JSON.stringify({ t: 'out', text: 'A' }) + '\n\n');
+          setTimeout(() => { try { res.destroy(); } catch (e) { } }, 150);
+          return;
+        }
+        res.write('data: ' + JSON.stringify({ t: 'out', text: 'A' }) + '\n\n');
+        res.write('data: ' + JSON.stringify({ t: 'out', text: 'B' }) + '\n\n');
+        res.write('data: ' + JSON.stringify({ t: 'done', code: 0 }) + '\n\n');
+        return res.end();
+      }
+      res.writeHead(404); res.end();
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    try {
+      const ev = [];
+      await runCloudTask(mkTask('c10'), AGENT, '', e => ev.push(e), {
+        cloud: { url: 'http://127.0.0.1:' + srv.address().port, token: 'ct' },
+        http: { timeoutMs: 5000, stallMs: 5000, fetchImpl: streamFetch },
+      });
+      const deltas = ev.filter(e => e.type === 'delta').map(e => e.text);
+      ok(deltas.join('') === 'AB', '旧节点按已消费计数去重（实际 ' + deltas.join('') + '）');
+      ok(ev.some(e => e.type === 'done' && e.result === 'AB'), '旧节点断流续读完成');
+    } finally { await new Promise(r => srv.close(r)); }
+  }
+
+  /* 11. 云端：重连次数用尽 — resume:0 时一次断流立即如实报错（可配置语义） */
+  {
+    let sseHits = 0;
+    const srv = http.createServer((req, res) => {
+      if (req.method === 'POST' && req.url === '/run') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"ok":true}'); }
+      if (req.method === 'GET' && /\/events$/.test(req.url)) {
+        sseHits++;
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: ' + JSON.stringify({ t: 'out', text: 'A', seq: 1 }) + '\n\n');
+        setTimeout(() => { try { res.destroy(); } catch (e) { } }, 150);
+        return;
+      }
+      res.writeHead(404); res.end();
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    try {
+      const ev = [];
+      await runCloudTask(mkTask('c11'), AGENT, '', e => ev.push(e), {
+        cloud: { url: 'http://127.0.0.1:' + srv.address().port, token: 'ct' },
+        http: { timeoutMs: 5000, stallMs: 5000, resume: 0, fetchImpl: streamFetch },
+      });
+      ok(ev.some(e => e.type === 'error' && /任务可能仍在节点上执行/.test(e.message)), 'resume:0 一次断流即报错');
+      ok(sseHits === 1, '未发起重连');
+    } finally { await new Promise(r => srv.close(r)); }
   }
 
   await sleep(1);

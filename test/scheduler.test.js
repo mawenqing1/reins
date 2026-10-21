@@ -152,6 +152,34 @@ async function run() {
     ok(s.list().length === 0, 'list 读取');
   }
 
+  /* ---------- 空间定向（v1.1）：orgId/spaceId 透传与归一 ---------- */
+  {
+    const db = { list: [] };
+    const s = createScheduler({ load: () => db.list, save: l => { db.list = l; }, onFire: () => { } });
+    const v = validateSchedule({ kind: 'digest', freq: 'daily', time: '18:00', orgId: 'o1', spaceId: 'sp9' });
+    ok(v.ok && v.schedule.orgId === 'o1' && v.schedule.spaceId === 'sp9', '定向字段透传');
+    ok(validateSchedule({ kind: 'digest', freq: 'daily', time: '18:00' }).schedule.orgId === '', '缺省归空（跟随当前空间）');
+    ok(validateSchedule({ kind: 'digest', freq: 'daily', time: '18:00', orgId: 42, spaceId: { x: 1 } }).schedule.spaceId === '', '坏类型归空不炸');
+    ok(validateSchedule({ kind: 'digest', freq: 'daily', time: '18:00', orgId: 'x'.repeat(80) }).schedule.orgId.length === 40, '超长截断');
+    s.upsert({ kind: 'digest', freq: 'daily', time: '18:00', orgId: 'o1', spaceId: 'sp9' });
+    ok(db.list[0].orgId === 'o1' && db.list[0].spaceId === 'sp9', 'upsert 持久化定向');
+    s.upsert({ id: db.list[0].id, freq: 'daily', time: '19:00', orgId: '', spaceId: '' });
+    ok(db.list[0].orgId === '' && db.list[0].time === '19:00', '编辑可清空定向（改回跟随当前空间）');
+  }
+
+  /* ---------- 渲染层接线（源码断言，防回退） ---------- */
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const SRC = fs.readFileSync(path.join(__dirname, '..', 'web', 'assets', 'app.js'), 'utf8');
+    ok(/function schedResolveSpace\(sc\)/.test(SRC), 'schedResolveSpace 存在');
+    ok(/fallback: true/.test(SRC) && /原定向空间已不存在/.test(SRC), '定向失效回落当前空间并如实提示');
+    ok(/buildDigest\(sp, org\)/.test(SRC) && /buildWeekly\(sp, org\)/.test(SRC) && /buildStandup\(sp\)/.test(SRC), '三个报告生成器参数化（按定向空间聚合）');
+    ok(/const tgt = schedResolveSpace\(sc\);/.test(SRC) && /sp\.tasks\.unshift\(t\)/.test(SRC), '触发写入定向空间而非当前空间');
+    ok(/id="sc-space"|ds\('sc-space'/.test(SRC), '调度表单带空间选择');
+    ok(/orgId: po \|\| ''/.test(SRC), '保存携带定向字段');
+  }
+
   await sleep(1);
   return n;
 }

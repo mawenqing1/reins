@@ -281,7 +281,34 @@ async function createPR(input) {
   return { ok: false, message: 'PR 创建失败：HTTP ' + resp.status + ' ' + text.slice(0, 200) };
 }
 
+/* ---------- PAT 有效性测试：调 /user 探活并回显账号名 ----------
+   GitHub: Authorization 头；Gitee v5: access_token 查询参数（与建 PR 同鉴权口径）。
+   只读接口、零副作用；fetch 可注入离线单测 */
+async function testToken(provider, token, opts) {
+  const o = opts || {};
+  if (!['github', 'gitee'].includes(provider)) return { ok: false, message: '未知平台：' + provider };
+  const tok = String(token || '').trim();
+  if (!tok) return { ok: false, message: '请先填写令牌' };
+  const url = provider === 'github'
+    ? 'https://api.github.com/user'
+    : 'https://gitee.com/api/v5/user?access_token=' + encodeURIComponent(tok);
+  const init = provider === 'github'
+    ? { headers: { 'Authorization': 'Bearer ' + tok, 'User-Agent': 'reins-pat-check', 'Accept': 'application/vnd.github+json' } }
+    : { headers: { 'User-Agent': 'reins-pat-check' } };
+  let resp;
+  try {
+    resp = await fetchWithRetry(url, init, { timeoutMs: o.timeoutMs || 15000, retries: 1, fetchImpl: o.fetchImpl });
+  } catch (e) {
+    return { ok: false, message: '网络请求失败：' + e.message };
+  }
+  if (resp.status === 401 || resp.status === 403) return { ok: false, message: '令牌无效或已过期（HTTP ' + resp.status + '）' };
+  if (!resp.ok) return { ok: false, message: '探活失败：HTTP ' + resp.status };
+  const data = await resp.json().catch(() => null);
+  const who = data && (data.login || data.name);
+  return { ok: true, message: who ? ('令牌有效 · 账号 ' + who) : '令牌有效' };
+}
+
 module.exports = {
-  parseRemoteUrl, remoteInfo, pushBranch, classifyPushError, buildPRRequest, createPR,
+  parseRemoteUrl, remoteInfo, pushBranch, classifyPushError, buildPRRequest, createPR, testToken,
   commitWorktree, uncommittedSummary, isIgnoredPath, commitsAhead, upstreamOf,
 };

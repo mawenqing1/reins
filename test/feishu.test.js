@@ -469,10 +469,10 @@ async function run() {
     ok(/cmd === 'approve'|cmd === 'approve' \|\|/.test(SRC), '渲染层实现 approve');
     ok(/cmd === 'reject'/.test(SRC), '渲染层实现 reject');
     ok(/cmd === 'revoke'/.test(SRC), '渲染层实现 revoke');
-    ok(/only 待验收|只有待验收的任务才能通过|status !== 'review'/.test(SRC), 'approve 校验只有待验收可归档');
-    ok(/未裁决的代码变更/.test(SRC), 'approve 拦住未裁决的代码变更（与客户端同一条路径）');
+    ok(/TaskFlow\.approve\(t\)/.test(SRC), 'approve 判定走 taskflow 共享规则（含只有待验收可归档的守卫）');
+    ok(/undecided-diff/.test(SRC) && /需先在 Reins 客户端确认应用或放弃/.test(SRC), 'approve 拦住未裁决的代码变更（taskflow 共享守卫 + 客户端引导文案）');
     ok(/来自飞书群/.test(SRC), '打回留痕标明来自飞书');
-    ok(/pipeline\.status = 'idle'/.test(SRC), '流水线打回同样重置（与 doReject 一致）');
+    ok(/TaskFlow\.applyPipelineReset\(t\.pipeline\)/.test(SRC), '流水线打回同样重置（与 doReject 同一共享口径）');
     const MAIN = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
     ok(/taskKey: cmd\.taskKey/.test(MAIN), '主进程把任务号透传给渲染层');
     ok(SRC.includes("kind === 'digest'") && SRC.includes('buildDigest'), '每日摘要生成接线');

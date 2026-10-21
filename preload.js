@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('reins', {
   stateSave: (data, immediate) => ipcRenderer.invoke('reins:state:save', data, immediate),
   /* 大文本取回（state 里存引用，全文落在 deliveries/text/ 下） */
   textRead: (ref) => ipcRenderer.invoke('reins:text:read', ref),
+  textPurge: (ref) => ipcRenderer.invoke('reins:text:purge', ref),
   /* 正文回写（恢复丢失的正文库） */
   textWrite: (ref, text) => ipcRenderer.invoke('reins:text:write', { ref, text }),
   /* 交付文件清理：删除任务时同步清理磁盘；孤儿目录回收 */
@@ -43,8 +44,9 @@ contextBridge.exposeInMainWorld('reins', {
   scheduleRunNow: (id) => ipcRenderer.invoke('reins:schedule:run-now', id),
   onScheduleFire: (cb) => ipcRenderer.on('reins:schedule:fire', (_e, info) => cb(info)),
 
-  /* Git 远程操作（REINS-128）：远程识别 / 分支推送 / PR 创建 */
+  /* Git 远程操作（REINS-128）：远程识别 / 分支推送 / PR 创建 / PAT 探活 */
   gitRemote: (cwd) => ipcRenderer.invoke('reins:git:remote', cwd),
+  gitPatTest: (p) => ipcRenderer.invoke('reins:git:testpat', p),
   gitPush: (p) => ipcRenderer.invoke('reins:git:push', p),
   gitCreatePR: (p) => ipcRenderer.invoke('reins:git:pr', p),
 

@@ -25,6 +25,11 @@ function collectRefs(state) {
   const visit = (holder, field, where) => {
     const v = holder && holder[field];
     if (!isRef(v)) return;
+    /* purged 引用（归档正文显式清理后的降级形态）：体检不再要求文件存在，也不计占用 */
+    if (v.purged === true) {
+      out.push({ ref: v.ref, bytes: 0, previewLen: String(v.preview || '').length, where, taskKey: where.split(' · ')[0] || '', purged: true });
+      return;
+    }
     out.push({
       ref: v.ref,
       bytes: Number(v.bytes) || 0,
@@ -56,12 +61,14 @@ function collectRefs(state) {
   return out;
 }
 
-/* 校验引用：exists(ref) → boolean 由宿主注入（真实环境做路径安全校验 + fs.existsSync） */
+/* 校验引用：exists(ref) → boolean 由宿主注入（真实环境做路径安全校验 + fs.existsSync）。
+   purged 引用（用户显式清理过的归档正文）不算缺失——那是有意的降级，不是数据丢失 */
 function verifyRefs(refs, exists) {
   const list = Array.isArray(refs) ? refs : [];
   const missing = [];
   let bytes = 0;
   for (const r of list) {
+    if (r && r.purged === true) continue;
     bytes += Number(r.bytes) || 0;
     let ok = false;
     try { ok = !!exists(r.ref); } catch (e) { ok = false; }

@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # 语法门：所有入口 JS 必须可解析（渲染层 app.js 无构建步骤，靠这里兜底）
+      - name: Syntax check
+        run: |
+          node --check main.js
+          node --check preload.js
+          node --check reins-node/server.js
+          for f in services/*.js tools/*.js web/assets/*.js; do node --check "$f"; done
+      # 回归：零依赖纯 Node 测试套件（Node 16+ 兼容，无需 npm install）
+      - name: Run tests
+        run: node test/run.js

@@ -1296,54 +1296,88 @@ async function runCloudTask(task, agent, extraPrompt, onEvent, opts = {}) {
       if (!/runId\s*已存在/.test(text)) { onEvent({ type: 'error', message: '云端节点拒绝派发：HTTP ' + resp.status + ' ' + text.slice(0, 120) }); return; }
     }
 
-    /* 事件流（SSE）：建连（含响应头）由重试层的每次尝试超时兜底；进入流读取后由
-       断流看门狗接管——超过 stallMs 无任何字节（连接静默死亡/半开）中止本地等待。
-       云端 CLI 长静默属正常，窗口放宽到 10 分钟（可用 http.stallMs 覆盖） */
+    /* 事件流（SSE）：建连（含响应头）由重试层的每次尝试超时兜底；进入流读取后由断流看门狗接管——
+       超过 stallMs 无任何字节（连接静默死亡/半开）掐断本次连接。
+       断流自动续读：流中断/断流先自动重连（默认 2 次，http.resume 可调）——节点每次重连整段回放
+       事件缓冲（天然支持续读），客户端按事件 seq 去重（旧节点无 seq 时按「已消费条数」跳过回放前缀），
+       已上屏输出不会重播；重连用尽才如实报错。用户取消（外部 ac）仍立即终止、绝不重连 */
     const stallMs = Number.isFinite(http.stallMs) ? http.stallMs : 10 * 60 * 1000;
-    let stalled = false;
-    let stallTimer = null;
-    const armStall = () => { if (stallTimer) clearTimeout(stallTimer); stallTimer = setTimeout(() => { stalled = true; try { ac.abort(); } catch (e) { } }, stallMs); };
-
+    const resumes = Number.isFinite(http.resume) ? Math.max(0, Math.floor(http.resume)) : 2;
+    const eventsUrl = base + '/run/' + encodeURIComponent(runId) + '/events';
     let out = '', errTail = '';
-    try {
-      const es = await fetchWithRetry(base + '/run/' + encodeURIComponent(runId) + '/events', { headers: auth }, ropts);
-      if (!es.ok || !es.body) throw new Error('HTTP ' + es.status);
-      const reader = es.body.getReader();
-      const dec = new TextDecoder();
-      let buf = '';
-      armStall();
-      for (;;) {
-        let chunk;
-        try { chunk = await reader.read(); }
-        catch (e) {
-          if (stalled) throw new Error('云端事件流超时：超过 ' + Math.round(stallMs / 1000) + 's 无数据，已结束本地等待（任务可能仍在节点上执行）');
-          throw e;
-        }
-        if (chunk.done) break;
-        armStall();
-        buf += dec.decode(chunk.value, { stream: true });
-        let idx;
-        while ((idx = buf.indexOf('\n\n')) >= 0) {
-          const piece = buf.slice(0, idx); buf = buf.slice(idx + 2);
-          const line = piece.split('\n').find(l => l.startsWith('data: '));
-          if (!line) continue;
-          let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
-          if (ev.t === 'out') { out += ev.text; onEvent({ type: 'delta', text: ev.text }); }
-          else if (ev.t === 'note') onEvent({ type: 'note', text: '[云端] ' + ev.text });
-          else if (ev.t === 'err') errTail = (errTail + ev.text).slice(-500);
-          else if (ev.t === 'killed') { onEvent({ type: 'cancelled' }); return; }
-          else if (ev.t === 'done') {
-            if (ev.code !== 0 && !out && ev.error) onEvent({ type: 'error', message: '云端执行失败：' + ev.error });
-            else if (ev.code !== 0 && !out) onEvent({ type: 'error', message: cmd + ' 云端退出码 ' + ev.code + (errTail ? '：' + errTail.slice(-200) : '') });
-            else onEvent({ type: 'done', result: out.trim() || '（无输出）', usage: null, worktree: ev.worktree || null });
-            return;
-          }
-        }
+    let lastSeq = 0;       // 已消费的最大事件序号（节点 ≥1.1 每个事件带 seq）
+    let consumed = 0;      // 旧节点（无 seq）兼容：已消费事件计数，重连后跳过回放前缀
+    let stallTimer = null;
+
+    /* 单事件消费：返回 'end' 表示终态已上抛（done/killed/gone） */
+    const consume = ev => {
+      if (Number.isFinite(ev.seq)) {
+        if (ev.seq <= lastSeq) return null;   // 回放重收：已消费过，去重
+        lastSeq = ev.seq;
+      } else if (skip > 0) { skip--; return null; }
+      else consumed++;
+      if (ev.t === 'out') { out += ev.text; onEvent({ type: 'delta', text: ev.text }); }
+      else if (ev.t === 'note') onEvent({ type: 'note', text: '[云端] ' + ev.text });
+      else if (ev.t === 'err') errTail = (errTail + ev.text).slice(-500);
+      else if (ev.t === 'gone') { onEvent({ type: 'error', message: '云端节点已无此任务记录（可能已结束并被清理，无法续读）' }); return 'end'; }
+      else if (ev.t === 'killed') { onEvent({ type: 'cancelled' }); return 'end'; }
+      else if (ev.t === 'done') {
+        if (ev.code !== 0 && !out && ev.error) onEvent({ type: 'error', message: '云端执行失败：' + ev.error });
+        else if (ev.code !== 0 && !out) onEvent({ type: 'error', message: cmd + ' 云端退出码 ' + ev.code + (errTail ? '：' + errTail.slice(-200) : '') });
+        else onEvent({ type: 'done', result: out.trim() || '（无输出）', usage: null, worktree: ev.worktree || null });
+        return 'end';
       }
-      onEvent({ type: 'error', message: '云端事件流中断（任务可能仍在节点上执行）' });
-    } catch (e) {
-      if ((e.name === 'AbortError' || ac.signal.aborted) && !stalled) { onEvent({ type: 'cancelled' }); return; }
-      onEvent({ type: 'error', message: '云端事件流失败：' + e.message });
+      return null;
+    };
+
+    let skip = 0;
+    try {
+      for (let attempt = 0; ; attempt++) {
+        let drop = null, stalled = false;
+        skip = consumed;   // 本连接回放前缀中「已消费」的条数（无 seq 节点）
+        /* 每次连接独立控制器：断流只作废本次连接（stall 计时器 abort 它），
+           用户取消经外部 ac 传播进来——两者在 catch 里可区分 */
+        const sc = new AbortController();
+        const onOuter = () => { try { sc.abort(); } catch (e) { } };
+        if (ac.signal.aborted) onOuter(); else ac.signal.addEventListener('abort', onOuter, { once: true });
+        const armStall = () => { if (stallTimer) clearTimeout(stallTimer); stallTimer = setTimeout(() => { stalled = true; try { sc.abort(); } catch (e) { } }, stallMs); };
+        try {
+          const es = await fetchWithRetry(eventsUrl, { headers: auth }, { ...ropts, signal: sc.signal });
+          if (!es.ok || !es.body) throw new Error('HTTP ' + es.status);
+          const reader = es.body.getReader();
+          const dec = new TextDecoder();
+          let buf = '';
+          armStall();
+          for (;;) {
+            let chunk;
+            try { chunk = await reader.read(); }
+            catch (e) { throw stalled ? new Error('事件流超时：超过 ' + Math.round(stallMs / 1000) + 's 无数据') : e; }
+            if (chunk.done) { drop = '事件流被节点关闭'; break; }
+            armStall();
+            buf += dec.decode(chunk.value, { stream: true });
+            let idx;
+            while ((idx = buf.indexOf('\n\n')) >= 0) {
+              const piece = buf.slice(0, idx); buf = buf.slice(idx + 2);
+              const line = piece.split('\n').find(l => l.startsWith('data: '));
+              if (!line) continue;
+              let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+              if (consume(ev) === 'end') return;
+            }
+          }
+        } catch (e) {
+          if (ac.signal.aborted) { onEvent({ type: 'cancelled' }); return; }
+          drop = '事件流' + (stalled ? '超时：超过 ' + Math.round(stallMs / 1000) + 's 无数据' : '读取失败：' + e.message);
+        } finally {
+          if (stallTimer) clearTimeout(stallTimer);
+          ac.signal.removeEventListener('abort', onOuter);
+        }
+        if (ac.signal.aborted) { onEvent({ type: 'cancelled' }); return; }
+        if (attempt >= resumes) {
+          onEvent({ type: 'error', message: '云端' + drop + (resumes > 0 ? '（已自动重连 ' + resumes + ' 次仍未恢复，任务可能仍在节点上执行）' : '（任务可能仍在节点上执行）') });
+          return;
+        }
+        onEvent({ type: 'note', text: '[云端] ' + drop + '，自动重连续读（第 ' + (attempt + 1) + '/' + resumes + ' 次）…' });
+      }
     } finally {
       if (stallTimer) clearTimeout(stallTimer);
     }

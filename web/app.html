@@ -6,6 +6,9 @@
 <title>Reins 控制台 — 一站式 Agent 统一指挥管理平台</title>
 <link rel="stylesheet" href="assets/app.css">
 <link rel="icon" type="image/png" href="assets/favicon.png">
+<!-- 纵深防御：渲染层只加载本地资源（所有网络请求都在主进程，connect-src 可关死）；
+     unsafe-inline 仅为既有内联 onclick/style 放行，远程脚本/外链回连一律拒绝 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
 </head>
 <body>
 
@@ -79,6 +82,8 @@
 
 <script src="assets/icons.js"></script>
 <script src="assets/brands.js"></script>
+<script src="assets/execlog.js"></script>
+<script src="assets/taskflow.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

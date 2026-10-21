@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { parseRemoteUrl, remoteInfo, classifyPushError, buildPRRequest, createPR, pushBranch } = require('../services/git-remote');
+const { parseRemoteUrl, remoteInfo, classifyPushError, buildPRRequest, createPR, pushBranch, testToken } = require('../services/git-remote');
 
 const res = (status, body) => ({
   status,
@@ -148,6 +148,29 @@ async function run() {
       ok(!dp.ok && dp.kind === 'detached' && /detached HEAD/.test(dp.message), 'detached HEAD 推送给出明确指引');
       spawnSync('git', ['-C', fix.work, 'checkout', '-q', 'reins/K1']);
     } finally { fix.clean(); }
+  }
+
+  /* ---------- PAT 探活：/user 只读测试（fetch 注入，离线可测） ---------- */
+  {
+    const mkResp = (status, body) => ({ status, ok: status >= 200 && status < 300, headers: { get: () => null }, json: async () => body, text: async () => '' });
+    ok((await testToken('gitlab', 'x')).ok === false, '未知平台拒绝');
+    ok((await testToken('github', '')).ok === false && /请先填写/.test((await testToken('github', '')).message), '空令牌提示');
+
+    let r = await testToken('github', 'ghp_ok', { fetchImpl: async () => mkResp(200, { login: 'someone' }) });
+    ok(r.ok && /someone/.test(r.message), 'GitHub 有效令牌回显账号名');
+    r = await testToken('github', 'ghp_bad', { fetchImpl: async () => mkResp(401, {}) });
+    ok(!r.ok && /401/.test(r.message), 'GitHub 401 判无效');
+    r = await testToken('github', 'ghp_x', { fetchImpl: async () => { throw new Error('offline'); }, retries: 0 });
+    ok(!r.ok && /offline/.test(r.message), '网络失败如实报错');
+
+    /* 鉴权口径：GitHub 走 Authorization 头；Gitee 走 access_token 查询参数（与建 PR 一致） */
+    let seen = null;
+    await testToken('github', 'ghp_ok', { fetchImpl: async (url, init) => { seen = { url, init }; return mkResp(200, { login: 'u' }); } });
+    ok(seen.url === 'https://api.github.com/user' && seen.init.headers.Authorization === 'Bearer ghp_ok', 'GitHub Authorization 头');
+    await testToken('gitee', 'gee_ok', { fetchImpl: async (url) => { seen = { url }; return mkResp(200, { login: 'gu' }); } });
+    ok(/gitee\.com\/api\/v5\/user\?access_token=gee_ok/.test(seen.url), 'Gitee access_token 查询参数');
+    r = await testToken('gitee', 'gee_bad', { fetchImpl: async () => mkResp(403, {}) });
+    ok(!r.ok && /403/.test(r.message), 'Gitee 403 判无效');
   }
 
   await new Promise(r => setTimeout(r, 1));

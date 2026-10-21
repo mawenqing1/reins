@@ -1414,6 +1414,50 @@ label.pipe-toggle {
   .cb-hint { font-size: 11px; color: var(--ink-faint); margin-left: auto; }
 }
 
+// ============ 概览·最近执行明细（执行流水表） ============
+.exec-list {
+  margin-bottom: 14px;
+  .xl-head, .xl-row {
+    display: grid; gap: 10px; align-items: center;
+    grid-template-columns: 64px minmax(150px, 1.4fr) minmax(150px, 1.4fr) 72px 56px 76px 72px;
+    padding: 6px 10px;
+  }
+  .xl-head {
+    font-size: 11px; color: var(--ink-faint);
+    border-bottom: 1px solid var(--line);
+  }
+  .xl-row {
+    font-size: 12px; color: var(--ink);
+    border-bottom: 1px dashed var(--line);
+    &:last-child { border-bottom: none; }
+    .xl-time { font-size: 11px; color: var(--ink-faint); font-family: var(--mono); }
+    .xl-task {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-weight: 600; font-family: var(--mono); font-size: 11.5px;
+      .xl-stage {
+        font-style: normal; font-size: 10px; font-weight: 400;
+        color: var(--ink-faint); margin-left: 5px;
+        border: 1px solid var(--line); border-radius: 4px; padding: 0 4px;
+      }
+    }
+    .xl-agent {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px;
+      .xl-dim { font-style: normal; color: var(--ink-faint); margin-left: 5px; font-size: 10.5px; }
+    }
+    .xl-ok {
+      font-size: 11px; color: @st-done;
+      &.fp { color: @st-done; font-weight: 700; }
+      &.bad { color: var(--red); }
+    }
+    .xl-num { font-family: var(--mono); font-size: 11px; text-align: right; color: var(--ink-dim); }
+    .xl-cost {
+      font-family: var(--mono); font-size: 11px; text-align: right; font-weight: 700;
+      .xl-dim { font-style: normal; font-weight: 400; color: var(--ink-faint); }
+    }
+    .xl-dim { font-style: italic; color: var(--ink-faint); }
+  }
+}
+
 // ============ 模型价格表 ============
 .price-head,
 .price-row,

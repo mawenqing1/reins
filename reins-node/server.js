@@ -100,9 +100,11 @@ function startRun(runId, body) {
   if (runs.size >= MAX_RUNS) return { error: '节点繁忙（并发上限 ' + MAX_RUNS + '）' };
 
   const key = safeKey(taskKey || runId);
-  const rec = { child: null, buffer: [], resolvers: [], done: false, worktree: null };
+  const rec = { child: null, buffer: [], resolvers: [], done: false, worktree: null, seq: 0 };
   runs.set(runId, rec);
+  /* 每个事件带递增 seq：客户端断流重连后按 seq 去重回放缓冲（整段回放 + 去重 = 续读） */
   const emit = ev => {
+    ev.seq = ++rec.seq;
     if (rec.buffer.length < 4000) rec.buffer.push(ev);
     for (const res of rec.resolvers.splice(0)) res(ev);
   };
@@ -167,7 +169,7 @@ const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   if (!authOK(req)) return json(res, 401, { ok: false, error: 'unauthorized' });
   if (req.method === 'GET' && u.pathname === '/health') {
-    return json(res, 200, { ok: true, name: NAME, version: '1.0.0', uptime: Math.round(process.uptime()), workspace: WORKSPACE, repoRoot: REPO_ROOT || null, agents: detectClis() });
+    return json(res, 200, { ok: true, name: NAME, version: '1.1.0', uptime: Math.round(process.uptime()), workspace: WORKSPACE, repoRoot: REPO_ROOT || null, agents: detectClis() });
   }
   const mRun = u.pathname.match(/^\/run\/([^/]+)\/events$/);
   if (req.method === 'GET' && mRun) return sseEvents(req, res, decodeURIComponent(mRun[1]));

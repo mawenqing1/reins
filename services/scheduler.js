@@ -154,6 +154,9 @@ function validateSchedule(input) {
     webhook: !!input.webhook,
     /* 推送去向（digest 等报告）：显式 out 优先，未给时沿用旧字段 webhook 的布尔语义 */
     out: normalizeOut(input.out !== undefined ? input.out : (input.webhook ? 'webhook' : 'none')),
+    /* 空间定向（渲染层触发时解析：空 = 跟随当前空间）。调度器只透传，不感知组织结构 */
+    orgId: typeof input.orgId === 'string' ? input.orgId.slice(0, 40) : '',
+    spaceId: typeof input.spaceId === 'string' ? input.spaceId.slice(0, 40) : '',
   };
   if (input.kind && !KIND_DEFAULTS[input.kind]) errors.push('未知调度类型：' + input.kind);
   if (input.out !== undefined && !OUT_TARGETS.includes(input.out) && typeof input.out !== 'object') errors.push('推送去向非法：' + input.out);

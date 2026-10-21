@@ -12,6 +12,7 @@ const feishuBridgeMod = require('./services/feishu-bridge');
 const pricing = require('./services/pricing');
 const textstore = require('./services/textstore');
 const integrity = require('./services/integrity');
+const updateMod = require('./services/update');
 
 const isMac = process.platform === 'darwin';
 let mainWindow = null;
@@ -352,6 +353,15 @@ ipcMain.handle('reins:text:read', (_e, ref) => {
   } catch (e) { return { ok: false, error: '正文不存在或不可读：' + e.message }; }
 });
 
+/* 正文清理（归档任务显式清理）：删正文文件（路径同 read 的安全校验；文件本就不在时按成功返回） */
+ipcMain.handle('reins:text:purge', (_e, ref) => {
+  const abs = textstore.resolveRef(textRoot(), ref);
+  if (!abs) return { ok: false, error: '非法的正文引用' };
+  try { fs.unlinkSync(abs); } catch (e) { if (e.code !== 'ENOENT') return { ok: false, error: e.message }; }
+  invalidateIntegrity();
+  return { ok: true };
+});
+
 /* ---------- 真实执行引擎 ---------- */
 ipcMain.handle('reins:providers', () => runner.PROVIDERS);
 ipcMain.handle('reins:agent:test', (_e, agent) => runner.testAgent(agent));
@@ -572,6 +582,7 @@ ipcMain.handle('reins:schedule:run-now', (_e, id) => scheduler.runNow(id));
 
 /* ---------- Git 远程操作（REINS-128）：任务分支推送 + PR 创建 ---------- */
 ipcMain.handle('reins:git:remote', (_e, cwd) => gitRemote.remoteInfo(cwd));
+ipcMain.handle('reins:git:testpat', (_e, p) => gitRemote.testToken(p && p.provider, p && p.token, { timeoutMs: 15000 }));
 ipcMain.handle('reins:git:push', (_e, p) => gitRemote.pushBranch(p && p.cwd, p));
 ipcMain.handle('reins:git:pr', async (_e, p) => {
   const s = readSettings();
@@ -895,6 +906,32 @@ function buildMenu() {
             message: 'Reins v' + app.getVersion(),
             detail: '一站式 Agent 统一指挥管理平台（演示原型）\n\n把任务交给 Agent，把缰绳留给自己。\n数据保存在本机，完全离线可用。'
           })
+        },
+        {
+          label: '检查更新…', click: async () => {
+            const cur = app.getVersion();
+            let res;
+            try { res = await updateMod.checkLatest({ currentVersion: cur }); }
+            catch (e) { res = { ok: false, message: (e && e.message) || String(e) }; }
+            if (res.ok && res.newer) {
+              const r = await dialog.showMessageBox({
+                type: 'info', title: '发现新版本',
+                message: '最新版本 ' + res.latest + '（当前 v' + cur + '）',
+                detail: '从 GitHub Releases 获取安装包，或拉取最新源码。',
+                buttons: ['前往下载', '稍后再说'], defaultId: 0, cancelId: 1
+              });
+              if (r.response === 0) shell.openExternal(res.htmlUrl);
+            } else if (res.ok && res.latest) {
+              dialog.showMessageBox({ type: 'info', title: '已是最新', message: '当前 v' + cur + ' 已是最新版本。' });
+            } else {
+              dialog.showMessageBox({
+                type: 'warning', title: '检查更新失败',
+                message: '查询 GitHub Releases 失败：' + (res.message || '未知原因'),
+                detail: '网络受限环境可手动访问 https://github.com/' + updateMod.UPDATE_REPO + '/releases',
+                buttons: ['好']
+              });
+            }
+          }
         },
         { label: '产品官网落地页', click: () => loadPage('index.html') },
         { label: '返回控制台', click: () => loadPage('app.html') }

@@ -84,4 +84,11 @@ function resolveRef(root, ref) {
   return abs;
 }
 
-module.exports = { THRESHOLD, PREVIEW_CHARS, REF_PREFIX, isRef, makeRef, toRef, previewOf, bytesOf, safeRef, resolveRef };
+/* 引用降级（归档正文清理）：返回带 purged 标记的新引用对象；非引用或已清理返回 null。
+   purged 引用只保留 preview 摘要，正文文件由宿主删除；体检对 purged 不再要求文件存在 */
+function purgeRef(v) {
+  if (!isRef(v) || v.purged === true) return null;
+  return { __text: true, ref: v.ref, bytes: Number(v.bytes) || 0, preview: String(v.preview || ''), purged: true };
+}
+
+module.exports = { THRESHOLD, PREVIEW_CHARS, REF_PREFIX, isRef, makeRef, toRef, previewOf, bytesOf, safeRef, resolveRef, purgeRef };

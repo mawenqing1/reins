@@ -160,6 +160,22 @@ async function run() {
     ok(/runDeliveryGC\(\)/.test(SRC), '面板内可直接回收孤儿');
   }
 
+  /* ---------- purged 引用豁免（归档正文清理后的形态不判缺失） ---------- */
+  {
+    const st = { orgs: [{ spaces: [{ tasks: [
+      { key: 'REINS-P1', status: 'done', result: { __text: true, ref: 'text/REINS-P1/result.md', bytes: 9000, preview: 'x', purged: true } },
+      { key: 'REINS-P2', status: 'done', result: { __text: true, ref: 'text/REINS-P2/result.md', bytes: 8000, preview: 'x' } },
+    ] }] }] };
+    const refs = integrity.collectRefs(st);
+    ok(refs.length === 2 && refs[0].purged === true && refs[1].purged === undefined, 'collectRefs 标记 purged');
+    ok(refs[0].bytes === 0, 'purged 引用不计占用');
+    const v = integrity.verifyRefs(refs, () => false);   // 文件全不存在
+    ok(v.missing.length === 1 && v.missing[0].ref === 'text/REINS-P2/result.md', 'purged 不判缺失，普通引用照常判');
+    ok(v.bytes === 8000, '占用只计未清理的引用');
+    const rep = integrity.buildReport({ refs, exists: () => false });
+    ok(rep.healthy === false && rep.refs.missing.length === 1, '报告组装同口径');
+  }
+
   return n;
 }
 

@@ -218,6 +218,17 @@ async function run() {
     ok(/textRead:/.test(PRELOAD), 'preload 暴露 textRead');
   }
 
+  /* ---------- purgeRef（归档正文清理，v1.1） ---------- */
+  {
+    const ref = { __text: true, ref: 'text/REINS-9/stage-s1.md', bytes: 9000, preview: '前 400 字' };
+    const p1 = ts.purgeRef(ref);
+    ok(p1 && p1.purged === true && p1.ref === ref.ref && p1.preview === '前 400 字', '引用降级为 purged（保留摘要）');
+    ok(ts.purgeRef(p1) === null, '已 purged 的引用不再重复处理');
+    ok(ts.purgeRef('纯字符串') === null && ts.purgeRef(null) === null, '非引用返回 null');
+    ok(ts.purgeRef({ __text: true, ref: 'x', preview: '' }).purged === true, '坏字段容错（preview 缺省空串）');
+    ok(ts.previewOf(p1) === '前 400 字', 'purged 引用预览仍可读');
+  }
+
   return n;
 }
 
