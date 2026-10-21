@@ -2,6 +2,20 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式与语义化版本。
 
+## [1.2.0] — 2026-10-21
+
+### 变更
+
+- **全量 TypeScript 化**：44 个源文件（主进程 / preload / services / 云端节点 / 工具 / 渲染层 / 全部测试）改为 `.ts`，tsc 编译到 `dist/`（node 侧）与 `web/assets/`（渲染层产物，不入库）。运行时行为零变动——全量 831 条断言逐一对齐后才提交。此后项目一律 TypeScript，不再新增 `.js` 源文件
+- 编译管线：三套 tsconfig（node+test / 渲染层 UMD 共享模块 / 渲染层经典脚本）；`npm install` 经 `prepare` 自动编译，`npm test` = 编译 + 全量回归
+- CI 改为「TypeScript 编译门 + 全量测试」（Node 22，跳过 Electron 二进制下载提速）
+- electron-builder 输出目录改为 `release/`（与编译产物 `dist/` 区分），打包清单补入 `assets/`（托盘 / Dock 图标此前未进包）与 `dist/`
+
+### 已知限制
+
+- 类型收紧分步推进：node 侧 `strictNullChecks` 与渲染层 `app.ts` 的 `strict` 暂关（存量 14k 行的空值流收紧按重构立项），共享模块 execlog / taskflow 与全部新代码的公共签名已带类型
+- 渲染层 execlog / taskflow 保留手写 UMD 壳（TS 原生 `export as namespace` 仅限 .d.ts，且 tsc 的 umd 产物无浏览器分支），仅补类型注解
+
 ## [1.1.0] — 2026-10-21
 
 ### 新增

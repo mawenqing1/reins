@@ -1,0 +1,24 @@
+{
+  /* 渲染层经典脚本（app / icons / brands）：
+     module none —— 编译产物保持无包装的全局脚本，<script> 直引语义与手写 JS
+     完全一致（顶层 let/const 仍是页面级全局，CDP 调试可见）。
+     strict 暂关：app.ts 体量大，先完成整体 TS 化，类型收紧逐步推进。 */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "none",
+    "rootDir": "web/assets",
+    "outDir": "web/assets",
+    "strict": false,
+    "skipLibCheck": true
+  },
+  "include": [
+    "web/assets/icons.ts",
+    "web/assets/brands.ts",
+    "web/assets/app.ts",
+    "web/assets/globals.d.ts"
+  ],
+  /* outDir 与源码同目录（web/assets）时，TS 默认会把 outDir 整个排除掉导致 TS18003，
+     必须显式置空 exclude 才能找到 include 的输入。 */
+  "exclude": []
+}

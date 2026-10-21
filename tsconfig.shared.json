@@ -1,0 +1,21 @@
+{
+  /* 渲染层共享模块（execlog / taskflow）：
+     export as namespace + module umd —— 浏览器 <script> 直引时挂全局
+     （window.ExecLog / window.TaskFlow），测试 require 时走 module.exports。
+     产物直接落在源码同目录（web/assets/*.js），app.html 的引用路径不变。 */
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "module": "umd",
+    "moduleResolution": "node",
+    "rootDir": "web/assets",
+    "outDir": "web/assets",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["web/assets/execlog.ts", "web/assets/taskflow.ts"],
+  /* outDir 与源码同目录（web/assets）时，TS 默认会把 outDir 整个排除掉导致 TS18003，
+     必须显式置空 exclude 才能找到 include 的输入。 */
+  "exclude": []
+}

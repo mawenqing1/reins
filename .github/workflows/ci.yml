@@ -12,14 +12,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      # 语法门：所有入口 JS 必须可解析（渲染层 app.js 无构建步骤，靠这里兜底）
-      - name: Syntax check
-        run: |
-          node --check main.js
-          node --check preload.js
-          node --check reins-node/server.js
-          for f in services/*.js tools/*.js web/assets/*.js; do node --check "$f"; done
-      # 回归：零依赖纯 Node 测试套件（Node 16+ 兼容，无需 npm install）
+          node-version: 22
+      # 源码已全部 TypeScript 化：tsc 编译即类型/语法门，node --check 不再需要。
+      # ELECTRON_SKIP_BINARY_DOWNLOAD：CI 不跑 GUI，跳过 Electron 二进制下载提速。
+      - name: Install & build
+        run: npm install
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Build (tsc)
+        run: npm run build
       - name: Run tests
-        run: node test/run.js
+        run: node dist/test/run.js

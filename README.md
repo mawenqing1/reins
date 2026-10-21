@@ -10,12 +10,13 @@
 
 ```bash
 cd xfw/reins
-npm install        # 首次（已装好可跳过）
+npm install        # 首次（已装好可跳过）；会自动把 TypeScript 编译到 dist/
 npm start          # 编译 LESS → 启动桌面客户端
 ```
 
 **开启真实执行**：控制台 → 设置 → 模型与密钥 → 「GLM · 去配置」→ 填入你的 API Key → 测试连接 → 保存。之后把任何任务指派给该 Agent，即是真实调用（流式输出、真实 tokens）。
 
+- 源码全部为 **TypeScript**：主进程 / services / 云端节点 / 工具 / 测试编译到 `dist/`，渲染层编译到 `web/assets/*.js`（产物不入库）。改完代码跑 `npm run build`；`npm test` = 编译 + 全量回归
 - 样式源码全部为 **LESS**（`src/*.less`），`npm start` 会先编译再启动；改样式用 `npm run watch:css` 监听增量编译
 - 官网落地页：`web/index.html`（浏览器直接打开，或客户端菜单「帮助 → 产品官网落地页」）
 - 控制台：客户端窗口本体；浏览器打开 `web/app.html` 为降级模式（localStorage + 仅演示引擎）
@@ -44,14 +45,14 @@ npm start          # 编译 LESS → 启动桌面客户端
 | **飞书双向同步** | 自建应用 + 群机器人双通道：任务创建 / 归档 / 打回 / **执行失败与超时告警**以卡片推送到飞书群，站报 / 周报 / **每日摘要**可定时推飞书；开启「读取群指令」后无需公网回调地址，客户端轮询群消息即可执行 `/reins status`、`/reins list`、`/reins new 标题`、`/reins approve|reject REINS-42`——群内派活、验收、打回都能在飞书里完成；控制台未就绪时群指令自动排队、就绪后回放执行；App Secret 与加签密钥走系统钥匙串加密落盘（见 `docs/飞书接入指南.md`） |
 | **收件箱** | 跨空间聚合的任务事件收件箱：类型筛选（交付/执行/打回/创建分诊）、未读高亮、点击直达对应任务、全部已读 |
 | **节点视图** | 本机节点（在线状态、运行时检测、**执行期间防休眠**——caffeinate 守护，接电合盖不中断）+ 云端节点（健康、可用运行时、仓库配置）一页总览 |
-| **云端 Runtime** | 零依赖单文件节点服务（`reins-node/server.js`，Node 18+）：Token 鉴权、任务级隔离目录 / git worktree、SSE 流式回传（事件带序号）、超时与取消、并发上限。CLI 型 Agent 可选「云端执行」——合盖断线不影响，输出实时流回抽屉；**事件流断开自动重连续读**（回放缓冲按序号去重，输出不重屏，默认重连 2 次）；设置 → 云端节点配置地址与令牌、连通测试 |
+| **云端 Runtime** | 零依赖单文件节点服务（`reins-node/server.ts`，编译为 `dist/reins-node/server.js`，Node 18+）：Token 鉴权、任务级隔离目录 / git worktree、SSE 流式回传（事件带序号）、超时与取消、并发上限。CLI 型 Agent 可选「云端执行」——合盖断线不影响，输出实时流回抽屉；**事件流断开自动重连续读**（回放缓冲按序号去重，输出不重屏，默认重连 2 次）；设置 → 云端节点配置地址与令牌、连通测试 |
 | **AI 分诊** | 待办任务一键分析：类型 / 优先级 / 建议经办 + 理由。**三级引擎链**：Jev 决策模型（结构化判断，输出各选项概率，百毫秒级）→ API Agent 模型分诊（严格 JSON）→ 本地关键词规则，逐级降级、如实标注来源；集成页配置 Jev（Key / 地址 / 模型 / 引擎策略）并带连通测试；支持任务抽屉单条与自动化批量（逐条理由、单条/全部应用，写入时间线） |
 | 通知中心 | 顶栏铃铛：空间动态未读徽标、下拉通知列表 |
 | 任务时间线 | 每张卡片记录完整动态（创建/指派/状态流转/执行/交付/打回/归档） |
 | 提示词库 | 团队共享，执行时可附加到任务 |
 | 自动化 | 站会、**周报**、**每日摘要**（吞吐 + 在途 + 验收队列 + 失败/超时告警汇总，真实数据聚合，可复制 / 下载 .md）、分诊例程（Jev / 模型 / 本地规则三级引擎）；调度可配置**报告写入空间**（跨组织定向，不跟随当前空间也能落对地方）与推送去向（看板 / 飞书 / Webhook / 两者） |
 | 数据管理 | JSON 导出备份 / 导入恢复（自动体检补齐字段）/ 一键重置；**归档正文清理**（已归档任务的外置正文显式降级为摘要，引用带 purged 标记、体检豁免，先备份再清理的引导） |
-| 开发与安全 | **CI**（GitHub Actions：语法门 + 全量测试）、**CSP**（渲染层拒绝一切远程脚本与回连）、**状态迁移规则单一来源**（`taskflow.js`，客户端按钮与飞书群指令同源判定）、**检查更新**（菜单查询 GitHub Releases 引导下载） |
+| 开发与安全 | **CI**（GitHub Actions：TypeScript 编译门 + 全量测试）、**CSP**（渲染层拒绝一切远程脚本与回连）、**状态迁移规则单一来源**（`taskflow.ts`，客户端按钮与飞书群指令同源判定）、**检查更新**（菜单查询 GitHub Releases 引导下载） |
 | 快捷键 | ⌘K 搜索、⌘0-9 切换视图、⌘N 新建任务、⌘B 折叠侧栏、⌘/ 快捷键帮助 |
 | 客户端 | 托盘常驻、关闭驻留、开机自启、侧栏可折叠窄栏（记忆状态） |
 
@@ -59,19 +60,21 @@ npm start          # 编译 LESS → 启动桌面客户端
 
 ```
 xfw/reins/
-├── main.js            # Electron 主进程（窗口/托盘/菜单/IPC）
-├── reins-node/        # 云端执行节点（零依赖单文件 server.js + 部署文档）
-├── preload.js         # contextBridge：设置、状态、执行引擎事件
+├── main.ts            # Electron 主进程（窗口/托盘/菜单/IPC）；源码全 TypeScript，编译到 dist/
+├── reins-node/        # 云端执行节点（零依赖单文件 server.ts + 部署文档）
+├── preload.ts         # contextBridge：设置、状态、执行引擎事件
 ├── services/
-│   ├── store.js       # 状态持久化（userData/reins-data.json，原子写+去抖）
-│   ├── runner.js      # 真实执行引擎（OpenAI 兼容 /chat/completions SSE 流式、取消、连通测试）
-│   ├── feishu.js      # 飞书协议层：tenant_access_token 缓存、卡片构造、群机器人加签、拉群消息、指令解析
-│   ├── feishu-bridge.js # 飞书接线层：事件推送队列、报告推送、群指令轮询与回执、Webhook 协议适配
-│   ├── pricing.js     # Token 成本估算：单价查表、usage 拆分、金额折算（纯函数，可单测）
-│   ├── update.js      # 检查更新：语义化版本比较 + GitHub Releases 查询（fetch 可注入）
-│   ├── textstore.js   # 大文本外置：超阈值正文落盘、state 只存引用（含路径安全校验、purgeRef 清理降级）
-│   └── integrity.js   # 数据自检：引用盘点、缺失检测、孤儿目录与体积告警（纯函数，purged 豁免）
-├── package.json       # electron + less 依赖、electron-builder 打包配置
+│   ├── store.ts       # 状态持久化（userData/reins-data.json，原子写+去抖）
+│   ├── runner.ts      # 真实执行引擎（OpenAI 兼容 /chat/completions SSE 流式、取消、连通测试）
+│   ├── feishu.ts      # 飞书协议层：tenant_access_token 缓存、卡片构造、群机器人加签、拉群消息、指令解析
+│   ├── feishu-bridge.ts # 飞书接线层：事件推送队列、报告推送、群指令轮询与回执、Webhook 协议适配
+│   ├── pricing.ts     # Token 成本估算：单价查表、usage 拆分、金额折算（纯函数，可单测）
+│   ├── update.ts      # 检查更新：语义化版本比较 + GitHub Releases 查询（fetch 可注入）
+│   ├── textstore.ts   # 大文本外置：超阈值正文落盘、state 只存引用（含路径安全校验、purgeRef 清理降级）
+│   └── integrity.ts   # 数据自检：引用盘点、缺失检测、孤儿目录与体积告警（纯函数，purged 豁免）
+├── package.json       # electron + less + typescript 依赖、electron-builder 打包配置
+├── tsconfig*.json     # 三套编译配置：node 侧 / 渲染层 UMD 共享模块 / 渲染层经典脚本
+├── dist/              # node 侧编译产物（不入库，npm install 自动生成）
 ├── assets/            # 图标（icons/icon.icns、tray template 图标等）
 ├── src/               # 样式源码（LESS，唯一维护入口）
 │   ├── _variables.less # 共享设计变量（品牌色/状态色/字体/圆角）
@@ -79,15 +82,16 @@ xfw/reins/
 │   ├── app.less        # 控制台样式
 │   └── landing.less    # 官网落地页样式
 ├── tools/
-│   └── build-css.js    # LESS 编译脚本（支持 --watch）
-└── web/               # 运行/打包资源（CSS 为编译产物，勿手改）
+│   └── build-css.ts    # LESS 编译脚本（支持 --watch）
+└── web/               # 运行/打包资源（CSS 与 assets/*.js 为编译产物，勿手改）
     ├── index.html     # 产品官网落地页
     ├── app.html       # 控制台骨架
     └── assets/
     ├── app.css / landing.css  # 编译产物
-    ├── execlog.js  # 执行流水表纯函数（UMD：浏览器 window.ExecLog / 单测 require）
-    ├── taskflow.js # 任务状态迁移共享规则（UMD：客户端按钮与飞书群指令同一判定源）
-    └── app.js     # 全部逻辑（状态/看板/执行引擎/自动化/集成/设置）
+    ├── globals.d.ts # 渲染层经典脚本共享的全局声明（window.reins / ExecLog / ic…）
+    ├── execlog.ts  # 执行流水表纯函数（手写 UMD 壳 + 类型：浏览器 window.ExecLog / 单测 require）
+    ├── taskflow.ts # 任务状态迁移共享规则（UMD：客户端按钮与飞书群指令同一判定源）
+    └── app.ts     # 全部逻辑（状态/看板/执行引擎/自动化/集成/设置）；编译为同目录 app.js
 ```
 
 ## 飞书接入
@@ -152,7 +156,7 @@ Agent 在隔离 worktree 里改完文件后，**改动只是工作区文件**—
 npm run dist    # 需要先安装 electron-builder（Node ≥ 18）
 ```
 
-已在 `package.json > build` 配置 mac（dmg/zip）、win（nsis/portable）、linux（AppImage/deb）。打包时仅含 `main.js` 与 `web/`，不含 node_modules 源码。
+已在 `package.json > build` 配置 mac（dmg/zip）、win（nsis/portable）、linux（AppImage/deb）。打包时含 `dist/`（编译产物）、`web/` 与 `assets/`，不含 node_modules 源码。
 
 ## 设计说明
 

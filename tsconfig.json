@@ -1,0 +1,32 @@
+{
+  /* Node 侧（Electron 主进程 / preload / services / 无头节点 / 工具 / 测试）
+     编译到 dist/，目录结构与源码一一镜像：
+     main.ts → dist/main.js，test/x.test.ts → dist/test/x.test.js */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "rootDir": ".",
+    "outDir": "dist",
+    "strict": true,
+    /* 存量 JS 整体转换第一步：先关空值流检查（14k 行历史代码的 null 流是重构级工程），
+       其余 strict 检查全开（拼错属性 / 参数个数 / 缺导出在编译期就拦）。
+       类型收紧路线图见 CONTRIBUTING.md。 */
+    "strictNullChecks": false,
+    "useUnknownInCatchVariables": false,
+    "noImplicitAny": false,
+    "esModuleInterop": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": [
+    "main.ts",
+    "preload.ts",
+    "services/**/*",
+    "reins-node/**/*",
+    "tools/**/*",
+    "test/**/*"
+  ]
+}

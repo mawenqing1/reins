@@ -1,30 +1,37 @@
 {
   "name": "reins",
   "productName": "Reins",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Reins — 一站式 Agent 统一指挥管理平台（演示原型）",
-  "main": "main.js",
+  "main": "dist/main.js",
   "author": "Reins Demo",
   "license": "MIT",
   "scripts": {
-    "build:css": "node tools/build-css.js",
-    "watch:css": "node tools/build-css.js --watch",
-    "start": "node tools/brand-electron.js && npm run build:css && electron .",
-    "dist": "npm run build:css && npx electron-builder"
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.shared.json && tsc -p tsconfig.plain.json",
+    "build:css": "node dist/tools/build-css.js",
+    "watch:css": "node dist/tools/build-css.js --watch",
+    "start": "node dist/tools/brand-electron.js && npm run build:css && electron .",
+    "test": "npm run build && node dist/test/run.js",
+    "server": "node dist/reins-node/server.js",
+    "dist": "npm run build && npm run build:css && npx electron-builder",
+    "prepare": "npm run build"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
     "electron": "^44.7.1",
-    "less": "^4.9.1"
+    "less": "^4.9.1",
+    "typescript": "^5.9.3"
   },
   "build": {
     "appId": "dev.reins.desktop",
     "productName": "Reins",
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
-      "main.js",
-      "web/**/*"
+      "dist/**/*",
+      "web/**/*",
+      "assets/**/*"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
