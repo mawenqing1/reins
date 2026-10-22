@@ -176,7 +176,7 @@ function runAcpTask(opts: any): Promise<void> {
         finish({
           type: 'done',
           result: resultText.trim() || ('（会话结束 · stopReason=' + ((r && r.stopReason) || '?') + '）'),
-          usage: null, worktree: cwd || null,
+          usage: normUsageTokens(r && r.usage), worktree: cwd || null,
           acpSessionId: sessionId || null, resumed,
         });
         setTimeout(() => { try { child.kill('SIGTERM'); } catch (e) { } }, 300);
@@ -198,4 +198,22 @@ function worktreeChangesSafe(cwd) {
   } catch (e) { return null; }
 }
 
-export = { runAcpTask, pickAllowOption };
+/* usage 计量归一（CLI stream-json result 帧 / ACP session/prompt 响应通用）。
+   input 不含 cache 是 claude 家族与 ZCode ACP 的共同口径（cache 读写单列，实测
+   totalTokens = inputTokens + outputTokens + cachedRead + cachedWrite），归并入输入侧；
+   全零或无数字返回 null——统计不到就如实不记，不编数 */
+function normUsageTokens(u: any) {
+  if (!u || typeof u !== 'object') return null;
+  const n = v => { const x = +v; return Number.isFinite(x) && x > 0 ? x : 0; };
+  const inTok = n(u.input_tokens ?? u.inputTokens ?? u.prompt_tokens ?? u.promptTokens)
+    + n(u.cache_read_input_tokens ?? u.cachedReadTokens)
+    + n(u.cache_creation_input_tokens ?? u.cachedWriteTokens);
+  const outTok = n(u.output_tokens ?? u.outputTokens ?? u.completion_tokens ?? u.completionTokens);
+  let total = 0;
+  for (const t of [u.total_tokens, u.totalTokens]) { const x = +t; if (Number.isFinite(x) && x > 0) { total = x; break; } }
+  if (!total) total = inTok + outTok;
+  if (!(total > 0)) return null;
+  return { prompt_tokens: inTok, completion_tokens: outTok, total_tokens: total };
+}
+
+export = { runAcpTask, pickAllowOption, normUsageTokens };

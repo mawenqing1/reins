@@ -685,6 +685,8 @@ function agentQualityRow(a) {
   if (avg) items.push(`<span class="aq" title="按 ${st.runs || 0} 次执行取平均">均耗时 <b>${avg}</b></span>`);
   if (cost > 0) items.push(`<span class="aq" title="按模型单价估算${unpriced ? '（另有 ' + unpriced + ' 次未定价未计入）' : ''}">花费 <b>${fmtMoney(cost)}</b>${unpriced ? ' <i>+' + unpriced + '次未计</i>' : ''}</span>`);
   else if (unpriced > 0) items.push(`<span class="aq" title="该模型未在价格表中，设置里可补单价">花费 <b>未定价</b></span>`);
+  const credits = Number(a.credits) || 0;
+  if (credits > 0) items.push(`<span class="aq" title="引擎上报的积分（credits）累计；该引擎按积分计费，不折算金额">积分 <b>${Math.round(credits * 100) / 100}</b></span>`);
   if (!items.length) return '';
   return `<div class="agent-quality">${items.join('')}</div>`;
 }
@@ -1481,13 +1483,15 @@ function dashExecList() {
     const cost = e.priced === true && Number.isFinite(+e.cost) ? fmtMoney(e.cost)
       : e.priced === false ? '<i class="xl-dim">未定价</i>' : '<i class="xl-dim">计价中</i>';
     const dur = e.ms >= 1000 ? Math.round(e.ms / 1000) + 's' : (e.ms || '');
+    const cr = Number(e.credits) > 0 ? Math.round((+e.credits) * 100) / 100 : 0;
+    const num = ((e.tokens ? fmtTokens(e.tokens) : '') + (cr ? (e.tokens ? ' · ' : '') + '积分 ' + cr : '')) || '—';
     return `<div class="xl-row">
       <span class="xl-time">${fmtRel(e.at)}</span>
       <span class="xl-task" title="${esc(e.taskKey + ' ' + e.taskTitle)}">${esc(e.taskKey || '—')}${e.stage ? '<i class="xl-stage">' + esc(e.stage) + '</i>' : ''}</span>
       <span class="xl-agent" title="${esc(e.agentName + ' · ' + e.model)}">${esc(e.agentName || '—')}<i class="xl-dim">${esc(String(e.model || '').slice(0, 24))}</i></span>
       <span class="xl-ok ${e.ok === false ? 'bad' : e.firstPass ? 'fp' : ''}">${e.ok === false ? '✕ 失败' : e.firstPass ? '✓ 一次过' : '✓ 完成'}</span>
       <span class="xl-num">${dur || '—'}</span>
-      <span class="xl-num">${e.tokens ? fmtTokens(e.tokens) : '—'}</span>
+      <span class="xl-num">${num}</span>
       <span class="xl-cost">${cost}</span>
     </div>`;
   }).join('');
@@ -1817,7 +1821,7 @@ function handleRunEvent(evt) {
       /* 流水线阶段执行也是真实调用：与单任务同源记账（此前只累 tokens，Agent 成功率/成本/流水表都漏掉流水线）；
          归属按 run 实例携带的 agentId（并行阶段 t.assignee 会被最后派发者覆盖，不能用它） */
       const sa = agentById(r.agentId) || effAgentOf(t0);
-      if (sa) accountRun(sa, { ok: true, usage: evt.usage, model: r.model || sa.model, provider: sa.provider, ms: r.startedAt ? Date.now() - r.startedAt : 0,
+      if (sa) accountRun(sa, { ok: true, usage: evt.usage, credits: Number(evt.credits) > 0 ? +evt.credits : 0, model: r.model || sa.model, provider: sa.provider, ms: r.startedAt ? Date.now() - r.startedAt : 0,
         taskId: t0.id, taskKey: t0.key, taskTitle: t0.title, stage: st ? st.name : null,
         delivery: !!(st && st.final), firstPass: !(t0.rejections > 0) });
       return pipelineStageDone(taskId, evt, st);
@@ -1848,15 +1852,17 @@ function handleRunEvent(evt) {
     }
     if (a) { a.status = 'idle'; a.done++; a.taskId = null; }
     const used = evt.usage?.total_tokens || 0;
-    /* 质量与成本记账：耗时进样本、tokens 与金额按模型单价累加（未定价的只计 tokens 并留痕） */
+    const cr = Number(evt.credits) > 0 ? Math.round((+evt.credits) * 100) / 100 : 0;
+    /* 质量与成本记账：耗时进样本、tokens 与金额按模型单价累加（未定价的只计 tokens 并留痕）；
+       积分（qoder 家族按 credits 计费）单独累计，不折算金额 */
     if (a) {
-      accountRun(a, { ok: true, usage: evt.usage, model: r.model || a.model, provider: a.provider, ms: r.startedAt ? Date.now() - r.startedAt : 0,
+      accountRun(a, { ok: true, usage: evt.usage, credits: cr, model: r.model || a.model, provider: a.provider, ms: r.startedAt ? Date.now() - r.startedAt : 0,
         taskId: t2.id, taskKey: t2.key, taskTitle: t2.title, delivery: true, firstPass: !(t2.rejections > 0) });
     }
-    r.log.push(['ok', `✓ 执行完成${used ? ' · tokens ' + used : ''}`]);
+    r.log.push(['ok', `✓ 执行完成${used ? ' · tokens ' + used : ''}${cr ? ' · 积分 ' + cr : ''}`]);
     r.log.push(['ok', `✓ ${t2.pr} 已生成 → 卡片移入「待验收」`]);
-    th(t2, '🚀', `${t2.pr} 交付${used ? ' · ' + used + ' tokens' : ''}`);
-    addActivity('🔀', `${t2.key} 完成，${t2.pr} 等待验收（${t2.assignee?.name || 'Agent'}${used ? ' · ' + used + ' tokens' : ''}）`);
+    th(t2, '🚀', `${t2.pr} 交付${used ? ' · ' + used + ' tokens' : ''}${cr ? ' · 积分 ' + cr : ''}`);
+    addActivity('🔀', `${t2.key} 完成，${t2.pr} 等待验收（${t2.assignee?.name || 'Agent'}${used ? ' · ' + used + ' tokens' : ''}${cr ? ' · 积分 ' + cr : ''}）`);
     toast('任务完成', `${t2.key} 交付已生成，等待验收`, '✓');
     delete runs[taskId];
     save(); refreshViews();
@@ -1873,7 +1879,7 @@ function handleRunEvent(evt) {
       r.log.push(['', '⚠ 超时收尾：产出完整，按完成推进']);
       /* 超时收尾按完成记账（同 done 通路，终段视为交付） */
       const pa = agentById(r.agentId) || effAgentOf(t0);
-      if (pa) accountRun(pa, { ok: true, usage: evt.usage, model: r.model || pa.model, provider: pa.provider, ms: r.startedAt ? Date.now() - r.startedAt : 0,
+      if (pa) accountRun(pa, { ok: true, usage: evt.usage, credits: Number(evt.credits) > 0 ? +evt.credits : 0, model: r.model || pa.model, provider: pa.provider, ms: r.startedAt ? Date.now() - r.startedAt : 0,
         taskId: t0.id, taskKey: t0.key, taskTitle: t0.title, stage: stg ? stg.name : null,
         delivery: !!(stg && stg.final), firstPass: !(t0.rejections > 0) });
       return pipelineStageDone(taskId, { result: evt.partial, worktree: evt.worktree || null, changes: evt.changes, usage: evt.usage }, stg || t0.pipeline.stages[t0.pipeline.cur]);
@@ -3208,6 +3214,9 @@ function accountRun(agent, info) {
   if (Number.isFinite(i.ms) && i.ms > 0) st.durMs = (st.durMs || 0) + i.ms;
   const tokensTotal = i.usage?.total_tokens || i.tokens || 0;
   agent.tokens = (agent.tokens || 0) + tokensTotal;
+  /* 积分（credits）单独累计：qoder 家族按积分计费、token 全零，积分就是它的真实消耗口径，不折算金额 */
+  const cr = Number(i.credits) || 0;
+  if (cr > 0) agent.credits = (agent.credits || 0) + cr;
   /* 首过率样本：只有「交付级完成」计交付（单任务 done 与流水线终段），失败/中间阶段不计 */
   if (i.ok !== false && i.delivery) {
     st.deliveries = (st.deliveries || 0) + 1;
@@ -3223,7 +3232,7 @@ function accountRun(agent, info) {
         at: Date.now(), taskId: i.taskId, taskKey: i.taskKey, taskTitle: i.taskTitle,
         agentId: agent.id, agentName: agent.name, model: i.model || agent.model, provider: agent.provider,
         stage: i.stage || null, ok: i.ok !== false, firstPass: i.delivery ? i.firstPass === true : null,
-        ms: i.ms || 0, usage: i.usage || null
+        ms: i.ms || 0, usage: i.usage || null, credits: cr || 0
       });
       ExecLog.push(org.execLog, row);
     }

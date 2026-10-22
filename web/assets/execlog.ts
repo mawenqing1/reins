@@ -57,6 +57,7 @@
     firstPass?: boolean | null;
     ms?: any;
     usage?: any;
+    credits?: any;
   }
 
   /* 一条流水：cost/priced 构造时为 null，由记账方（计价回包后）回填 */
@@ -77,6 +78,7 @@
     tokIn: number | null;
     tokOut: number | null;
     tokens: number;
+    credits: number;
     cost: number | null;
     priced: boolean | null;
   }
@@ -104,6 +106,7 @@
       ms: Math.max(0, Math.round(+i.ms || 0)),
       tokIn: tk.in, tokOut: tk.out,
       tokens: tk.total || 0,
+      credits: Math.max(0, +i.credits || 0),   // 积分消耗（qoder 家族），与 tokens 并列如实记，不折算金额
       cost: null, priced: null   // 计价回包后由记账方回填
     };
   }

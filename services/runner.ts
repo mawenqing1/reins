@@ -95,7 +95,7 @@ function buildMessages(task, extraPrompt, scenePrompt) {
 
 /* 流式执行一个任务；onEvent(evt) 回调：
    {type:'start',...} {type:'delta',text} {type:'usage',usage} {type:'retry',retryNo,retries,delayMs,status,reason,text}
-   {type:'done',result,usage} {type:'error',message} {type:'cancelled'}
+   {type:'done',result,usage,credits} {type:'error',message} {type:'cancelled'}
    opts：{ repoRoot, params(任务级模型参数覆盖), modelDefaults(全局默认), http:{timeoutMs,retries}, stage:{key,no} } */
 async function runTask(task: any, agent: any, extraPrompt: any, onEvent: (evt: any) => void, opts: any = {}): Promise<void> {
   if (agent.mode === 'cli' && agent.acp) return runAcpSession(task, agent, extraPrompt, onEvent, opts);
@@ -640,7 +640,7 @@ const { spawn, spawnSync } = cp;
 import os = require('os');
 
 const CLI_PRESETS: any[] = [
-  { id: 'claude-code', label: 'Claude Code', cmd: 'claude', template: 'claude -p {prompt} --output-format text', install: 'curl -fsSL https://claude.ai/install.sh | bash', modelFlag: '--model' },
+  { id: 'claude-code', label: 'Claude Code', cmd: 'claude', template: 'claude -p {prompt} --output-format text', streamJson: true, install: 'curl -fsSL https://claude.ai/install.sh | bash', modelFlag: '--model' },
   { id: 'codex', label: 'Codex CLI', cmd: 'codex', template: 'codex exec --skip-git-repo-check {prompt}', install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh', modelFlag: '-m' },
   { id: 'codebuddy', label: '腾讯 CodeBuddy Code', cmd: 'codebuddy', template: 'codebuddy -y -p {prompt} --output-format text', streamJson: true, install: 'npm install -g @tencent-ai/codebuddy-code', modelFlag: '--model' },
   { id: 'workbuddy', label: '腾讯 WorkBuddy', cmd: 'workbuddy', template: 'workbuddy -y -p {prompt} --output-format text', modelFlag: '--model' },
@@ -660,8 +660,8 @@ const CLI_PRESETS: any[] = [
   { id: 'kilo', label: 'Kilo Code', cmd: 'kilo', template: 'kilo {prompt}', install: 'npm install -g @kilocode/cli' },
   { id: 'kiro', label: 'Kiro', cmd: 'kiro', template: 'kiro {prompt}', install: 'curl -fsSL https://cli.kiro.dev/install | bash' },
   { id: 'trae', label: 'Trae', cmd: 'trae', template: 'trae {prompt}', install: 'sh -c "$(curl -fsSL https://trae.cn/trae-cli/install_v2.sh)"' },
-  { id: 'qoder', label: 'Qoder', cmd: 'qodercli', template: 'qodercli -p {prompt}', install: 'npm install -g @qoder-ai/qodercli', modelFlag: '-m', modelListFlag: '--list-models' },
-  { id: 'qoder-cn', label: 'Qoder CN', cmd: 'qoderclicn', template: 'qoderclicn -p {prompt}', install: 'npm install -g @qodercn-ai/qoderclicn', modelFlag: '-m', modelListFlag: '--list-models' },
+  { id: 'qoder', label: 'Qoder', cmd: 'qodercli', template: 'qodercli -p {prompt}', streamJson: true, install: 'npm install -g @qoder-ai/qodercli', modelFlag: '-m', modelListFlag: '--list-models' },
+  { id: 'qoder-cn', label: 'Qoder CN', cmd: 'qoderclicn', template: 'qoderclicn -p {prompt}', streamJson: true, install: 'npm install -g @qodercn-ai/qoderclicn', modelFlag: '-m', modelListFlag: '--list-models' },
   { id: 'auggie', label: 'Auggie', cmd: 'auggie', template: 'auggie {prompt}', install: 'npm install -g @augmentcode/auggie' },
   { id: 'qwenpaw', label: 'QwenPaw', cmd: 'qwenpaw', template: 'qwenpaw {prompt}', install: 'pip install qwenpaw' },
   { id: 'hermes', label: 'Hermes', cmd: 'hermes', template: 'hermes {prompt}', install: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash' },
@@ -1003,6 +1003,8 @@ async function runCliTask(task, agent, extraPrompt, onEvent, opts: any = {}) {
   let buf = '';
   let sawInit = false;      // 首个 system/init 帧含真实模型，只取一次
   let finalResult: any = null;   // result 帧的干净交付文本
+  let cliUsage: any = null;      // result 帧的 usage（归一后随 done 上报，供 token/成本记账）
+  let cliCredits = 0;            // result 帧的 total_credits（qoder 家族按积分计费，token 全零时这就是真实消耗）
   let resultError = false;
   let resultAt = 0;         // result 帧到达时间：事件流模式下进程可能因 MCP/后台任务滞留，宽限后主动收尾
   await new Promise<void>(resolve => {
@@ -1032,6 +1034,8 @@ async function runCliTask(task, agent, extraPrompt, onEvent, opts: any = {}) {
           if (j.type === 'result') {
             finalResult = typeof j.result === 'string' ? j.result : String(j.result ?? '');
             if (j.is_error) resultError = true;
+            if (j.usage) cliUsage = require('./acp').normUsageTokens(j.usage);
+            if (Number.isFinite(+j.total_credits) && +j.total_credits > 0) cliCredits = +j.total_credits;
             resultAt = Date.now();
             continue;
           }
@@ -1049,7 +1053,7 @@ async function runCliTask(task, agent, extraPrompt, onEvent, opts: any = {}) {
       if (authHint) onEvent({ type: 'error', message: authHint });
       else if (resultError) onEvent({ type: 'error', message: (finalResult || '执行失败').slice(0, 300) });
       else if (code !== 0 && !out && finalResult === null) onEvent({ type: 'error', message: cmd + ' 退出码 ' + code + (errTail ? '：' + errTail.slice(-200) : '') });
-      else onEvent({ type: 'done', result: (finalResult !== null ? finalResult : out.trim()) || '（无输出）', usage: null, worktree: cwd || null, changes: worktreeChanges(cwd) });
+      else onEvent({ type: 'done', result: (finalResult !== null ? finalResult : out.trim()) || '（无输出）', usage: cliUsage, credits: cliCredits || undefined, worktree: cwd || null, changes: worktreeChanges(cwd) });
     }));
   });
   aborts.delete(runKey);
