@@ -7,243 +7,305 @@
 <meta name="description" content="像给同事派活一样给 AI Agent 派任务：写代码、做调研、整资料、处理工单，看板流转、并行执行、过程可回放。接入你已有的 Agent，免费开始。">
 <link rel="stylesheet" href="assets/landing.css">
 <link rel="icon" type="image/png" href="assets/favicon.png">
-<!-- 只加载本地资源；唯一内联脚本为静态打字机动画，无外部输入 -->
+<!-- 只加载本地资源；唯一内联脚本为静态仪表演示动画，无外部输入 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
 </head>
 <body>
 
-<nav>
-  <div class="wrap nav-in">
+<div class="chassis">
+
+  <!-- ===== 铭牌导航 ===== -->
+  <nav class="plate">
     <a class="logo" href="#">
-      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
         <defs><linearGradient id="lgHead" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2E2E33"/><stop offset="1" stop-color="#121215"/></linearGradient></defs>
         <rect width="26" height="26" rx="5.9" fill="url(#lgHead)"/>
-        <text x="13.0" y="13.65" text-anchor="middle" dominant-baseline="central" font-family="ui-rounded,-apple-system,'SF Pro Rounded','PingFang SC',sans-serif" font-weight="800" font-size="14.6" fill="#FFFFFF">R</text>
+        <text x="13" y="13.65" text-anchor="middle" dominant-baseline="central" font-family="ui-rounded,-apple-system,'SF Pro Rounded','PingFang SC',sans-serif" font-weight="800" font-size="14.6" fill="#FFFFFF">R</text>
         <circle cx="15.2" cy="5.8" r="1.7" fill="#f2efe9"/>
         <circle cx="19.8" cy="9" r="1.7" fill="#f2efe9"/>
       </svg>
-      Reins
+      <span class="wordmark">REINS<small>AGENT DISPATCH SYSTEMS</small></span>
     </a>
     <div class="nav-links">
-      <a href="#cases">场景</a>
-      <a href="#features">产品能力</a>
-      <a href="#how">工作方式</a>
-      <a href="#integrations">集成</a>
-      <a href="#faq">FAQ</a>
+      <a href="#cases">曲目单</a>
+      <a href="#features">控制面板</a>
+      <a href="#how">走带三键</a>
+      <a href="#integrations">配线盘</a>
+      <a href="#faq">维修手册</a>
     </div>
-    <div class="nav-cta">
-      <a class="btn btn-ghost gh" href="https://github.com/mawenqing1/reins" target="_blank" rel="noopener" title="GitHub 开源仓库">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-        <span class="lbl">GitHub</span>
-      </a>
-    </div>
+    <span class="clock" id="clock" aria-hidden="true">00:00:00</span>
+    <a class="key gh" href="https://github.com/mawenqing1/reins" target="_blank" rel="noopener" title="GitHub 开源仓库">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+      GitHub
+    </a>
+  </nav>
+  <div class="m-nav">
+    <a href="#cases">曲目单</a><a href="#features">控制面板</a><a href="#how">走带三键</a><a href="#integrations">配线盘</a><a href="#faq">维修手册</a>
   </div>
-</nav>
 
-<header class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <div class="badge"><span class="dot"></span>v1.0 正式发布 · 免费接入你正在用的 Agent</div>
-      <h1>你的 <em>AI 同事</em>，<br>已经到岗。</h1>
-      <p class="hero-sub">Reins，一块用来给 AI Agent 派活的看板。写代码、做调研、整资料、写文案、处理工单——<strong>把活儿说清楚，派出去</strong>，进度、过程、结果都在你眼前，验收你说了算。</p>
-      <div class="hero-ctas">
-        <a class="btn btn-primary btn-lg" href="https://github.com/mawenqing1/reins" target="_blank" rel="noopener">GitHub 获取源码</a>
-        <a class="btn btn-line btn-lg" href="#how">怎么派活？三步搞定 →</a>
+  <!-- ===== 主面板 ===== -->
+  <header class="hero" id="top">
+    <div class="hero-copy">
+      <h1>你的 AI 同事，<br><em>已经到岗</em>。</h1>
+      <p class="sub">Reins，一台给 AI Agent 派活的调度台。写代码、做调研、整资料、写文案、处理工单——<strong>把活儿说清楚，上机走带</strong>。多个 Agent 并行开工，电平表上看得见；每一步可回放，验收键握在你手里。</p>
+      <div class="ctas">
+        <a class="key primary" href="https://github.com/mawenqing1/reins" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <span>GitHub 获取源码</span>
+        </a>
+        <a class="key plain" href="#how">三步派活 →</a>
       </div>
-      <p class="hero-note">公有云 <b>¥0</b> · 不限席位 · token 走你自己的订阅，平台不抽成</p>
+      <p class="engraved-note">公有云 ¥0 · 不限席位 · TOKEN 走你自己的订阅 · 平台不抽成</p>
     </div>
 
-    <div class="console">
-      <div class="console-bar">
-        <div class="dots"><i></i><i></i><i></i></div>
-        <div class="title">reins — 团队空间 · 迭代 Sprint 24</div>
-      </div>
-      <div class="console-body">
-        <div class="mini-cols">
-          <div class="mini-col">
-            <h5>待处理 <span>4</span></h5>
-            <div class="mini-card"><div class="k">REINS-96 · P1</div><div class="t">Q4 竞品调研：协作办公赛道</div><div class="row"><span class="chip-p">调研</span></div></div>
-            <div class="mini-card"><div class="k">REINS-98 · P0</div><div class="t">会员周公众号初稿</div><div class="row"><span class="chip-p" style="color:#e0a23c;background:rgba(224,162,60,.1)">文案</span></div></div>
-          </div>
-          <div class="mini-col">
-            <h5>进行中 <span>3</span></h5>
-            <div class="mini-card" style="border-color:rgba(232,163,61,.45)">
-              <div class="k">REINS-95 · P1</div><div class="t">供应商名单清洗与核对</div>
-              <div class="row"><span class="chip-a">◆ Claude</span><div class="progress"><i></i></div></div>
-            </div>
-            <div class="mini-card" style="border-color:rgba(232,163,61,.45)">
-              <div class="k">REINS-97 · P2</div><div class="t">登录接口参数校验</div>
-              <div class="row"><span class="chip-a">◆ Codex</span><div class="progress"><i style="animation-delay:1.2s"></i></div></div>
-            </div>
-          </div>
-          <div class="mini-col">
-            <h5>待审查 <span>2</span></h5>
-            <div class="mini-card"><div class="k">REINS-91 · 交付 #216</div><div class="t">行业政策周报 · 本期</div><div class="row"><span class="chip-a" style="color:#79c795;background:rgba(121,199,149,.08);border-color:rgba(121,199,149,.3)">✓ 待终审</span></div></div>
-            <div class="mini-card"><div class="k">REINS-93 · 交付 #217</div><div class="t">工单高频问题整理</div><div class="row"><span class="chip-a" style="color:#79c795;background:rgba(121,199,149,.08);border-color:rgba(121,199,149,.3)">✓ 待终审</span></div></div>
-          </div>
+    <div class="deck" role="img" aria-label="演示面板：三个 Agent 的执行电平表、执行时长与 token 计数、并行/回放/云端开关">
+      <div class="deck-row meters">
+        <div class="vu"><span class="vu-name">CLAUDE</span>
+          <div class="ladder" data-ch><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </div>
-        <div class="term" id="term"></div>
-      </div>
-    </div>
-  </div>
-</header>
-
-<div class="strip">
-  <div class="wrap">
-    <p>正在用哪个 Agent？直接接入，不用重新付费</p>
-    <div class="tools">
-      <span class="tool">Claude Code</span><span class="tool">Codex</span><span class="tool">OpenCode</span><span class="tool">Gemini CLI</span><span class="tool">Qwen Code</span><span class="tool">Cursor CLI</span><span class="tool">更多…</span>
-    </div>
-  </div>
-</div>
-
-<section class="light pad" id="cases">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">能派的活</div>
-      <h2>说得清楚的工作，<br>都可以派出去</h2>
-      <p class="sec-sub">不限开发。凡是能写成一张卡片的任务，Reins 都接得住。</p>
-    </div>
-    <div class="cases">
-      <div class="case reveal"><div class="ic">🧩</div><h3>产品开发</h3><p>写代码、修 Bug、补测试：需求拆进看板，多个 Agent 并行开工，改了哪几行、测试过没过，全程可回放。</p></div>
-      <div class="case reveal"><div class="ic">📊</div><h3>资料研究</h3><p>行业调研、竞品分析、论文摘要：Agent 先把材料读厚再读薄，结论给你，来源可查。</p></div>
-      <div class="case reveal"><div class="ic">✍️</div><h3>内容创作</h3><p>公众号、周报、产品文案：给个主题和口径，初稿自动来，你只管改到满意。</p></div>
-      <div class="case reveal"><div class="ic">🗂</div><h3>数据整理</h3><p>表格清洗、信息抽取、格式转换：重复劳动交给 Agent，一遍跑完还自动核对。</p></div>
-      <div class="case reveal"><div class="ic">💬</div><h3>客户支持</h3><p>工单转任务，Agent 起草回复、整理知识库，人工只做最后签发。</p></div>
-      <div class="case reveal"><div class="ic">📋</div><h3>流程杂务</h3><p>会议纪要、报名统计、日程协调：说得清楚的琐事，都值得派出去。</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="features pad" id="features">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker" style="color:var(--accent)">产品能力</div>
-      <h2 style="color:var(--ink)">指挥、并行、沉淀，<br>一个平台全搞定</h2>
-      <p class="sec-sub" style="color:var(--ink-dim)">Reins 不发明新 Agent——它让你手里的 Agent，真正进入团队的工作流。</p>
-    </div>
-    <div class="feats">
-      <div class="feat reveal"><div class="num">01 · 指派</div><h3>指派即执行</h3><p>把卡片拖给 Agent，上下文、验收标准、团队技能包一并送达，不用再复制粘贴提示词。</p></div>
-      <div class="feat reveal"><div class="num">02 · 并行</div><h3>并行不添乱</h3><p>每个任务有自己独立的工作区，多个 Agent 同时开工互不打架；成果各自交付，最后统一汇总到你面前。</p></div>
-      <div class="feat reveal"><div class="num">03 · 透明</div><h3>过程全透明</h3><p>查了什么、写了什么、怎么核对的，全程可回放。出了问题，能定位到具体某一步。</p></div>
-      <div class="feat reveal"><div class="num">04 · 资产</div><h3>经验变资产</h3><p>资深工程师的提示词与技能沉淀成团队资产，新人第一天就站在前人的肩膀上。</p></div>
-      <div class="feat reveal"><div class="num">05 · 自动</div><h3>例程自动化</h3><p>站会、周报、缺陷分诊、状态同步，交给定时例程。你到工位时，晨会材料已经写好了。</p></div>
-      <div class="feat reveal"><div class="num">06 · 一体</div><h3>管理在一起</h3><p>需求、迭代、评审、泳道与 Agent 执行同屏呈现，不必在 IM、表格和终端之间反复横跳。</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="light pad" id="how">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">工作方式</div>
-      <h2>派一件活，只要三步</h2>
-      <p class="sec-sub">接入你正在用的 Agent，不换工具、不换账单。</p>
-    </div>
-    <div class="steps">
-      <div class="step reveal"><span class="tag">约 3 分钟</span><h3>接入 Agent</h3><p>填上你已有的订阅或 API Key，Claude、Codex、OpenCode 一键连接，无需重新付费。</p></div>
-      <div class="step reveal"><span class="tag">拖一下的事</span><h3>派活</h3><p>把任务写成卡片拖给 Agent，或让自动化规则按标签、优先级自动分派。</p></div>
-      <div class="step reveal"><span class="tag">人做终审</span><h3>验收</h3><p>Agent 交付后进入待审查：过程可回放、结果可比对，满意就归档，不满意打回重做。</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="pad" id="integrations" style="background:var(--paper);color:var(--paper-ink)">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <div class="kicker">集成</div>
-      <h2>长在你现有的流程上，<br>而不是让你搬家</h2>
-      <p class="sec-sub">不迁移、不替换，Reins 与你正在用的系统双向同步。</p>
-    </div>
-    <div class="integ-grid">
-      <div class="jira reveal">
-        <div class="kicker">双向同步</div>
-        <h3>Jira / 研发项目系统</h3>
-        <p>需求、缺陷、状态、评论实时互通：Jira 里建的票自动落进 Reins 看板，Agent 干完的状态自动回写。你的 PM 不用改变任何习惯。</p>
-        <div class="sync-demo">
-          <div><span class="ar">jira ⇄ reins</span></div>
-          <div class="in">← 引入 PAY-1042 「支付回调超时」 · P0</div>
-          <div class="in">← 引入 PAY-1043 「对账单导出乱码」 · P2</div>
-          <div class="out">→ 回写 PAY-1031 状态：已完成 · PR #216</div>
-          <div class="out">→ 回写 PAY-1035 状态：待审查 · PR #217</div>
+        <div class="vu"><span class="vu-name">CODEX</span>
+          <div class="ladder" data-ch><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="vu"><span class="vu-name">GLM</span>
+          <div class="ladder" data-ch><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </div>
       </div>
-      <div class="integ-list reveal">
-        <div class="integ-item">Linear <span>双向同步</span></div>
-        <div class="integ-item">TAPD <span>双向同步</span></div>
-        <div class="integ-item">GitHub Issues <span>双向同步</span></div>
-        <div class="integ-item">GitLab <span>双向同步</span></div>
-        <div class="integ-item">飞书项目 <span>双向同步</span></div>
-        <div class="integ-item">Webhook / API <span>开放接口</span></div>
+      <div class="deck-row counters">
+        <div class="counter"><b id="c-time">00:00:00</b><span>执行时长 TIME</span></div>
+        <div class="counter"><b id="c-tokens">37.5K</b><span>TOKENS 计量</span></div>
+        <div class="counter"><b>03</b><span>在役 AGENTS</span></div>
+      </div>
+      <div class="deck-row switches">
+        <button class="sw on" type="button" data-sw aria-pressed="true"><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-name">并行 <i>PARALLEL</i></span></button>
+        <button class="sw on" type="button" data-sw aria-pressed="true"><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-name">回放 <i>REPLAY</i></span></button>
+        <button class="sw" type="button" data-sw aria-pressed="false"><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-name">云端 <i>CLOUD</i></span></button>
+        <span class="sw-note" id="sw-note">演示走带 · 非实时数据</span>
       </div>
     </div>
-  </div>
-</section>
+  </header>
 
-<section class="light pad" id="faq" style="padding-top:30px">
-  <div class="wrap">
-    <div class="sec-head reveal" style="text-align:center;max-width:none">
-      <div class="kicker">常见问题</div>
-      <h2>你可能想问</h2>
+  <!-- ===== 磁带仓：直接接入 ===== -->
+  <section class="bay" aria-label="支持的 Agent">
+    <div class="zone-head"><h2>磁带仓</h2><span class="zone-en">Tape Bay · 正在用哪个 Agent？直接接入，不用重新付费</span></div>
+    <div class="shelf">
+      <span class="tape">Claude Code</span>
+      <span class="tape">Codex</span>
+      <span class="tape">OpenCode</span>
+      <span class="tape">Gemini CLI</span>
+      <span class="tape">Qwen Code</span>
+      <span class="tape">Cursor CLI</span>
+      <span class="tape">ZCode</span>
+      <span class="tape ghost">更多…</span>
     </div>
-    <div class="faq reveal">
-      <details open><summary>Reins 是又一个 AI Agent 吗？</summary><div class="a">不是，也不打算是。它不替代你正在用的 Claude、Codex、OpenCode，而是把它们组织成一支听指挥的队伍——你可以把 Reins 理解为这支队伍的派活台。</div></details>
-      <details><summary>只能干编程的活吗？</summary><div class="a">不限。凡是能写清楚的任务——调研、写作、整理、客服、开发——都能派。开发场景的工具链最全（独立代码工作区、PR 交付、测试回放），其他场景同样有过程记录和结果审核。</div></details>
-      <details><summary>要重新买模型订阅吗？</summary><div class="a">不用。接入时填你已有的订阅或 API Key 即可。Reins 不代理计费、不抽成，token 成本始终出现在你原来的账单里。</div></details>
-      <details><summary>好几个任务同时跑，不会乱吗？</summary><div class="a">不会。每个任务在自己的独立工作区里执行（写代码时就是独立的 git worktree），互不可见、互不干扰，成果各自交付，由人验收归档。</div></details>
-      <details><summary>Agent 干的活，我怎么放心？</summary><div class="a">每个任务的执行过程完整可回放：查了哪些资料、改了哪些内容、怎么核对的，一目了然。验收时，你像检查同事的交付一样检查它。</div></details>
-      <details><summary>数据安全怎么保障？</summary><div class="a">SaaS 模式下任务与资料加密存储；要求更高的团队可以私有部署，所有数据留在内网。</div></details>
-    </div>
-  </div>
-</section>
+  </section>
 
-<footer>
-  <div class="wrap foot">
-    <span class="logo">
-      <svg width="20" height="20" viewBox="0 0 26 26" fill="none">
-        <defs><linearGradient id="lgHead" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2E2E33"/><stop offset="1" stop-color="#121215"/></linearGradient></defs>
-        <rect width="26" height="26" rx="5.9" fill="url(#lgHead)"/>
-        <text x="13.0" y="13.65" text-anchor="middle" dominant-baseline="central" font-family="ui-rounded,-apple-system,'SF Pro Rounded','PingFang SC',sans-serif" font-weight="800" font-size="14.6" fill="#FFFFFF">R</text>
+  <!-- ===== 曲目单：能派的活 ===== -->
+  <section class="zone pad" id="cases">
+    <div class="zone-head"><h2>曲目单</h2><span class="zone-en">Program Sheet · 说得清楚的工作，都可以派出去</span></div>
+    <p class="zone-sub">不限开发。凡是能写成一张卡片的任务，Reins 都接得住。下面这盘 C90，两面各三首。</p>
+    <div class="tracks">
+      <div class="side" aria-label="A 面">
+        <h3 class="side-label"><span class="reel" aria-hidden="true"><i></i><i></i></span>A 面 · 常放</h3>
+        <ol class="tracklist">
+          <li class="track reveal"><b class="no">A1</b><div class="t"><h4>产品开发</h4><p>写代码、修 Bug、补测试：需求拆进看板，多个 Agent 并行开工，改了哪几行、测试过没过，全程可回放。</p></div><span class="tag">开发</span></li>
+          <li class="track reveal"><b class="no">A2</b><div class="t"><h4>资料研究</h4><p>行业调研、竞品分析、论文摘要：Agent 先把材料读厚再读薄，结论给你，来源可查。</p></div><span class="tag">调研</span></li>
+          <li class="track reveal"><b class="no">A3</b><div class="t"><h4>内容创作</h4><p>公众号、周报、产品文案：给个主题和口径，初稿自动来，你只管改到满意。</p></div><span class="tag">内容</span></li>
+        </ol>
+      </div>
+      <div class="side" aria-label="B 面">
+        <h3 class="side-label"><span class="reel" aria-hidden="true"><i></i><i></i></span>B 面 · 省心</h3>
+        <ol class="tracklist">
+          <li class="track reveal"><b class="no">B1</b><div class="t"><h4>数据整理</h4><p>表格清洗、信息抽取、格式转换：重复劳动交给 Agent，一遍跑完还自动核对。</p></div><span class="tag">数据</span></li>
+          <li class="track reveal"><b class="no">B2</b><div class="t"><h4>客户支持</h4><p>工单转任务，Agent 起草回复、整理知识库，人工只做最后签发。</p></div><span class="tag">支持</span></li>
+          <li class="track reveal"><b class="no">B3</b><div class="t"><h4>流程杂务</h4><p>会议纪要、报名统计、日程协调：说得清楚的琐事，都值得派出去。</p></div><span class="tag">杂务</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 控制面板：产品能力 ===== -->
+  <section class="zone pad alt" id="features">
+    <div class="zone-head"><h2>控制面板</h2><span class="zone-en">Control Panel · 指挥、并行、沉淀，一个平台全搞定</span></div>
+    <p class="zone-sub">Reins 不发明新 Agent——它让你手里的 Agent，真正进入团队的工作流。每一枚开关，都是一项已交付的能力。</p>
+    <div class="panels">
+      <div class="pz span7 reveal">
+        <h3>指派即执行 <i>ASSIGN</i></h3>
+        <p>把卡片拖给 Agent，上下文、验收标准、团队技能包一并送达，不用再复制粘贴提示词。</p>
+        <div class="pz-ctl" aria-hidden="true"><span class="pz-sw on"></span>随卡送达：上下文 · 验收标准 · 技能包</div>
+      </div>
+      <div class="pz span5 reveal">
+        <h3>并行不添乱 <i>PARALLEL</i></h3>
+        <p>每个任务有自己独立的工作区，多个 Agent 同时开工互不打架；成果各自交付，统一汇总到你面前。</p>
+        <div class="pz-bars" aria-hidden="true"><i style="--w:72%"></i><i style="--w:46%"></i><i style="--w:83%"></i><i style="--w:31%"></i></div>
+      </div>
+      <div class="pz span5 reveal">
+        <h3>过程全透明 <i>REPLAY</i></h3>
+        <p>查了什么、写了什么、怎么核对的，全程可回放。出了问题，能定位到具体某一步。</p>
+        <div class="pz-matrix" aria-hidden="true">▶ REINS-96 · 已读 214 页 · 结论排作 12 行</div>
+      </div>
+      <div class="pz span7 reveal">
+        <h3>经验变资产 <i>LIBRARY</i></h3>
+        <p>资深工程师的提示词与技能沉淀成团队资产，新人第一天就站在前人的肩膀上。</p>
+        <div class="pz-labels" aria-hidden="true"><span>评审口径 v3</span><span>SQL 规范</span><span>周报模板</span><span>+12</span></div>
+      </div>
+      <div class="pz span7 reveal">
+        <h3>例程自动化 <i>TIMER</i></h3>
+        <p>站会、周报、缺陷分诊、状态同步，交给定时例程。你到工位时，晨会材料已经写好了。</p>
+        <div class="pz-ctl" aria-hidden="true"><span class="pz-clock">08:59</span>每日 08:59 · 晨会材料自动就绪</div>
+      </div>
+      <div class="pz span5 reveal">
+        <h3>管理在一起 <i>ONE BOARD</i></h3>
+        <p>需求、迭代、评审、泳道与 Agent 执行同屏呈现，不必在 IM、表格和终端之间反复横跳。</p>
+        <div class="pz-grid" aria-hidden="true"><span>看板</span><span>迭代</span><span>评审</span><span>Agent</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 走带三键：工作方式 ===== -->
+  <section class="zone pad" id="how">
+    <div class="zone-head"><h2>走带三键</h2><span class="zone-en">Transport · 派一件活，只要三步</span></div>
+    <p class="zone-sub">接入你正在用的 Agent，不换工具、不换账单。</p>
+    <div class="transport">
+      <div class="tk reveal">
+        <span class="tk-step">STEP 1 · 约 3 分钟</span>
+        <span class="tk-key" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11.5 12l5-4v8zM6.5 8v8M4 8v8" transform="translate(1.5 0)"/></svg><small>REW</small></span>
+        <h3>接入 Agent</h3>
+        <p>填上你已有的订阅或 API Key，Claude、Codex、OpenCode 一键连接，无需重新付费。</p>
+      </div>
+      <div class="tk reveal">
+        <span class="tk-step">STEP 2 · 拖一下的事</span>
+        <span class="tk-key hot" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><small>PLAY</small></span>
+        <h3>派活</h3>
+        <p>把任务写成卡片拖给 Agent，或让自动化规则按标签、优先级自动分派。</p>
+      </div>
+      <div class="tk reveal">
+        <span class="tk-step">STEP 3 · 人做终审</span>
+        <span class="tk-key" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg><small>STOP</small></span>
+        <h3>验收</h3>
+        <p>Agent 交付后进入待审查：过程可回放、结果可比对，满意就归档，不满意打回重做。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 配线盘：集成 ===== -->
+  <section class="zone pad alt" id="integrations">
+    <div class="zone-head"><h2>配线盘</h2><span class="zone-en">Patch Bay · 长在你现有的流程上，而不是让你搬家</span></div>
+    <p class="zone-sub">不迁移、不替换，Reins 与你正在用的系统双向同步——插上线就通。</p>
+    <div class="patch">
+      <div class="jacks reveal" aria-label="可接入的系统">
+        <span class="jack"><i class="socket"></i>Jira 项目</span>
+        <span class="jack"><i class="socket"></i>Linear</span>
+        <span class="jack"><i class="socket"></i>TAPD</span>
+        <span class="jack"><i class="socket"></i>GitHub Issues</span>
+        <span class="jack"><i class="socket"></i>GitLab</span>
+        <span class="jack"><i class="socket"></i>飞书项目</span>
+        <span class="jack wide"><i class="socket"></i>Webhook / API · 开放接口</span>
+      </div>
+      <div class="flow reveal">
+        <div class="flow-head"><span>信号流 · jira ⇄ reins</span><span class="flow-live">● 双向同步中</span></div>
+        <div class="flow-line in">← 引入 PAY-1042「支付回调超时」 · P0</div>
+        <div class="flow-line in">← 引入 PAY-1043「对账单导出乱码」 · P2</div>
+        <div class="flow-line out">→ 回写 PAY-1031 状态：已完成 · PR #216</div>
+        <div class="flow-line out">→ 回写 PAY-1035 状态：待审查 · PR #217</div>
+        <p class="flow-note">Jira 里建的票自动落进 Reins 看板，Agent 干完的状态自动回写。你的 PM 不用改变任何习惯。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 维修手册：FAQ ===== -->
+  <section class="zone pad" id="faq">
+    <div class="zone-head center"><h2>维修手册</h2><span class="zone-en">Service Notes · 你可能想问</span></div>
+    <div class="manual reveal">
+      <details open><summary><b class="pn">Q-01</b>Reins 是又一个 AI Agent 吗？</summary><div class="a">不是，也不打算是。它不替代你正在用的 Claude、Codex、OpenCode，而是把它们组织成一支听指挥的队伍——你可以把 Reins 理解为这支队伍的派活台。</div></details>
+      <details><summary><b class="pn">Q-02</b>只能干编程的活吗？</summary><div class="a">不限。凡是能写清楚的任务——调研、写作、整理、客服、开发——都能派。开发场景的工具链最全（独立代码工作区、PR 交付、测试回放），其他场景同样有过程记录和结果审核。</div></details>
+      <details><summary><b class="pn">Q-03</b>要重新买模型订阅吗？</summary><div class="a">不用。接入时填你已有的订阅或 API Key 即可。Reins 不代理计费、不抽成，token 成本始终出现在你原来的账单里。</div></details>
+      <details><summary><b class="pn">Q-04</b>好几个任务同时跑，不会乱吗？</summary><div class="a">不会。每个任务在自己的独立工作区里执行（写代码时就是独立的 git worktree），互不可见、互不干扰，成果各自交付，由人验收归档。</div></details>
+      <details><summary><b class="pn">Q-05</b>Agent 干的活，我怎么放心？</summary><div class="a">每个任务的执行过程完整可回放：查了哪些资料、改了哪些内容、怎么核对的，一目了然。验收时，你像检查同事的交付一样检查它。</div></details>
+      <details><summary><b class="pn">Q-06</b>数据安全怎么保障？</summary><div class="a">SaaS 模式下任务与资料加密存储；要求更高的团队可以私有部署，所有数据留在内网。</div></details>
+    </div>
+  </section>
+
+  <!-- ===== 底部铭牌 ===== -->
+  <footer class="plate-foot">
+    <span class="logo small">
+      <svg width="20" height="20" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+        <defs><linearGradient id="lgFoot" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2E2E33"/><stop offset="1" stop-color="#121215"/></linearGradient></defs>
+        <rect width="26" height="26" rx="5.9" fill="url(#lgFoot)"/>
+        <text x="13" y="13.65" text-anchor="middle" dominant-baseline="central" font-family="ui-rounded,-apple-system,'SF Pro Rounded','PingFang SC',sans-serif" font-weight="800" font-size="14.6" fill="#FFFFFF">R</text>
       </svg>
-      Reins
+      REINS
     </span>
+    <span class="serial">MODEL RDS-1 · 演示原型 · © 2026 Reins</span>
     <div class="links">
-      <a href="#features">产品能力</a><a href="#">文档</a><a href="https://github.com/mawenqing1/reins" target="_blank" rel="noopener">GitHub</a>
+      <a href="#features">控制面板</a><a href="#faq">维修手册</a><a href="https://github.com/mawenqing1/reins" target="_blank" rel="noopener">GitHub</a>
     </div>
-    <span class="cp">© 2026 Reins · 本站为产品演示原型</span>
-  </div>
-</footer>
+  </footer>
+
+</div><!-- /chassis -->
 
 <script>
-  // reveal on scroll
-  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); } }), { threshold: .12 });
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  // reveal on scroll（JS 才加 reveal 类：无 JS 时内容默认可见）
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) return;
+    els.forEach(function (el) { el.classList.add('pre'); });
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); }
+      });
+    }, { threshold: .12 });
+    els.forEach(function (el) { io.observe(el); });
+  })();
 
-  // hero terminal typing loop（按墙钟时间推进，节流只跳帧不冻结）
-  const script = [
-    { c: 'cmd', t: '$ reins assign REINS-95 --to claude · 数据整理' },
-    { c: 'ok',  t: '✓ 上下文已装配 · 已创建独立工作区 ws/REINS-95' },
-    { c: '',    t: '● 正在读取 suppliers_2026Q3.xlsx（1.2 万行）…' },
-    { c: 'acc', t: '● 清洗完成：去重 214 行 · 补全 96 格 · 标出存疑 12 处' },
-    { c: 'ok',  t: '✓ 交付 #216 已生成 → 卡片移动至「待审查」' },
-    { c: 'cmd', t: '$ reins assign REINS-97 --to codex --parallel' },
-    { c: 'ok',  t: '✓ codex 已并行开工 · 当前 2 个 Agent 在役' },
-  ];
-  const term = document.getElementById('term');
-  const CPS = 42, LINE_PAUSE = 460, HOLD = 3200;
-  const durations = script.map(l => l.t.length / CPS * 1000 + LINE_PAUSE);
-  const total = durations.reduce((a, b) => a + b, 0) + HOLD;
-  let t0 = performance.now();
-  setInterval(() => {
-    const el = (performance.now() - t0) % total;
-    let acc = 0, html = '';
-    for (let i = 0; i < script.length && acc <= el; i++) {
-      const within = el - acc, shown = Math.min(script[i].t.length, Math.floor(within / 1000 * CPS));
-      if (shown > 0) html += `<div class="ln ${script[i].c}">${script[i].t.slice(0, shown)}</div>`;
-      acc += durations[i];
+  // 在役仪表：VU 电平随机走动 + 点阵计数按墙钟推进（rAF 节流 ~10fps；reduced-motion 时静止在半电平）
+  (function () {
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var chs = document.querySelectorAll('.ladder[data-ch]');
+    var segs = chs.length ? chs[0].children.length : 0;
+    var levels = Array.prototype.map.call(chs, function (c, i) { return .5 + i * .12; });
+
+    function paint() {
+      chs.forEach(function (ch, i) {
+        var lit = Math.round(levels[i] * segs);
+        Array.prototype.forEach.call(ch.children, function (seg, j) {
+          seg.className = j < lit ? 'on' : '';
+        });
+      });
     }
-    term.innerHTML = html || '<div class="ln cmd">$</div>';
-  }, 90);
+
+    var t0 = Date.now(), tokens = 37.5, last = 0;
+    var elT = document.getElementById('c-time'), elK = document.getElementById('c-tokens'), elC = document.getElementById('clock');
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    function tick(now) {
+      if (now - last > 90) {
+        last = now;
+        if (!reduced) {
+          levels = levels.map(function (v) {
+            var next = v + (Math.random() - .5) * .34;
+            return Math.max(.18, Math.min(.95, next));
+          });
+          paint();
+        } else { paint(); }
+        var s = Math.floor((Date.now() - t0) / 1000);
+        if (elT) elT.textContent = p2(Math.floor(s / 3600)) + ':' + p2(Math.floor(s / 60) % 60) + ':' + p2(s % 60);
+        if (elC) { var d = new Date(); elC.textContent = p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); }
+        if (elK && !reduced) {
+          tokens += Math.random() * .9;
+          elK.textContent = (tokens >= 1000 ? (tokens / 1000).toFixed(1) + 'M' : tokens.toFixed(1)) + 'K';
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  })();
+
+  // 拨杆开关（detent 阻尼）
+  document.querySelectorAll('[data-sw]').forEach(function (sw) {
+    sw.addEventListener('click', function () {
+      var on = sw.classList.toggle('on');
+      sw.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  });
 </script>
 </body>
 </html>

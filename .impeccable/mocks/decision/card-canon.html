@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>类目标准 — 首屏草图</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body{ font-family:-apple-system,"PingFang SC",sans-serif; background:#fff; color:#0f172a; overflow:hidden; height:100vh; display:flex; flex-direction:column; }
+  nav{ display:flex; align-items:center; gap:30px; padding:18px 56px; border-bottom:1px solid #eef1f5; }
+  .logo{ font-weight:800; font-size:19px; display:flex; align-items:center; gap:9px; }
+  .logo i{ width:25px; height:25px; border-radius:6px; background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-style:normal; font-size:14px; font-weight:800; }
+  nav a{ color:#5b6472; text-decoration:none; font-size:14px; }
+  nav .gh{ margin-left:auto; border:1px solid #d8dee7; padding:8px 16px; border-radius:8px; color:#0f172a; font-size:13px; text-decoration:none; }
+  main{ flex:1; display:grid; grid-template-columns:1fr 1fr; align-items:center; padding:0 56px; gap:48px; }
+  .badge{ display:inline-block; font-size:13px; color:#2563eb; background:#eff4ff; border:1px solid #d7e3ff; border-radius:999px; padding:5px 14px; margin-bottom:22px; }
+  h1{ font-size:52px; font-weight:800; line-height:1.25; letter-spacing:-.01em; }
+  .sub{ margin-top:20px; font-size:17px; line-height:1.75; color:#5b6472; max-width:32em; }
+  .ctas{ margin-top:32px; display:flex; gap:14px; }
+  .btn{ background:#2563eb; color:#fff; text-decoration:none; font-weight:700; font-size:16px; padding:14px 30px; border-radius:10px; }
+  .btn2{ border:1px solid #d8dee7; color:#0f172a; text-decoration:none; font-size:15px; padding:14px 24px; border-radius:10px; }
+  /* 产品截图卡 */
+  .shot{ background:#f8fafc; border:1px solid #e5eaf1; border-radius:16px; padding:22px; box-shadow:0 20px 50px rgba(15,23,42,.08); }
+  .shot .bar{ height:12px; border-radius:6px; background:#eef2f7; margin-bottom:16px; }
+  .cols{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .col h5{ font-size:11px; color:#94a3b8; letter-spacing:.08em; margin:4px 0 10px; text-align:center; }
+  .card{ background:#fff; border:1px solid #e5eaf1; border-radius:9px; padding:10px; margin-bottom:10px; }
+  .card b{ display:block; font-size:11px; color:#334155; margin-bottom:5px; }
+  .card i{ display:block; height:6px; border-radius:3px; background:#eef2f7; }
+  .card .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; background:#2563eb; }
+</style>
+</head>
+<body>
+  <nav>
+    <span class="logo"><i>R</i>Reins</span>
+    <a href="#">场景</a><a href="#">产品能力</a><a href="#">工作方式</a><a href="#">集成</a><a href="#">FAQ</a>
+    <a class="gh" href="#">GitHub ↗</a>
+  </nav>
+  <main>
+    <div>
+      <span class="badge">v1.0 正式发布 · 免费接入你正在用的 Agent</span>
+      <h1>你的 AI 同事，已经到岗。</h1>
+      <p class="sub">像给同事派活一样给 AI Agent 派任务：写代码、做调研、整资料、处理工单，看板流转、并行执行、过程可回放。</p>
+      <div class="ctas">
+        <a class="btn" href="#">GitHub 获取源码</a>
+        <a class="btn2" href="#">怎么派活？三步搞定 →</a>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="bar" style="width:38%"></div>
+      <div class="cols">
+        <div class="col"><h5>待处理</h5>
+          <div class="card"><b>REINS-96</b><i style="width:80%"></i></div>
+          <div class="card"><b>REINS-98</b><i style="width:60%"></i></div>
+        </div>
+        <div class="col"><h5>进行中</h5>
+          <div class="card"><b><span class="dot"></span> REINS-95</b><i style="width:70%;background:#dbeafe"></i></div>
+          <div class="card"><b><span class="dot"></span> REINS-97</b><i style="width:45%;background:#dbeafe"></i></div>
+        </div>
+        <div class="col"><h5>待审查</h5>
+          <div class="card"><b>REINS-91</b><i style="width:65%"></i></div>
+        </div>
+        <div class="col"><h5>已完成</h5>
+          <div class="card"><b>REINS-93</b><i style="width:50%"></i></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

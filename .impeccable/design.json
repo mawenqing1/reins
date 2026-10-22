@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-21T00:00:00+08:00",
+  "title": "Design System: Reins（驭码）",
+  "extensions": {
+    "colorMeta": {
+      "led": {
+        "role": "primary",
+        "displayName": "通电琥珀 LED",
+        "canonical": "#ff9d00",
+        "tonalRamp": ["#4d2f00", "#7f4e00", "#b06e10", "#d98c0d", "#ff9d00", "#ffad29", "#ffc466", "#ffe3b3"]
+      },
+      "dotmatrix": {
+        "role": "primary",
+        "displayName": "点阵辉光字",
+        "canonical": "#ffb23e",
+        "tonalRamp": ["#4d3609", "#7f5a0f", "#b07e15", "#ff9d00", "#ffb23e", "#ffc46b", "#ffd698", "#ffebc9"]
+      },
+      "amber-press": {
+        "role": "primary",
+        "displayName": "压深琥珀（浅底交互）",
+        "canonical": "#a06a08",
+        "tonalRamp": ["#322002", "#543604", "#7d5206", "#a06a08", "#b98220", "#cd9a44", "#e0b87a", "#f0d8b0"]
+      },
+      "chassis-beige": {
+        "role": "neutral",
+        "displayName": "机身米",
+        "canonical": "#e3e4d9",
+        "tonalRamp": ["#565750", "#7e7f74", "#a3a496", "#c2c4b7", "#d3d5c9", "#e3e4d9", "#eef0e5", "#f7f8ef"]
+      },
+      "alu-face": {
+        "role": "neutral",
+        "displayName": "拉丝铝面板（受光面）",
+        "canonical": "#dcdfd5",
+        "tonalRamp": ["#3d3f38", "#5c5e55", "#82857a", "#a5a89b", "#c9ccc1", "#dcdfd5", "#e9ebdf", "#f4f5eb"]
+      },
+      "etched-card": {
+        "role": "neutral",
+        "displayName": "蚀刻暖白面板",
+        "canonical": "#eef0e5",
+        "tonalRamp": ["#4a4b43", "#6f7065", "#989a8c", "#babeb0", "#d6d8cb", "#e3e5da", "#eef0e5", "#f8f9f2"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "蚀刻黑油墨",
+        "canonical": "#1d1c1a",
+        "tonalRamp": ["#0c0b0a", "#1d1c1a", "#33322d", "#4c4a44", "#676459", "#8a877c", "#b8b5aa", "#e6e4da"]
+      },
+      "glass-face": {
+        "role": "neutral",
+        "displayName": "深色玻璃窗",
+        "canonical": "#1c1a13",
+        "tonalRamp": ["#0c0b08", "#17150f", "#211e15", "#2c2a22", "#3b382b", "#565243", "#7a7563", "#a39e8c"]
+      },
+      "doing": {
+        "role": "secondary",
+        "displayName": "运行琥珀（--doing）",
+        "canonical": "#c47f17",
+        "tonalRamp": ["#3d2705", "#6b450a", "#96600e", "#c47f17", "#d99a3d", "#e8b56b", "#f3cf9e", "#fae5c6"]
+      },
+      "review": {
+        "role": "secondary",
+        "displayName": "待验收紫（--review）",
+        "canonical": "#7c6bd6",
+        "tonalRamp": ["#26204a", "#40377e", "#584bad", "#7c6bd6", "#9c8fe2", "#bcb0ec", "#d9d2f5", "#efecfa"]
+      },
+      "done": {
+        "role": "secondary",
+        "displayName": "完成绿（--done）",
+        "canonical": "#36855a",
+        "tonalRamp": ["#0f2a1b", "#1b452e", "#266040", "#36855a", "#5aa27c", "#85bd9f", "#b0d6c2", "#d8ecdf"]
+      },
+      "todo": {
+        "role": "secondary",
+        "displayName": "待办灰（--todo）",
+        "canonical": "#8a8f94",
+        "tonalRamp": ["#2b2d2f", "#47494c", "#64676b", "#8a8f94", "#a8adb2", "#c3c7cb", "#dde0e2", "#f0f2f3"]
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "告警红（--red）",
+        "canonical": "#c14e4e",
+        "tonalRamp": ["#401818", "#6b2828", "#963939", "#c14e4e", "#d47676", "#e2a0a0", "#f0c9c9", "#f8e4e4"]
+      },
+      "ember": {
+        "role": "tertiary",
+        "displayName": "过载炽炭（电平表顶段）",
+        "canonical": "#d05636",
+        "tonalRamp": ["#421a11", "#702c1c", "#9e3f27", "#d05636", "#de7c62", "#e9a28f", "#f3c9bd", "#f9e4dd"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "官网 hero 双行巨题；em 行内琥珀荧光笔刻痕。" },
+      "headline": { "displayName": "Headline", "purpose": "分区题（官网 .zone-head h2）与控制台视图题 h2。" },
+      "title": { "displayName": "Title", "purpose": "面板题 h3，后缀 i.zen 铭牌刻字。" },
+      "body": { "displayName": "Body（控制台密度）", "purpose": "控制台全部正文/表单；13px/1.55 工作密度。" },
+      "body-landing": { "displayName": "Body（官网密度）", "purpose": "官网正文与长文；15px/1.75 展示密度，限宽 33–44em。" },
+      "mono": { "displayName": "点阵仪表字", "purpose": "一切读数、键位、流水；tabular-nums + 疏排 + 玻璃窗内辉光。" },
+      "nameplate": { "displayName": "铭牌刻字", "purpose": "仅英文微刻（大写 11px .22em）；Avenir Next Condensed 栈。" }
+    },
+    "shadows": [
+      { "name": "panel-ground", "value": "inset 0 1px 0 rgba(255,255,255,.6), 0 2px 8px rgba(40,38,30,.07)", "purpose": "控制台卡片/表格/面板的贴地浮雕（上高光+贴地影）。" },
+      { "name": "panel-ground-landing", "value": "inset 0 1px 0 rgba(255,255,255,.6), 0 8px 22px rgba(40,38,30,.14)", "purpose": "官网铝面板一档更大的贴地投影。" },
+      { "name": "chassis-drop", "value": "0 30px 70px rgba(40,38,30,.3)", "purpose": "仅官网最外层机壳允许一次的大投影。" },
+      { "name": "glass-recess", "value": "inset 0 2px 8px rgba(0,0,0,.6), inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(255,255,255,.35)", "purpose": "一切深色玻璃仪表窗的下陷。" },
+      { "name": "key-travel", "value": "0 3px 0 #8f8d7c, inset 0 1px 0 #fff", "purpose": "塑模键行程底影；hover 减 1px，active 归零。" },
+      { "name": "key-travel-primary", "value": "0 3px 0 #7d5206, inset 0 1px 0 rgba(255,255,255,.4)", "purpose": "琥珀主键行程（官网 0 4px 0 #6f4904）。" },
+      { "name": "amber-glow", "value": "0 0 6px rgba(255,157,0,.45)", "purpose": "玻璃窗内点阵字与点亮电平段的辉光（官网 7px .5，弱化件 .35）。" },
+      { "name": "focus-ring", "value": "0 0 0 3px rgba(255,157,0,.13)", "purpose": "输入域聚焦琥珀环，配边框 rgba(160,106,8,.42)。" },
+      { "name": "breathe-ring", "value": "0 0 0 3px rgba(196,127,23,.16)", "purpose": "运行中甘特片的光环呼吸（pw-breathe，动效非静态阴影）。" }
+    ],
+    "motion": [
+      { "name": "detent", "value": "cubic-bezier(0.34, 1.56, 0.64, 1) / 0.22s", "purpose": "拨杆开关旋钮行程——全站唯一弹性动效，专属于拨杆手势。" },
+      { "name": "press", "value": "ease-out / 0.12s", "purpose": "一切可按压件的行程（transform + 底影同步）。" },
+      { "name": "surface", "value": "ease-out / 0.15–0.18s", "purpose": "背景/边框/颜色的状态过渡。" },
+      { "name": "reveal", "value": "opacity .5s ease-out, transform .5s cubic-bezier(0.22, 0.9, 0.3, 1)", "purpose": "滚动显现「上电」节奏；JS 加 .pre，无 JS 默认可见。" },
+      { "name": "pulse", "value": "1.4s ease-in-out infinite", "purpose": "执行状态点呼吸（透明度 .35↔1 + 缩放 .85↔1.15）。" },
+      { "name": "vu-breathe", "value": "1.8s ease-in-out infinite", "purpose": "在役电平表点亮段呼吸（透明度 1↔.72）；空闲熄灭退隐。" },
+      { "name": "pw-breathe", "value": "1.8s ease-in-out infinite", "purpose": "运行中甘特片光环呼吸（box-shadow 0↔3px rgba(196,127,23,.16)）。" },
+      { "name": "reel-spin", "value": "2.4s linear infinite / 默认 paused", "purpose": "磁带卷轴仅供带时旋转（官网 hover 播放）。" },
+      { "name": "reduced-motion", "value": "prefers-reduced-motion: 全部 animation/transition none", "purpose": "无障碍底线：所有动效可整体关断。" }
+    ],
+    "breakpoints": [
+      { "name": "index-wide-collapse", "value": "1100px", "purpose": "官网 hero 收单列、功能面板 12 列收 2 列。" },
+      { "name": "index-nav-collapse", "value": "860px", "purpose": "官网导航收横滑 m-nav、点阵时钟隐藏、三栏区收单列。" },
+      { "name": "index-compact", "value": "620px", "purpose": "官网页边收 8px、仪表窗两列、deck-row 换行。" },
+      { "name": "app-console", "value": "1080px", "purpose": "控制台唯一收缩点。" }
+    ]
+  },
+  "components": [
+    {
+      "name": "琥珀塑模主键",
+      "kind": "button",
+      "refersTo": "btn-primary",
+      "description": "控制台主行动键：琥珀渐变键面 + 硬底影行程，按压下沉底影归零。",
+      "html": "<button class=\"ds-btn-primary\">＋ 新建任务</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; gap:7px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro SC','PingFang SC','Segoe UI',sans-serif; font-size:13px; font-weight:600; padding:8px 15px; border-radius:7px; border:1px solid #b06e10; background:linear-gradient(180deg,#ff9d00,#e08800); color:#241a04; box-shadow:0 3px 0 #7d5206, inset 0 1px 0 rgba(255,255,255,.4); cursor:pointer; transition:transform .12s ease-out, box-shadow .12s ease-out; } .ds-btn-primary:hover { box-shadow:0 2px 0 #7d5206, inset 0 1px 0 rgba(255,255,255,.4); } .ds-btn-primary:active { transform:translateY(2px); box-shadow:0 0 0 #7d5206, inset 0 1px 0 rgba(255,255,255,.4); } .ds-btn-primary:focus-visible { outline:2px solid #c9891a; outline-offset:1px; }"
+    },
+    {
+      "name": "米白塑模副键",
+      "kind": "button",
+      "refersTo": "btn-secondary",
+      "description": "次级键：暖白键面 + 铝边 + 2px 底影；危险变体换红。",
+      "html": "<button class=\"ds-btn-secondary\">打回重做</button>",
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; gap:7px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro SC','PingFang SC','Segoe UI',sans-serif; font-size:13px; font-weight:600; padding:8px 15px; border-radius:7px; border:1px solid rgba(29,28,26,.24); background:linear-gradient(180deg,#f6f7ee,#e6e8db); color:#1d1c1a; box-shadow:0 2px 0 rgba(29,28,26,.18), inset 0 1px 0 #fff; cursor:pointer; transition:transform .12s ease-out, box-shadow .12s ease-out, border-color .15s; } .ds-btn-secondary:hover { border-color:rgba(29,28,26,.38); } .ds-btn-secondary:active { transform:translateY(2px); box-shadow:0 0 0 rgba(29,28,26,.18), inset 0 1px 0 #fff; }"
+    },
+    {
+      "name": "点阵计数窗",
+      "kind": "custom",
+      "refersTo": "glass-counter",
+      "description": "深色玻璃窗 + 点阵数字 + 辉光；控制台概览四盘与官网计数窗同构。读数必须真实。",
+      "html": "<div class=\"ds-glass-counter\"><b>12.6</b><span>今日花费 <i>¥ · COST</i></span></div>",
+      "css": ".ds-glass-counter { background:linear-gradient(180deg,#1c1a13,#17150f 60%); border:1px solid #0c0b08; border-radius:10px; box-shadow:inset 0 2px 8px rgba(0,0,0,.6), inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(255,255,255,.35); padding:16px 20px 14px; font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; } .ds-glass-counter b { display:block; font-size:26px; font-weight:600; letter-spacing:.06em; color:#ffb23e; text-shadow:0 0 7px rgba(255,157,0,.45); font-variant-numeric:tabular-nums; } .ds-glass-counter span { font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif; font-size:12px; color:#918c7a; letter-spacing:.04em; } .ds-glass-counter i { font-style:normal; font-family:'Avenir Next Condensed','Arial Narrow',sans-serif; font-weight:600; font-size:11px; letter-spacing:.22em; color:#8f8a78; margin-left:7px; }"
+    },
+    {
+      "name": "蚀刻面板",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "暖白蚀刻卡片：上缘 1px 高光 + 贴地影 + 铭牌刻字；空态为虚线框。",
+      "html": "<div class=\"ds-panel\"><h3>Agent 负载<i>LOAD</i></h3><div class=\"ds-empty\">还没有 Agent。接入后，执行负载的电平会在这里点亮。</div></div>",
+      "css": ".ds-panel { background:linear-gradient(180deg,#f4f5eb,#eef0e5 70%); border:1px solid rgba(29,28,26,.17); border-radius:10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 2px 8px rgba(40,38,30,.07); padding:20px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro SC','PingFang SC','Segoe UI',sans-serif; color:#1d1c1a; } .ds-panel h3 { margin:0 0 14px; font-size:14px; font-weight:800; text-shadow:0 1px 0 rgba(255,255,255,.5); } .ds-panel h3 i { font-style:normal; font-family:'Avenir Next Condensed','Arial Narrow',sans-serif; font-weight:600; font-size:11px; letter-spacing:.22em; color:#676459; margin-left:9px; vertical-align:1px; } .ds-empty { border:1.5px dashed rgba(29,28,26,.3); border-radius:8px; padding:22px 14px; text-align:center; font-size:12.5px; color:#676459; }"
+    },
+    {
+      "name": "凹槽输入域",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "凹陷填充 + 琥珀聚焦环；搜索框聚焦展宽 240→300px。",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"搜索任务、Agent、交付物…\">",
+      "css": ".ds-input { width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid rgba(29,28,26,.3); border-radius:7px; background:#f7f8ef; color:#1d1c1a; font-family:-apple-system,BlinkMacSystemFont,'SF Pro SC','PingFang SC','Segoe UI',sans-serif; font-size:13px; caret-color:#a06a08; box-shadow:inset 0 2px 4px rgba(40,38,30,.05); transition:border-color .15s, box-shadow .15s; } .ds-input:focus { outline:none; border-color:rgba(160,106,8,.42); box-shadow:inset 0 2px 4px rgba(40,38,30,.05), 0 0 0 3px rgba(255,157,0,.13); } .ds-input::placeholder { color:#676459; }"
+    },
+    {
+      "name": "在役电平表",
+      "kind": "custom",
+      "refersTo": "vu-ladder",
+      "description": "世界签名件：10 段琥珀梯，负载 % 驱动点亮数，执行中呼吸、空闲熄灭退隐。",
+      "html": "<div class=\"ds-vu live\"><span class=\"ds-vu-name\">GLM-4.6</span><div class=\"ds-vu-lad\"><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class=\"ds-vu-rd\">REINS-42 · 40%</span></div>",
+      "css": ".ds-vu { display:flex; align-items:center; gap:14px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro SC','PingFang SC','Segoe UI',sans-serif; } .ds-vu-name { width:120px; font-size:12px; font-weight:600; color:#1d1c1a; text-shadow:0 1px 0 rgba(255,255,255,.5); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .ds-vu-lad { flex:1; display:flex; flex-direction:column-reverse; gap:2px; padding:7px 10px; background:linear-gradient(180deg,#1c1a13,#17150f 60%); border:1px solid #0c0b08; border-radius:7px; box-shadow:inset 0 2px 8px rgba(0,0,0,.6), inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(255,255,255,.35); } .ds-vu-lad i { height:4px; border-radius:1.5px; background:#3b382b; box-shadow:inset 0 1px 1px rgba(0,0,0,.45); } .ds-vu-lad i.on { background:linear-gradient(180deg,#ffb23e,#ff9d00); box-shadow:0 0 4px rgba(255,157,0,.38); } .ds-vu.live .ds-vu-lad i.on { animation:ds-vu-breathe 1.8s ease-in-out infinite; } .ds-vu-rd { width:150px; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11px; color:#4c4a44; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } @keyframes ds-vu-breathe { 0%,100% { opacity:1; } 50% { opacity:.72; } } @media (prefers-reduced-motion: reduce) { .ds-vu.live .ds-vu-lad i.on { animation:none; } }"
+    },
+    {
+      "name": "状态点",
+      "kind": "chip",
+      "refersTo": "status-dot",
+      "description": "四枚语义色圆点（--todo/--doing/--review/--done）+ 红；JS 经 var(--${st}) 消费，名字不可变。",
+      "html": "<span class=\"ds-st todo\"><span class=\"ds-dot\"></span>待办</span><span class=\"ds-st doing\"><span class=\"ds-dot\"></span>进行中</span><span class=\"ds-st review\"><span class=\"ds-dot\"></span>待验收</span><span class=\"ds-st done\"><span class=\"ds-dot\"></span>已归档</span>",
+      "css": ".ds-st { display:inline-flex; align-items:center; gap:6px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro SC','PingFang SC','Segoe UI',sans-serif; font-size:12px; font-weight:600; color:#1d1c1a; margin-right:14px; } .ds-dot { width:7px; height:7px; border-radius:50%; } .ds-st.todo .ds-dot { background:var(--todo,#8a8f94); } .ds-st.doing .ds-dot { background:var(--doing,#c47f17); animation:ds-pulse 1.4s ease-in-out infinite; } .ds-st.review .ds-dot { background:var(--review,#7c6bd6); } .ds-st.done .ds-dot { background:var(--done,#36855a); } @keyframes ds-pulse { 0%,100% { opacity:.35; transform:scale(.85); } 50% { opacity:1; transform:scale(1.15); } } @media (prefers-reduced-motion: reduce) { .ds-st.doing .ds-dot { animation:none; } }"
+    },
+    {
+      "name": "拨杆开关",
+      "kind": "custom",
+      "refersTo": "switch",
+      "description": "轨道凹槽 + 象牙旋钮 + detent 阻尼回弹；on 态轨道通电转琥珀。",
+      "html": "<button class=\"ds-sw on\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-sw-track\"><span class=\"ds-sw-knob\"></span></span><span class=\"ds-sw-name\">并行 <i>PARALLEL</i></span></button>",
+      "css": ".ds-sw { display:inline-flex; align-items:center; gap:9px; background:none; border:0; padding:4px 2px; cursor:pointer; font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif; } .ds-sw-track { width:40px; height:20px; border-radius:10px; background:linear-gradient(180deg,#14120d,#2c2a22); box-shadow:inset 0 2px 5px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.3); position:relative; transition:background .18s ease-out; } .ds-sw-knob { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:linear-gradient(180deg,#fdfcf5,#cfccbb); box-shadow:0 2px 4px rgba(0,0,0,.4); transition:transform .22s cubic-bezier(0.34,1.56,0.64,1); } .ds-sw-name { font-size:13px; font-weight:600; color:#1d1c1a; text-shadow:0 1px 0 rgba(255,255,255,.5); } .ds-sw-name i { font-style:normal; display:block; line-height:1; font-family:'Avenir Next Condensed','Arial Narrow',sans-serif; font-size:11px; letter-spacing:.16em; color:#4e4b42; } .ds-sw.on .ds-sw-track { background:linear-gradient(180deg,#b06e10,#d98c0d); } .ds-sw.on .ds-sw-knob { transform:translateX(20px); } .ds-sw:focus-visible { outline:2px solid #6f4904; outline-offset:2px; border-radius:4px; }"
+    },
+    {
+      "name": "执行终端窗",
+      "kind": "custom",
+      "refersTo": "run-box",
+      "description": "深色玻璃终端：窗头 + 点阵行 + 琥珀进度条；流式输出的唯一容器语声。",
+      "html": "<div class=\"ds-run\"><div class=\"ds-run-head\"><span class=\"ds-run-agent\">GLM-4.6</span><span class=\"ds-run-pct\">62%</span></div><div class=\"ds-run-bar\"><i style=\"width:62%\"></i></div><div class=\"ds-run-body\"><span class=\"ds-ln ok\">✓ 工作区就绪（worktree）</span><span class=\"ds-ln act\">→ 正在执行：reins-42</span><span class=\"ds-ln\">流式输出行…</span></div></div>",
+      "css": ".ds-run { border-radius:8px; overflow:hidden; background:linear-gradient(180deg,#1c1a13,#17150f 60%); border:1px solid #0c0b08; box-shadow:inset 0 2px 8px rgba(0,0,0,.6), inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(255,255,255,.35); font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; } .ds-run-head { background:#211e15; padding:9px 14px; display:flex; align-items:center; gap:9px; font-size:12px; color:#918c7a; border-bottom:1px solid rgba(255,255,255,.08); } .ds-run-agent { color:#ffb23e; font-weight:600; text-shadow:0 0 5px rgba(255,157,0,.35); } .ds-run-pct { margin-left:auto; color:#918c7a; } .ds-run-bar { height:4px; background:rgba(255,255,255,.07); } .ds-run-bar i { display:block; height:100%; background:linear-gradient(90deg,#ff9d00,#e08800); transition:width .5s; } .ds-run-body { padding:12px 14px; font-size:12px; line-height:1.8; } .ds-ln { display:block; color:#cdc7b2; } .ds-ln.ok { color:#3d7a55; } .ds-ln.act { color:#ffb23e; text-shadow:0 0 6px rgba(255,157,0,.45); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "开工中的调度台（The On-Duty Deck）",
+    "overview": "Reins 的视觉世界是一台正在开工的卡带调度台：用户面对的不是\"又一个后台\"，而是一块米色机身包裹、拉丝铝面板作地的实体设备。信息分层即物理分层——机身是地面，铝面板是骨架，暖白蚀刻卡片是操作区，深色玻璃窗是仪表，琥珀是唯一通电的颜色。一切可按压的东西都有行程，一切仪表都读真实数据。两个表面共享同一套物料：官网是整幅机箱面板（磁带仓/曲目单/走带三键/配线盘/维修手册五区以蚀刻细线与螺钉定界），控制台是在役面板（216px 铝面侧栏 + 四盘点阵计数窗 + 三路电平表先行）。密度上官网是展示密度（15px/1.75），控制台是工作密度（13px/1.55）——同一世界，两种握感。",
+    "keyCharacteristics": [
+      "米色机身 + 拉丝铝 + 暖白蚀刻卡的三层地面，靠 1px 上缘高光与蚀刻细线塑形，不靠大阴影。",
+      "交互琥珀只在深色玻璃窗内通电（LED、点阵数字、辉光）；浅底上的琥珀一律压深。",
+      "蚀刻黑油墨字带 1px 白高光浮雕（text-shadow 0 1px 0 rgba(255,255,255,.5)）。",
+      "EN 铭牌刻字是独立的第四种字声：Avenir Next Condensed 栈、11px、.22em、大写。",
+      "可按压件必有 2–4px 硬底影行程；拨杆带 detent 阻尼回弹。",
+      "全部为 CSS/SVG/系统字体，零位图、零外源（CSP connect-src 'none'）。"
+    ],
+    "rules": [
+      { "name": "The Glass Window Rule（玻璃窗法规）", "body": "交互琥珀只活在深色玻璃窗内：LED、点阵数字、辉光只出现在 linear-gradient(180deg,#1c1a13,#17150f 60%) 的窗体上。浅底上的琥珀一律压深为 #a06a08 / #7d5206 / #c9891a。琥珀出现在浅底亮面上等于短路。", "section": "colors" },
+      { "name": "The Real Load Rule（真实负载法规）", "body": "仪表读数必须来自真实数据（电平段数 = 负载百分比、计数 = 真实任务/花费）；演示数据必须就地标注（官网 deck 角注\"演示走带 · 非实时数据\"）。", "section": "colors" },
+      { "name": "The State Slot Rule（状态槽法规）", "body": "四枚语义色 #8a8f94/#c47f17/#7c6bd6/#36855a + #c14e4e 以 :root 自定义属性 --todo/--doing/--review/--done/--red 暴露，app.ts 经 var(--${st}) 消费——这些名字是 JS 运行时接口，任何重绘都不得改名。", "section": "colors" },
+      { "name": "The Nameplate Rule（铭牌法规）", "body": "Condensed 刻字只用于英文铭牌语声（全大写、11px、.22em、600），不承载中文，不作正文强调。它是丝印，不是排版花样。", "section": "typography" },
+      { "name": "The Instrument Digit Rule（仪表示数法规）", "body": "一切读数用 ui-monospace 栈 + tabular-nums；数字宽度不稳定等于表针抖动。", "section": "typography" },
+      { "name": "The Etched Highlight Rule（蚀刻法规）", "body": "每块凸面板必有 1px 上缘白高光，每条分界线（1px rgba(29,28,26,.15~.18)）下邻必有一条白高光线——线是刻出来的，浮起的不是卡片而是面板。", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** 按物料配方上漆：拉丝铝 = repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 1px, rgba(0,0,0,.035) 1px 2px) 叠 linear-gradient(168deg,#dcdfd5,#c9ccc1 46%,#bfc3b6) + 斜向光；蚀刻卡 = #f4f5eb→#eef0e5 渐变 + inset 白高光。",
+      "**Do** 给浏览器原生件上漆：::selection #ff9d00/#241a04、滚动条铝槽（track #c2c4b7）+ 钢灰渐变滑块（#a2a496→#86887a，3px 同色边框内缩）、caret #a06a08、:focus-visible 2px outline。",
+      "**Do** 一切循环动效走柔和呼吸：状态点 pulse 1.4s（透明度+缩放）、电平 vu-breathe 1.8s（透明度 1→.72）、运行片 pw-breathe 1.8s（光环 0→3px）；卷带 spin 2.4s 仅 hover 供带。",
+      "**Do** 滚动显现由 JS 加 .pre 类、IntersectionObserver 换 .on——无 JS 时内容默认完整可见。",
+      "**Do** 状态语义小件统一走状态点/点阵：7–8px 圆点（2~3px 圆角方点用于列头）+ 语义色，克制使用。"
+    ],
+    "donts": [
+      "**Don't** 引入任何外部字体、图片、脚本（CSP 关死外连，connect-src 'none'）；资产只能是系统栈、内联 SVG 与本地文件。",
+      "**Don't** 让亮琥珀 (#ff9d00/#ffb23e) 出现在浅色底上；浅底琥珀只允许 #a06a08 / #7d5206 / #c9891a。",
+      "**Don't** 给面板加漂浮大阴影或 hover 上浮；投影词汇表之外只有键行程硬底影。",
+      "**Don't** 改动 :root 状态变量名（--todo/--doing/--review/--done/--red/--accent 等）——它们是 app.ts 的运行时接口。",
+      "**Don't** 用装饰性彩色渐变或品牌大色块；彩色只承担状态语义与玻璃窗内仪表。",
+      "**Don't** 编造仪表读数或省略\"演示\"标注；空态用虚线框如实写\"还没有\"，不放假数据。"
+    ]
+  }
+}

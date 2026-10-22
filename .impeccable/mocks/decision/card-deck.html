@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>卡带调度台 — 首屏草图</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body{
+    font-family:-apple-system,"PingFang SC",sans-serif; color:#2b2b28;
+    background:linear-gradient(180deg,#eceade,#dcd8cb 60%,#cfcabb); overflow:hidden; height:100vh;
+  }
+  .fascia{
+    margin:26px auto; width:min(1240px,92vw); height:calc(100vh - 52px);
+    background:linear-gradient(160deg,#d7d3c6,#c9c5b8 55%,#beb9ab);
+    border-radius:18px; border:1px solid #a8a496;
+    box-shadow:0 24px 60px rgba(40,38,30,.35), inset 0 1px 0 rgba(255,255,255,.7);
+    padding:26px 34px; display:flex; flex-direction:column;
+  }
+  nav{ display:flex; align-items:center; gap:26px; padding-bottom:18px; border-bottom:2px solid #7c7666; }
+  .logo{ font-weight:900; font-size:20px; letter-spacing:.04em; display:flex; align-items:center; gap:10px; }
+  .logo .key{ width:26px; height:26px; background:#2b2b28; color:#e8a33c; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; }
+  nav a{ color:#4d4a42; text-decoration:none; font-size:13px; letter-spacing:.12em; font-weight:600; }
+  nav .gh{ margin-left:auto; background:#2b2b28; color:#e8a33c; padding:8px 16px; border-radius:5px; font-size:12px; letter-spacing:.14em; text-decoration:none; font-weight:800; }
+  main{ flex:1; display:grid; grid-template-columns: 1.05fr .95fr; gap:44px; padding-top:44px; align-items:start; }
+  h1{ font-size:52px; line-height:1.2; font-weight:900; letter-spacing:.02em; }
+  h1 .amber{ color:#b06e10; }
+  .sub{ margin-top:20px; font-size:16px; line-height:1.75; color:#545047; max-width:32em; }
+  .ctas{ margin-top:30px; display:flex; gap:14px; }
+  .key-btn{ background:linear-gradient(180deg,#f4f1e6,#ddd8c8); color:#2b2b28; font-weight:800; font-size:15px; padding:14px 26px; border-radius:8px; text-decoration:none; border:1px solid #a8a496; box-shadow:0 4px 0 #8f8a7a, inset 0 1px 0 #fff; }
+  .key-btn.accent{ box-shadow:0 4px 0 #7a4a08, inset 0 2px 0 rgba(255,255,255,.4); background:linear-gradient(180deg,#e8a33c,#cf8a1e); color:#231a08; }
+  .link{ color:#4d4a42; font-size:14px; text-decoration:none; border-bottom:1px solid #8f8a7a; padding-bottom:2px; }
+  .note{ margin-top:24px; font-size:12px; letter-spacing:.14em; color:#6e6a5e; }
+  /* 右侧：仪表区 —— VU 指针 + 琥珀阶梯 + 点阵计数 */
+  .panel{
+    background:linear-gradient(180deg,#efece2,#ddd9cb); border:1px solid #a8a496; border-radius:14px;
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.8), 0 10px 30px rgba(40,38,30,.25);
+    padding:22px 26px;
+  }
+  .meters{ display:flex; gap:26px; }
+  .vu{ flex:1; height:150px; border-radius:8px; background:#23221e; position:relative; overflow:hidden; box-shadow:inset 0 3px 10px rgba(0,0,0,.6); }
+  .vu .ladder{ position:absolute; inset:12px; display:flex; flex-direction:column-reverse; gap:4px; }
+  .vu .ladder i{ height:9px; border-radius:2px; background:#3a382f; }
+  .vu .ladder i.on{ background:#e8a33c; box-shadow:0 0 7px rgba(232,163,60,.8); }
+  .vu .ladder i:nth-child(8),.vu .ladder i:nth-child(9){ background:#d05636; box-shadow:0 0 7px rgba(208,86,54,.7); }
+  .vu .ladder i:nth-child(8).on,.vu .ladder i:nth-child(9).on{ background:#d05636; }
+  .vu .name{ position:absolute; top:10px; left:12px; color:#e8a33c; font-size:11px; letter-spacing:.2em; font-weight:700; }
+  .counters{ display:flex; gap:18px; margin-top:20px; }
+  .counter{ flex:1; background:#23221e; border-radius:8px; padding:12px 16px; box-shadow:inset 0 3px 10px rgba(0,0,0,.6); }
+  .counter b{ display:block; color:#e8a33c; font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:26px; letter-spacing:.14em; }
+  .counter span{ color:#8c887c; font-size:11px; letter-spacing:.22em; }
+  .toggles{ display:flex; gap:22px; margin-top:20px; }
+  .tg{ display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:.16em; color:#4d4a42; font-weight:700; }
+  .tg .sw{ width:44px; height:22px; border-radius:11px; background:#8f8a7a; position:relative; box-shadow:inset 0 2px 5px rgba(0,0,0,.4); }
+  .tg .sw::after{ content:""; position:absolute; top:2px; left:24px; width:18px; height:18px; border-radius:50%; background:linear-gradient(180deg,#fff,#c9c5b8); box-shadow:0 2px 4px rgba(0,0,0,.35); }
+  .tg.on .sw{ background:#e8a33c; }
+</style>
+</head>
+<body>
+  <div class="fascia">
+    <nav>
+      <span class="logo"><span class="key">R</span>REINS</span>
+      <a href="#">场景</a><a href="#">产品能力</a><a href="#">工作方式</a><a href="#">集成</a><a href="#">FAQ</a>
+      <a class="gh" href="#">GITHUB ↗</a>
+    </nav>
+    <main>
+      <div>
+        <h1>你的 AI 同事，<br><span class="amber">已经到岗。</span></h1>
+        <p class="sub">写代码、做调研、整资料、处理工单——把活儿说清楚，派出去。多个 Agent 并行开工，过程全程可回放，验收你说了算。</p>
+        <div class="ctas">
+          <a class="key-btn accent" href="#">GitHub 获取源码</a>
+          <a class="link" href="#">怎么派活？三步搞定 →</a>
+        </div>
+        <p class="note">PUBLIC CLOUD ¥0 · TOKEN 走你自己的订阅 · 平台不抽成</p>
+      </div>
+      <div class="panel">
+        <div class="meters">
+          <div class="vu"><span class="name">CLAUDE</span>
+            <div class="ladder"><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="vu"><span class="name">CODEX</span>
+            <div class="ladder"><i></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="vu"><span class="name">GLM</span>
+            <div class="ladder"><i></i><i></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="counters">
+          <div class="counter"><b>04:12:36</b><span>执行时长 TIME</span></div>
+          <div class="counter"><b>37.5K</b><span>TOKENS 计量</span></div>
+          <div class="counter"><b>03</b><span>在役 AGENTS</span></div>
+        </div>
+        <div class="toggles">
+          <span class="tg on"><span class="sw"></span>并行 PARALLEL</span>
+          <span class="tg on"><span class="sw"></span>回放 REPLAY</span>
+          <span class="tg"><span class="sw"></span>云端 CLOUD</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

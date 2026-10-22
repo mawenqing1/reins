@@ -270,11 +270,13 @@ const FILES = ['src/api/orders.ts', 'src/services/payment.ts', 'docs/竞品分�
 /* ============ 状态 ============ */
 let state = null;
 const runs = {};          // taskId -> 运行实例（演示引擎步进 / 真实 API 流式）
-let curView = 'kanban';
+let curView = 'dash';   // 在役面板（仪表先行）：打开即在概览读到全局健康
 let drawerTaskId = null;
 let filters = { type: '', who: '', search: '', iter: '', lane: '' };
 
 function now() { return Date.now(); }
+/* 本地时区 YYYY-MM-DD（日切锚点用；自带纯函数，不依赖 ExecLog 全局） */
+function dayStr(ms) { const d = new Date(ms), p = n => (n < 10 ? '0' : '') + n; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
 
 /* —— 当前空间访问器（数据按空间隔离；Agent/密钥为全局） —— */
 const O = () => state.orgs?.find(x => x.id === state.activeOrgId) || state.orgs?.[0];
@@ -295,7 +297,7 @@ function seed() {
     chart: [0, 0, 0, 0, 0, 0, 0],
     integ: { jira: { connected: false, host: '', lastSync: 0 } },
     activity: [{ at: now(), icon: '✳', text: '工作区已创建，可新建任务或接入 Agent' }],
-    seq: 1, deliverSeq: 1, repoRoot: '', readAt: 0,
+    seq: 1, deliverSeq: 1, repoRoot: '', readAt: 0, chartDay: dayStr(now()),
   };
   return {
     version: 3, activeOrgId: 'og1', activeSpaceId: 'sp1',
@@ -404,6 +406,22 @@ function navItem(v) {
   return `<button class="nav-item ${curView === v.id ? 'on' : ''}" onclick="switchView('${v.id}')">
     <span class="ic">${ic(v.ic)}</span><span class="txt">${v.label}</span>${cnt ? `<span class="cnt">${cnt}</span>` : ''}</button>`;
 }
+/* 近 7 日吞吐的日切：chart[6] 必须永远代表今天——启动时按锚点把跨过的天推平，
+   否则跨天后旧数堆在「今天」桶里，与「今日归档」统计口径打架（如实呈现原则） */
+function rollChartDaily() {
+  const sp = S(); if (!sp || !Array.isArray(sp.chart)) return;
+  const today = dayStr(now());
+  if (!sp.chartDay) { sp.chartDay = today; return; }
+  let guard = 0;
+  while (sp.chartDay < today && guard++ < 7) {
+    const d = sp.chartDay.split('-').map(Number);
+    const next = new Date(d[0], d[1] - 1, d[2] + 1);
+    sp.chartDay = next.getFullYear() + '-' + String(next.getMonth() + 1).padStart(2, '0') + '-' + String(next.getDate()).padStart(2, '0');
+    sp.chart.shift(); sp.chart.push(0);
+  }
+  if (sp.chartDay !== today) sp.chartDay = today;   // 时钟回拨等异常：对齐锚点，不清历史
+}
+
 function switchView(id) {
   const v = VIEWS.find(x => x.id === id);
   if (!v) { console.warn('[reins] 未知视图', id); return; }   // 守卫：未知 id 直接忽略
@@ -1374,23 +1392,28 @@ function viewDash() {
   const bars = S().chart.map((v, i) => `<div class="bar-w ${i === 6 ? 'today' : ''}"><span style="font-size:11px;font-family:var(--mono);color:var(--ink-dim)">${v}</span><div class="bar" style="height:${Math.round(v / max * 100)}%"></div><span class="lbl">${labels[i]}</span></div>`).join('');
   const utilRows = O().agents.map(a => {
     const cur = a.taskId ? byId(a.taskId) : null;
-    const u = a.status === 'working' ? Math.min(96, a.taskId && runs[a.taskId] ? 20 + runPct(a.taskId) * 0.76 : 40) : 0;
-    return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:13px">
-      <span style="width:130px;font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${brandOf(a)} ${esc(a.name)}</span>
-      <div class="util" style="flex:1;margin:0"><i style="width:${u}%"></i></div>
-      <span style="width:140px;font-size:11px;color:var(--ink-faint);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cur ? cur.key + ' · ' + Math.round(u) + '%' : '空闲'}</span>
+    const live = a.status === 'working';
+    const u = live ? Math.min(96, a.taskId && runs[a.taskId] ? 20 + runPct(a.taskId) * 0.76 : 40) : 0;
+    /* 调音台语法：执行中的通道升起十段电平梯，空闲通道推子归零——只留一条熄灭细槽 */
+    const segN = live ? 10 : 1;
+    const lit = Math.max(u > 0 ? 1 : 0, Math.round(u / 10));
+    const segs = Array.from({ length: segN }, (_, i) => `<i${live && i < lit ? ' class="on"' : ''}></i>`).join('');
+    return `<div class="vu-row${live ? ' live' : ''}">
+      <span class="vu-name">${brandOf(a)} ${esc(a.name)}</span>
+      <div class="vu-lad">${segs}</div>
+      <span class="vu-rd">${cur ? cur.key + ' · ' + Math.round(u) + '%' : '空闲'}</span>
     </div>`;
   }).join('');
   return `<div class="stats">
-      <div class="stat"><span class="ic" style="color:var(--doing)">${ic('play')}</span><b>${doing.length}</b><span>进行中</span><div class="trend">含 Agent 执行 ${doing.filter(t => t.assignee?.kind === 'agent').length} 项</div></div>
-      <div class="stat"><span class="ic" style="color:var(--review)">${ic('clock')}</span><b>${review.length}</b><span>待验收</span><div class="trend">需人工验收</div></div>
-      <div class="stat"><span class="ic" style="color:var(--done)">${ic('check')}</span><b>${doneToday.length}</b><span>今日归档</span></div>
-      <div class="stat"><span class="ic" style="color:var(--accent)">${ic('bot')}</span><b>${working.length}/${online.length}</b><span>Agent 执行中 / 在线</span></div>
+      <div class="stat"><span class="ic" style="color:var(--doing)">${ic('play')}</span><b>${doing.length}</b><span>进行中<i class="zen">DOING</i></span><div class="trend">含 Agent 执行 ${doing.filter(t => t.assignee?.kind === 'agent').length} 项</div></div>
+      <div class="stat"><span class="ic" style="color:var(--review)">${ic('clock')}</span><b>${review.length}</b><span>待验收<i class="zen">REVIEW</i></span><div class="trend">需人工验收</div></div>
+      <div class="stat"><span class="ic" style="color:var(--done)">${ic('check')}</span><b>${doneToday.length}</b><span>今日归档<i class="zen">DONE TODAY</i></span></div>
+      <div class="stat"><span class="ic" style="color:var(--accent)">${ic('bot')}</span><b>${working.length}/${online.length}</b><span>Agent 执行中 / 在线<i class="zen">ON DUTY</i></span></div>
     </div>
     ${dashCostRow()}
     <div class="grid2" style="margin-bottom:14px">
-      <div class="panel"><h3 style="font-size:14px;margin-bottom:4px">近 7 日吞吐</h3><span style="font-size:12px;color:var(--ink-faint)">归档任务数 / 天</span><div class="chart">${bars}</div></div>
-      <div class="panel"><h3 style="font-size:14px;margin-bottom:14px">Agent 负载</h3>${utilRows}</div>
+      <div class="panel"><h3 style="font-size:14px;margin-bottom:4px">近 7 日吞吐<i class="zen">THROUGHPUT</i></h3><span style="font-size:12px;color:var(--ink-faint)">归档任务数 / 天</span><div class="chart">${bars}</div></div>
+      <div class="panel"><h3 style="font-size:14px;margin-bottom:14px">Agent 负载<i class="zen">LOAD</i></h3>${utilRows || '<div class="panel-empty">还没有 Agent。到「Agent」页接入后，执行负载的电平会在这里点亮。</div>'}</div>
     </div>
     ${dashExecList()}
     <div class="panel"><h3 style="font-size:14px;margin-bottom:6px">最近动态</h3>
@@ -1468,7 +1491,7 @@ function dashExecList() {
       <span class="xl-cost">${cost}</span>
     </div>`;
   }).join('');
-  return `<div class="panel exec-list"><h3 style="font-size:14px;margin-bottom:8px">最近执行 <span style="font-weight:400;font-size:11px;color:var(--ink-faint)">逐次流水 · 共 ${log.length} 条（封顶 500）</span></h3>
+  return `<div class="panel exec-list"><h3 style="font-size:14px;margin-bottom:8px">最近执行<i class="zen">RECENT RUNS</i> <span style="font-weight:400;font-size:11px;color:var(--ink-faint)">逐次流水 · 共 ${log.length} 条（封顶 500）</span></h3>
     ${dashCostChart()}
     <div class="xl-head"><span>时间</span><span>任务</span><span>Agent · 模型</span><span>结果</span><span>耗时</span><span>tokens</span><span>花费</span></div>
     ${rows}</div>`;
@@ -4815,6 +4838,11 @@ function normalizeSpace(sp) {
     typeof m === 'string' ? { name: m, role: 'member' }
       : { name: typeof m?.name === 'string' && m.name.trim() ? m.name : '成员', role: ['owner', 'member', 'guest'].includes(m?.role) ? m.role : 'member' });
   for (const k of ['iterations', 'epics', 'prompts', 'autos', 'activity', 'chart']) if (!Array.isArray(sp[k])) sp[k] = [];
+  if (typeof sp.chartDay !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(sp.chartDay)) {
+    /* 旧档无日切锚点：桶龄不可知，按「近 7 日」展示即是编造——清洗归零，从今天起如实计数 */
+    sp.chart = [0, 0, 0, 0, 0, 0, 0];
+    sp.chartDay = dayStr(now());
+  }
   delete sp.comics;   // 漫剧功能已下线：旧档的漫剧项目数据清除
   if (!sp.integ || typeof sp.integ !== 'object') sp.integ = {};
   sp.seq = Number.isFinite(sp.seq) ? sp.seq : 1;
@@ -4856,7 +4884,8 @@ async function init() {
   boot('space-button', () => renderSpaceButton());
   boot('cli-presets', () => { if (window.reins) window.reins.cliList().then(list => { if (Array.isArray(list) && list.length) CLI_PRESETS.splice(0, CLI_PRESETS.length, ...list); }).catch(() => { }); });
   boot('nav', () => renderNav());
-  boot('first-view', () => switchView('kanban'));
+  boot('chart-roll', () => rollChartDaily());
+  boot('first-view', () => switchView(curView));   // 默认落在「在役面板」（概览）
   if (faults.includes('first-view')) {
     $('#content').innerHTML = `<div class="panel" style="padding:26px"><h3 style="margin:0 0 8px">视图渲染失败</h3>
       <div style="font-size:13px;color:var(--ink-dim)">部分数据可能损坏。可先导出备份，再尝试「清空数据」。</div></div>`;

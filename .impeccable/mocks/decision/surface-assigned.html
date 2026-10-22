@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Reins · 在役面板</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1440px;height:900px;overflow:hidden;display:flex;background:#e6e4d6;color:#4c4a44;font:13px/1.45 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+/* —— 侧栏：铝面板 —— */
+.side{width:208px;flex:none;height:100%;display:flex;flex-direction:column;padding:22px 14px 18px;background:linear-gradient(180deg,#d9dcd2,#cfd2c7);border-right:1px solid rgba(29,28,26,.28);box-shadow:inset -1px 0 0 rgba(255,255,255,.5)}
+.logo{display:flex;align-items:center;gap:10px;margin:0 4px 28px}
+.mark{width:34px;height:34px;flex:none;border-radius:7px;background:linear-gradient(180deg,#1c1a13,#17150f);box-shadow:inset 0 2px 8px rgba(0,0,0,.65);color:#ffb23e;text-shadow:0 0 6px rgba(255,157,0,.5);font:700 17px/34px "SF Mono",Menlo,monospace;text-align:center}
+.lname{color:#1d1c1a;text-shadow:0 1px 0 rgba(255,255,255,.5);font-size:15px;font-weight:700;letter-spacing:.12em;line-height:1.2}
+.lname small{display:block;font-size:9px;font-weight:400;letter-spacing:.26em;color:#4a4740;margin-top:2px}
+.nav{display:flex;flex-direction:column;gap:3px}
+.nav a{display:flex;align-items:center;padding:9px 12px;border-radius:6px;font-size:13px;color:#1d1c1a;text-shadow:0 1px 0 rgba(255,255,255,.5);text-decoration:none}
+.nav a:hover{background:rgba(29,28,26,.06)}
+.nav a.cur{background:linear-gradient(180deg,#e6e8de,#d3d6ca);border-left:3px solid #ff9d00;padding-left:9px;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(29,28,26,.12)}
+.nav a em{margin-left:auto;min-width:18px;border-radius:9px;background:linear-gradient(180deg,#f4f2e8,#ddd9c9);border:1px solid #a8a696;box-shadow:0 2px 0 #8f8d7c;font:600 10px/16px "SF Mono",Menlo,monospace;font-style:normal;text-align:center;color:#4c4a44}
+.foot{margin-top:auto}
+.node{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;background:#e9ebe1;border:1px solid rgba(29,28,26,.18);font-size:11px;color:#4a4740}
+.node i{width:6px;height:6px;border-radius:50%;background:#36855a}
+.user{margin-top:12px;padding:12px 4px 0;border-top:1px solid rgba(29,28,26,.16);color:#1d1c1a;text-shadow:0 1px 0 rgba(255,255,255,.5);font-size:12px;font-weight:600}
+/* —— 主区：顶栏 —— */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px 20px}
+.top{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.top h1{font-size:21px;color:#1d1c1a;text-shadow:0 1px 0 rgba(255,255,255,.5);letter-spacing:.02em}
+.en{font-size:11px;letter-spacing:.24em;color:#4a4740;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.btn{margin-left:auto;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:#241a04;padding:10px 16px;border:1px solid #c17a00;border-radius:7px;background:linear-gradient(180deg,#ff9d00,#e08800);box-shadow:0 4px 0 #6f4904}
+/* —— 深色玻璃点阵计数窗 —— */
+.counters{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.cw{padding:14px 18px 12px;border-radius:9px;background:radial-gradient(rgba(255,157,0,.07) 1px,transparent 1.4px) 0 0/5px 5px,linear-gradient(180deg,#1c1a13,#17150f);box-shadow:inset 0 2px 8px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.5)}
+.cw .v{font:600 32px/1.15 "SF Mono",Menlo,Consolas,monospace;letter-spacing:.03em;color:#ffb23e;text-shadow:0 0 6px rgba(255,157,0,.5)}
+.cw .l{margin-top:6px;font-size:11px;letter-spacing:.14em;color:#a49e86}
+/* —— Agent 电平窗 —— */
+.meters{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.mw{display:flex;flex-direction:column;padding:14px 18px 12px;border-radius:9px;background:linear-gradient(180deg,#1c1a13,#17150f);box-shadow:inset 0 2px 8px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.5)}
+.mw .n{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.24em;color:#a49e86}
+.mw .n i{width:6px;height:6px;border-radius:50%;background:#ff9d00;box-shadow:0 0 6px rgba(255,157,0,.5)}
+.bars{flex:1;min-height:0;display:flex;flex-direction:column-reverse;gap:4px;margin:12px 0 10px}
+.bars i{flex:1;border-radius:2px;background:#2c2a22}
+.bars i.on{background:linear-gradient(180deg,#ffbf55,#e08800);box-shadow:0 0 7px rgba(255,157,0,.45)}
+.mw .r{font:11px/1.5 "SF Mono",Menlo,monospace;letter-spacing:.1em;color:#8f8a76}
+/* —— 最近执行明细 —— */
+.panel{background:#e9ebe1;border:1px solid rgba(29,28,26,.18);border-radius:9px;padding:14px 18px 6px}
+.panel h2{display:flex;align-items:baseline;gap:10px;font-size:13px;color:#1d1c1a;text-shadow:0 1px 0 rgba(255,255,255,.5);margin-bottom:4px}
+table{width:100%;border-collapse:collapse}
+th{font-size:10px;font-weight:600;letter-spacing:.14em;color:#4a4740;text-align:left;padding:8px;border-bottom:1px solid rgba(29,28,26,.28)}
+td{padding:9px 8px;border-bottom:1px solid rgba(29,28,26,.12);font-size:12px}
+tbody tr:last-child td{border-bottom:none}
+.r{text-align:right}
+.mono{font-family:"SF Mono",Menlo,Consolas,monospace}
+.st .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:7px;vertical-align:0}
+.st.run{color:#ff9d00}.st.rev{color:#7c6bd6}.st.done{color:#36855a}.st.pend{color:#8a8f94}
+</style>
+</head>
+<body>
+<aside class="side">
+  <div class="logo"><span class="mark">R</span><span class="lname">REINS<small>CONTROL DECK</small></span></div>
+  <nav class="nav">
+    <a class="cur" href="#">在役面板</a>
+    <a href="#">看板</a>
+    <a href="#">Agent</a>
+    <a href="#">交付物</a>
+    <a href="#">收件箱<em>3</em></a>
+    <a href="#">节点</a>
+    <a href="#">设置</a>
+  </nav>
+  <div class="foot">
+    <span class="node"><i></i>本机节点在线</span>
+    <div class="user">我 · 空间管理员</div>
+  </div>
+</aside>
+<main class="main">
+  <header class="top">
+    <h1>在役面板</h1>
+    <span class="en">CONTROL DECK</span>
+    <button class="btn">＋ 新建任务</button>
+  </header>
+  <section class="counters">
+    <div class="cw"><div class="v">¥3.42</div><div class="l">今日花费 · TODAY SPEND</div></div>
+    <div class="cw"><div class="v">03</div><div class="l">在役运行 · ACTIVE AGENTS</div></div>
+    <div class="cw"><div class="v">82%</div><div class="l">首过率 · FIRST-PASS RATE</div></div>
+    <div class="cw"><div class="v">07</div><div class="l">今日完成 · DONE TODAY</div></div>
+  </section>
+  <section class="meters">
+    <div class="mw"><div class="n"><i></i>CLAUDE</div><div class="bars"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div><div class="r">37.5K TOK · 04:12 · REINS-96</div></div>
+    <div class="mw"><div class="n"><i></i>CODEX</div><div class="bars"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div><div class="r">19.2K TOK · 07:48 · REINS-95</div></div>
+    <div class="mw"><div class="n"><i></i>GLM</div><div class="bars"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><div class="r">26.4K TOK · 05:36 · REINS-94</div></div>
+  </section>
+  <section class="panel">
+    <h2>最近执行明细 <span class="en">RECENT RUNS</span></h2>
+    <table>
+      <thead>
+        <tr><th>时间</th><th>任务</th><th>模型</th><th class="r">耗时</th><th class="r">TOKENS</th><th class="r">花费</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">14:32</td><td>REINS-96 · Q4 竞品调研</td><td>CLAUDE</td><td class="r mono">4m12s</td><td class="r mono">37.5K</td><td class="r mono">¥0.86</td><td class="st run"><i class="dot"></i>执行中</td></tr>
+        <tr><td class="mono">13:58</td><td>REINS-95 · 支付回调重试日志巡检</td><td>CODEX</td><td class="r mono">6m40s</td><td class="r mono">51.2K</td><td class="r mono">¥1.24</td><td class="st done"><i class="dot"></i>已完成</td></tr>
+        <tr><td class="mono">13:21</td><td>REINS-94 · 用户访谈纪要脱敏</td><td>GLM</td><td class="r mono">2m05s</td><td class="r mono">12.8K</td><td class="r mono">¥0.31</td><td class="st rev"><i class="dot"></i>待审查</td></tr>
+        <tr><td class="mono">11:47</td><td>REINS-93 · 周报数据汇总与分发</td><td>GLM</td><td class="r mono">3m18s</td><td class="r mono">18.4K</td><td class="r mono">¥0.45</td><td class="st done"><i class="dot"></i>已完成</td></tr>
+        <tr><td class="mono">10:15</td><td>REINS-92 · 帮助中心 FAQ 改写</td><td>CLAUDE</td><td class="r mono">5m51s</td><td class="r mono">29.7K</td><td class="r mono">¥0.68</td><td class="st pend"><i class="dot"></i>待处理</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>

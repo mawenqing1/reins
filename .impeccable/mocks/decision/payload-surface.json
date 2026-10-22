@@ -1,0 +1,77 @@
+{
+  "title": "Reins 控制台：选一个结构",
+  "question": "世界已定（卡带调度台）。骰子发了三种工作台结构——选一个。",
+  "options": [
+    {
+      "id": "surface-assigned",
+      "kind": "assigned",
+      "label": "在役面板（仪表先行）",
+      "kicker": "THE ROLL",
+      "thesis": "打开控制台先见「在役面板」：全局健康一屏读尽，看板退居其次。",
+      "palette": [
+        "#d9dcd2",
+        "#e8e6d8",
+        "#1d1c1a",
+        "#ff9d00"
+      ],
+      "materials": [
+        "铝面板地",
+        "点阵计数窗",
+        "VU 电平表"
+      ],
+      "viewport": "侧栏导航（在役面板为默认视图）；主区上排四盘点阵计数（今日花费/在役/首过率/今日完成），中幅三路 Agent 电平表 + 最近执行明细表。",
+      "risk": "重度看板用户多一次点击才到卡；概览信息密度要控住。",
+      "html": ".impeccable/mocks/decision/surface-assigned.html"
+    },
+    {
+      "id": "surface-transport",
+      "kind": "dealt",
+      "label": "走带指挥栏",
+      "thesis": "看板仍是主视图，顶栏常驻一条「走带状态条」：谁在跑、跑到哪，永远可见。",
+      "palette": [
+        "#d9dcd2",
+        "#e8e6d8",
+        "#1d1c1a",
+        "#ff9d00"
+      ],
+      "materials": [
+        "顶部走带状态条",
+        "卡片状态 LED",
+        "点阵计数窗"
+      ],
+      "viewport": "侧栏 + 顶栏（含走带状态条：执行中 Agent 的迷你电平 + 今日 tokens 点阵）；主区看板四列，卡片左缘状态 LED 灯。",
+      "risk": "顶栏信息多了会挤；状态条在窄窗口要先让路。",
+      "html": ".impeccable/mocks/decision/surface-transport.html"
+    },
+    {
+      "id": "surface-workbench",
+      "kind": "dealt",
+      "label": "双栏工作台",
+      "thesis": "右侧任务抽屉常驻半屏：左边挑卡，右边看执行，验收不换场。",
+      "palette": [
+        "#d9dcd2",
+        "#e8e6d8",
+        "#1d1c1a",
+        "#ff9d00"
+      ],
+      "materials": [
+        "常驻抽屉",
+        "执行输出点阵窗",
+        "卡片状态 LED"
+      ],
+      "viewport": "侧栏 + 窄看板列 + 右半常驻任务详情（状态 LED、执行输出点阵窗、验收/打回键在拇指位）。",
+      "risk": "13 寸以下双栏太挤，需要记得住折叠状态；看板列变窄后拖拽目标变小。",
+      "html": ".impeccable/mocks/decision/surface-workbench.html"
+    }
+  ],
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "buildPath": {
+    "value": "code"
+  },
+  "steer": true
+}

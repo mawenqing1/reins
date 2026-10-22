@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Reins · 看板 · REINS-96</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}button{font-family:inherit;cursor:default}
+body{width:1440px;height:900px;overflow:hidden;display:flex;background:#e6e4d6;color:#1d1c1a;font:13px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif}
+.mono{font-family:"SF Mono",Menlo,Consolas,monospace}
+.led{width:8px;height:8px;flex:none;border-radius:50%;box-shadow:inset 0 -1px 1px rgba(0,0,0,.3),0 1px 0 rgba(255,255,255,.5)}
+.led.a{background:#ff9d00}.led.p{background:#7c6bd6}
+.key{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #a8a696;background:linear-gradient(180deg,#f4f2e8,#ddd9c9);box-shadow:0 3px 0 #8f8d7c;color:#1d1c1a;font-size:12.5px;font-weight:600;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.key.amb{background:linear-gradient(180deg,#ff9d00,#e08800);border-color:#9c6602;box-shadow:0 4px 0 #6f4904;color:#241a04;text-shadow:0 1px 0 rgba(255,255,255,.28)}
+/* 左侧栏 */
+.side{width:208px;flex:none;height:100%;display:flex;flex-direction:column;background:linear-gradient(180deg,#d9dcd2,#cfd2c7);border-right:1px solid rgba(29,28,26,.22)}
+.logo{display:flex;align-items:center;gap:10px;padding:18px 16px;border-bottom:1px solid rgba(29,28,26,.14)}
+.logo b{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;background:linear-gradient(180deg,#f4f2e8,#ddd9c9);border:1px solid #a8a696;box-shadow:0 3px 0 #8f8d7c;font-size:17px}
+.logo span{font-size:14px;font-weight:700;letter-spacing:.24em;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+nav{padding:12px 10px;display:flex;flex-direction:column;gap:3px}
+nav a{position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;color:#4c4a44;font-size:13px;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+nav a.on{background:linear-gradient(180deg,#f2f0e6,#e1ded0);border:1px solid #a8a696;box-shadow:0 1px 0 rgba(255,255,255,.6),0 2px 5px rgba(29,28,26,.14);color:#1d1c1a;font-weight:700}
+nav a.on::before{content:"";position:absolute;left:-1px;top:6px;bottom:6px;width:3px;border-radius:2px;background:#ff9d00}
+.n{margin-left:auto;min-width:18px;padding:1px 5px;border-radius:999px;background:rgba(29,28,26,.14);font-size:10.5px;font-weight:700;text-align:center;color:#1d1c1a}
+.side-foot{margin-top:auto;padding:12px 14px 16px;border-top:1px solid rgba(29,28,26,.14)}
+.node{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:linear-gradient(180deg,#eeece0,#dbd7c7);border:1px solid rgba(29,28,26,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.6);font-size:11px;color:#4c4a44}
+.node i{width:7px;height:7px;border-radius:50%;background:#36855a;box-shadow:inset 0 -1px 1px rgba(0,0,0,.3)}
+.user{display:flex;align-items:center;gap:9px;margin-top:12px}
+.av{width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:50%;background:linear-gradient(180deg,#f4f2e8,#ddd9c9);border:1px solid #a8a696;font-size:12px;font-weight:700}
+.user b{display:block;font-size:12.5px;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.user small{font-size:10.5px;color:#4c4a44}
+/* 中部看板 */
+.board{width:460px;flex:none;display:flex;flex-direction:column;padding:16px 18px}
+.board-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.board-bar h1{font-size:15px;letter-spacing:.1em;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.board-bar .key{padding:5px 12px;border-radius:6px;font-size:11.5px;box-shadow:0 2px 0 #6f4904}
+.cols{flex:1;min-height:0;display:flex;gap:12px}
+.col{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.col-h{display:flex;align-items:center;gap:7px;padding:2px 2px 4px;font-size:12px;font-weight:700;letter-spacing:.08em;color:#4c4a44;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.col-h em{margin-left:auto;padding:0 7px;border-radius:999px;background:rgba(29,28,26,.12);font-style:normal;font-size:10.5px;color:#1d1c1a}
+.card{background:#e9ebe1;border:1px solid rgba(29,28,26,.18);border-radius:10px;padding:10px 12px;box-shadow:0 1px 0 rgba(255,255,255,.55)}
+.card .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.tid{font-size:11px;letter-spacing:.06em;color:#4c4a44}
+.card p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12.5px;line-height:1.5;font-weight:600;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.card.sel{padding:9px 11px;border:2px solid #ff9d00;box-shadow:0 5px 12px rgba(29,28,26,.18)}
+/* 右侧抽屉 */
+.drawer{flex:1;height:100%;display:flex;flex-direction:column;background:#eef0e6;border-left:1px solid rgba(29,28,26,.35);box-shadow:inset 1px 0 0 rgba(255,255,255,.5)}
+.d-head{padding:20px 24px 0}
+.d-id{font-size:11px;letter-spacing:.14em;color:#4c4a44}
+.d-title{display:flex;align-items:center;gap:14px;margin-top:5px}
+.d-title h2{flex:1;font-size:19px;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.badge{display:inline-flex;align-items:center;gap:7px;padding:4px 12px 4px 9px;border-radius:999px;background:linear-gradient(180deg,#1c1a13,#17150f);border:1px solid rgba(0,0,0,.55);font-size:11.5px;font-weight:600;color:#ffb23e}
+.badge i{width:7px;height:7px;border-radius:50%;background:#ff9d00;box-shadow:0 0 6px rgba(255,157,0,.6);animation:pulse 1.6s ease-in-out infinite}
+.meta{display:grid;grid-template-columns:1.1fr 1fr;gap:8px 24px;padding:13px 24px 15px;border-bottom:1px solid rgba(29,28,26,.12);font-size:12px;color:#4c4a44}
+.meta b{font-weight:400;color:rgba(29,28,26,.55);margin-right:8px}
+.meta .mono{font-size:11.5px}
+.out-label{padding:16px 24px 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.glass{flex:1;min-height:0;margin:0 24px;display:flex;flex-direction:column;border-radius:10px;border:1px solid rgba(0,0,0,.55);background:linear-gradient(180deg,#1c1a13,#17150f);box-shadow:inset 0 2px 8px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.5);overflow:hidden}
+.g-head{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#2c2a22;border-bottom:1px solid rgba(0,0,0,.45);font-size:10.5px;letter-spacing:.18em}
+.live{display:inline-flex;align-items:center;gap:7px;color:#ffb23e;text-shadow:0 0 6px rgba(255,157,0,.5)}
+.live i{width:7px;height:7px;border-radius:50%;background:#ff9d00;box-shadow:0 0 6px rgba(255,157,0,.6);animation:pulse 1.6s ease-in-out infinite}
+.g-time{color:rgba(255,178,62,.5);letter-spacing:.1em}
+.glass pre{flex:1;padding:14px 16px;overflow:hidden;font:12px/2.1 "SF Mono",Menlo,Consolas,monospace;color:#ffb23e;text-shadow:0 0 6px rgba(255,157,0,.45);white-space:pre-wrap;word-break:break-all}
+.glass .dim{color:rgba(255,178,62,.5);text-shadow:none}
+.cur{display:inline-block;width:8px;height:14px;margin-left:3px;vertical-align:-2px;background:#ff9d00;box-shadow:0 0 8px rgba(255,157,0,.7);animation:blink 1.1s steps(1) infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes blink{50%{opacity:0}}
+.acts{display:flex;align-items:center;gap:12px;padding:15px 24px 20px;border-top:1px solid rgba(29,28,26,.14);background:linear-gradient(180deg,#e9ebe1,#e1e3d7)}
+.acts .key{padding:11px 22px;font-size:13px}
+.acts .amb{flex:1;padding:11px 0;font-size:14px}
+.stop{background:none;border:none;padding:0 4px;color:#d05636;font-size:12.5px;font-weight:600;letter-spacing:.05em;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+</style>
+</head>
+<body>
+
+<aside class="side">
+  <div class="logo"><b>R</b><span>REINS</span></div>
+  <nav>
+    <a class="on">看板</a>
+    <a>在役面板</a>
+    <a>Agent</a>
+    <a>交付物</a>
+    <a>收件箱<span class="n">3</span></a>
+    <a>节点</a>
+    <a>设置</a>
+  </nav>
+  <div class="side-foot">
+    <div class="node"><i></i>reins-hub-01 · 在线</div>
+    <div class="user"><span class="av">林</span><span><b>林之遥</b><small>工作区管理员</small></span></div>
+  </div>
+</aside>
+
+<section class="board">
+  <div class="board-bar">
+    <h1>看板</h1>
+    <button class="key amb">＋ 新建任务</button>
+  </div>
+  <div class="cols">
+    <div class="col">
+      <div class="col-h"><i class="led a"></i>进行中<em>3</em></div>
+      <div class="card sel">
+        <div class="row"><span class="tid mono">REINS-96</span><i class="led a"></i></div>
+        <p>Q4 竞品调研：协作办公赛道</p>
+      </div>
+      <div class="card">
+        <div class="row"><span class="tid mono">REINS-92</span><i class="led a"></i></div>
+        <p>供应商报价单清洗与去重（suppliers_2026Q3）</p>
+      </div>
+      <div class="card">
+        <div class="row"><span class="tid mono">REINS-89</span><i class="led a"></i></div>
+        <p>客服工单月度聚类：TOP 10 诉求主题提炼</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="col-h"><i class="led p"></i>待审查<em>2</em></div>
+      <div class="card">
+        <div class="row"><span class="tid mono">REINS-94</span><i class="led p"></i></div>
+        <p>新人引导流程文案重写（第二版）</p>
+      </div>
+      <div class="card">
+        <div class="row"><span class="tid mono">REINS-91</span><i class="led p"></i></div>
+        <p>部署脚本参数校验加固</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<aside class="drawer">
+  <header class="d-head">
+    <div class="d-id mono">REINS-96</div>
+    <div class="d-title">
+      <h2>Q4 竞品调研：协作办公赛道</h2>
+      <span class="badge"><i></i>执行中</span>
+    </div>
+  </header>
+  <div class="meta">
+    <div><b>经办</b>◆ Claude</div>
+    <div><b>优先级</b>P1</div>
+    <div><b>工作区</b><span class="mono">.reins-wt/REINS-96</span></div>
+    <div><b>已运行</b><span class="mono">04:12</span></div>
+  </div>
+  <div class="out-label">执行输出</div>
+  <div class="glass">
+    <div class="g-head">
+      <span class="live"><i></i>EXEC LOG · LIVE</span>
+      <span class="g-time mono">14:33:12</span>
+    </div>
+    <pre><span class="dim">[14:27:31]</span> ● 正在读取 suppliers_2026Q3.xlsx（1.2 万行）…
+<span class="dim">[14:28:02]</span> ✓ 去重 214 行 · 补全 96 格 → clean/suppliers.csv
+<span class="dim">[14:29:15]</span> ● 抓取 6 家厂商官网定价页快照
+<span class="dim">[14:30:04]</span> ✓ 归档 12 个数据源 · 生成 source-index.csv
+<span class="dim">[14:31:40]</span> ● 起草《Q4 协作办公赛道竞品对比》章节骨架
+<span class="dim">[14:32:07]</span> ✓ 提纲 7 节 · 写入 docs/outline.md
+<span class="dim">[14:32:58]</span> ✓ 汇入对比表 comparison.sheet · 标记差异 23 项
+<span class="dim">[14:33:12]</span> ● 正在比对飞书多维表格「价格策略」字段…<span class="cur"></span></pre>
+  </div>
+  <div class="acts">
+    <button class="key amb">验收归档</button>
+    <button class="key">打回</button>
+    <button class="stop">终止</button>
+  </div>
+</aside>
+
+</body>
+</html>

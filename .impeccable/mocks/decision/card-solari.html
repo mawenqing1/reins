@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>发车板 — 首屏草图</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body{
+    font-family:-apple-system,"PingFang SC",sans-serif;
+    background:#0d1118; color:#f4f1e6; overflow:hidden; height:100vh;
+    display:flex; flex-direction:column;
+  }
+  nav{ display:flex; align-items:center; gap:32px; padding:18px 52px; border-bottom:1px solid #232a35; }
+  .logo{ font-weight:800; font-size:20px; display:flex; align-items:center; gap:10px; }
+  .logo .tile{ width:26px; height:26px; background:#f4f1e6; color:#10141c; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; font-weight:900; }
+  nav a{ color:#8f97a3; text-decoration:none; font-size:14px; }
+  nav .gh{ margin-left:auto; background:#f4f1e6; color:#10141c; padding:8px 18px; border-radius:4px; font-weight:700; font-size:13px; text-decoration:none; }
+  .board-head{ padding:40px 52px 18px; display:flex; align-items:baseline; gap:26px; }
+  h1{ font-size:46px; font-weight:900; letter-spacing:.01em; }
+  h1 .flipping{ display:inline-block; background:#f4f1e6; color:#10141c; padding:0 10px; border-radius:5px; position:relative; }
+  h1 .flipping::after{ content:""; position:absolute; left:0; right:0; top:50%; height:2px; background:#0d1118; }
+  .board-head .sub{ color:#8f97a3; font-size:15px; }
+  /* 发车板本体：一行一班，cream 翻牌 + 琥珀状态 */
+  .board{ flex:1; margin:6px 52px 46px; display:flex; flex-direction:column; gap:10px; }
+  .row{ display:grid; grid-template-columns: 90px 1.6fr 1fr 1fr .9fr; gap:10px; align-items:stretch; }
+  .row.h{ grid-template-columns: 90px 1.6fr 1fr 1fr .9fr; }
+  .row.h span{ font-size:11px; letter-spacing:.22em; color:#6b7480; padding:2px 4px; }
+  .flap{
+    background:#f4f1e6; color:#14181f; border-radius:5px;
+    display:flex; align-items:center; padding:0 16px; height:52px;
+    font-weight:700; font-size:17px; letter-spacing:.02em;
+    box-shadow:0 2px 0 #b9b4a2 inset, 0 3px 0 rgba(0,0,0,.45);
+    position:relative; overflow:hidden; white-space:nowrap;
+  }
+  .flap small{ font-weight:500; color:#5a5f68; margin-left:10px; font-size:13px; }
+  .flap.flip::after{
+    content:""; position:absolute; left:0; right:0; top:0; height:50%;
+    background:#e8a33c; transform-origin:top; animation:flip 1.4s ease-in-out infinite;
+  }
+  @keyframes flip{ 0%{transform:rotateX(0)} 55%{transform:rotateX(-88deg)} 100%{transform:rotateX(0)} }
+  .st{ border-radius:5px; display:flex; align-items:center; padding:0 14px; font-weight:800; font-size:14px; letter-spacing:.08em; }
+  .st.doing{ background:#e8a33c; color:#1c1608; }
+  .st.review{ background:#f4f1e6; color:#14181f; }
+  .st.done{ background:#2e7d55; color:#eaf6ef; }
+  .led{ display:flex; align-items:center; gap:6px; color:#6b7480; font-size:12px; }
+  .led i{ width:8px; height:8px; border-radius:50%; background:#e8a33c; box-shadow:0 0 8px #e8a33c; }
+  .ctas{ display:flex; gap:14px; padding:0 52px 34px; align-items:center; }
+  .btn{ background:#f4f1e6; color:#10141c; text-decoration:none; font-weight:800; font-size:16px; padding:14px 28px; border-radius:5px; box-shadow:0 3px 0 #b9b4a2; }
+  .btn2{ color:#cfd4dc; text-decoration:none; font-size:15px; border-bottom:1px solid #39414d; padding-bottom:3px; }
+</style>
+</head>
+<body>
+  <nav>
+    <span class="logo"><span class="tile">R</span>Reins</span>
+    <a href="#">场景</a><a href="#">产品能力</a><a href="#">工作方式</a><a href="#">集成</a><a href="#">FAQ</a>
+    <a class="gh" href="#">GitHub ↗</a>
+  </nav>
+  <div class="board-head">
+    <h1>你的 AI 同事<span class="flipping">已经到岗</span>。</h1>
+    <span class="sub">派活即发车 · 并行执行 · 全程可回放</span>
+  </div>
+  <div class="board">
+    <div class="row h"><span>班次</span><span>任务</span><span>经办</span><span>状态</span><span>交付</span></div>
+    <div class="row">
+      <span class="led"><i></i>R-96</span>
+      <span class="flap">Q4 竞品调研：协作办公赛道</span>
+      <span class="flap">◆ Claude</span>
+      <span class="st doing flip">执行中</span>
+      <span class="flap">—</span>
+    </div>
+    <div class="row">
+      <span class="led"><i></i>R-97</span>
+      <span class="flap">登录接口参数校验</span>
+      <span class="flap">◆ Codex</span>
+      <span class="st doing">执行中</span>
+      <span class="flap">—</span>
+    </div>
+    <div class="row">
+      <span class="led"><i></i>R-91</span>
+      <span class="flap">行业政策周报 · 本期</span>
+      <span class="flap">◆ GLM</span>
+      <span class="st review">待终审</span>
+      <span class="flap">#216</span>
+    </div>
+    <div class="row">
+      <span class="led"><i></i>R-93</span>
+      <span class="flap">工单高频问题整理</span>
+      <span class="flap">◆ OpenCode</span>
+      <span class="st done">已归档</span>
+      <span class="flap">#214</span>
+    </div>
+  </div>
+  <div class="ctas">
+    <a class="btn" href="#">GitHub 获取源码</a>
+    <a class="btn2" href="#">怎么派活？三步搞定 →</a>
+  </div>
+</body>
+</html>
